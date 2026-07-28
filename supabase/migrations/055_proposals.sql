@@ -21,6 +21,7 @@ create table app.proposals (
   proposed_start_date date,
   validity_date date,
   primary_owner_user_id uuid references auth.users(id) on delete set null,
+  owner_organization_id uuid,
   created_at timestamptz not null default now(),
   created_by uuid references auth.users(id) on delete set null,
   updated_at timestamptz not null default now(),
@@ -37,11 +38,17 @@ create table app.proposals (
   foreign key (tenant_id, destination_contact_id) references app.company_contacts(tenant_id, id) on delete set null,
   foreign key (tenant_id, resume_version_id) references app.engineer_resume_versions(tenant_id, id) on delete set null,
   foreign key (tenant_id, requirement_version_id) references app.project_requirement_versions(tenant_id, id) on delete set null,
+  foreign key (tenant_id, owner_organization_id)
+    references app.organizations(tenant_id, id)
+    on delete set null (owner_organization_id),
   check (proposed_unit_price is null or proposed_unit_price >= 0)
 );
 
 create index proposals_status_idx on app.proposals(tenant_id, status, updated_at desc) where deleted_at is null;
 create index proposals_engineer_idx on app.proposals(tenant_id, engineer_id, created_at desc) where deleted_at is null;
+create index proposals_owner_organization_idx
+  on app.proposals(tenant_id, owner_organization_id)
+  where deleted_at is null and owner_organization_id is not null;
 select app.attach_updated_at_trigger('app.proposals'::regclass);
 
 commit;
