@@ -15,8 +15,12 @@ create table app.task_assignments (
   assigned_by uuid references auth.users(id) on delete set null,
   unique (tenant_id, task_id, assignee_user_id, assignment_type),
   unique (tenant_id, task_id, assignee_organization_id, assignment_type),
-  foreign key (tenant_id, task_id) references app.tasks(tenant_id, id) on delete cascade,
-  foreign key (tenant_id, assignee_organization_id) references app.organizations(tenant_id, id) on delete cascade,
+  constraint task_assignments_task_fk
+    foreign key (tenant_id, task_id)
+    references app.tasks(tenant_id, id) on delete cascade,
+  constraint task_assignments_organization_fk
+    foreign key (tenant_id, assignee_organization_id)
+    references app.organizations(tenant_id, id) on delete cascade,
   check (num_nonnulls(assignee_user_id, assignee_organization_id) = 1)
 );
 
