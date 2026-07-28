@@ -24,6 +24,7 @@ create table app.companies (
     check (risk_level in ('none','low','medium','high','critical')),
   risk_summary text,
   primary_owner_user_id uuid references auth.users(id) on delete set null,
+  owner_organization_id uuid,
   created_at timestamptz not null default now(),
   created_by uuid references auth.users(id) on delete set null,
   updated_at timestamptz not null default now(),
@@ -34,6 +35,9 @@ create table app.companies (
   delete_reason text,
   unique (tenant_id, id),
   unique (tenant_id, management_no),
+  foreign key (tenant_id, owner_organization_id)
+    references app.organizations(tenant_id, id)
+    on delete set null (owner_organization_id),
   check (corporate_number is null or corporate_number ~ '^[0-9]{13}$'),
   check (deleted_at is not null or deleted_by is null)
 );
@@ -47,6 +51,9 @@ create index companies_tenant_name_idx
 create unique index companies_tenant_corporate_number_uidx
   on app.companies(tenant_id, corporate_number)
   where corporate_number is not null;
+create index companies_owner_organization_idx
+  on app.companies(tenant_id, owner_organization_id)
+  where deleted_at is null and owner_organization_id is not null;
 
 select app.attach_updated_at_trigger('app.companies'::regclass);
 
