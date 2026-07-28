@@ -10,7 +10,7 @@ create table app.record_shares (
   resource_type text not null,
   resource_id uuid not null,
   shared_with_user_id uuid references auth.users(id) on delete cascade,
-  shared_with_organization_id uuid references app.organizations(id) on delete cascade,
+  shared_with_organization_id uuid,
   permission_level text not null default 'view'
     check (permission_level in ('view','comment','edit')),
   expires_at timestamptz,
@@ -19,6 +19,10 @@ create table app.record_shares (
   revoked_at timestamptz,
   revoked_by uuid references auth.users(id) on delete set null,
   revoke_reason text,
+  foreign key (tenant_id, shared_with_user_id)
+    references app.tenant_memberships(tenant_id, user_id) on delete cascade,
+  foreign key (tenant_id, shared_with_organization_id)
+    references app.organizations(tenant_id, id) on delete cascade,
   check (num_nonnulls(shared_with_user_id, shared_with_organization_id) = 1),
   check (expires_at is null or expires_at > created_at),
   check (revoked_at is null or revoked_at >= created_at)
