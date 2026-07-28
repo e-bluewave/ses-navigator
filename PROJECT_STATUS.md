@@ -11,10 +11,10 @@
 |項目|内容|
 |----|----|
 |Version|0.1.0 (MVP)|
-|Status|🟢 物理DB・テーブル設計完了／Supabase DDL作成開始|
+|Status|🟢 Migration 001〜112完了／113 Data API GRANT設計完了|
 |Repository|ses-navigator|
 |優先基盤|Vercel + Supabase|
-|更新日時|2026-07-27|
+|更新日時|2026-07-28|
 
 ---
 
@@ -57,14 +57,20 @@
 - `docs/08_テーブル設計.md`
 - `docs/13_残課題・改善バックログ.md`
 - Decision Log DL-001〜DL-225相当
+- Migration 001〜112を欠番なく作成
+- テナント、複数組織、ロール、権限、期限付き共有の権限基盤
+- 会社・担当者・技術者・案件・提案の所有組織対応
+- `app` 102テーブルと`audit` 2テーブルのRLS有効化・強制
+- 機能権限、組織階層、担当、割当、共有、親子継承を評価する詳細RLS
+- Data API公開状態レビューとMigration 113 GRANT対象マトリクス
 
 ## 現在作業中
 
-- Supabase用DDL初版
-- マイグレーション構成
-- RLSヘルパー関数と基本ポリシー
+- Migration 113 Data API GRANT
+- Migration 114 機密情報・契約・財務・AI・監査の限定View/RPC
+- RLS・GRANTの自動テスト
 - 冪等Seed
-- DDL・RLSの自動テスト設計
+- インデックス・楽観ロック・最終整合性レビュー
 
 # 開発進捗
 
@@ -78,7 +84,7 @@
 |API設計|100%|
 |画面設計|100%|
 |AI設計|40%|
-|DDL・Migration|5%|
+|DDL・Migration|93%|
 |実装|0%|
 
 # 今回の主要決定
@@ -86,8 +92,11 @@
 - 実行基盤をVercel + Supabaseとする
 - 認証はSupabase Authを利用し、`auth.users`を認証IDの正本とする
 - 全業務テーブルでRLSを有効化する
+- 通常ユーザーの認可は機能権限、テナント、組織階層、担当・割当、明示共有を組み合わせる
 - UUID v7、全業務`tenant_id`、重要参照の複合外部キーを採用する
 - Service Roleは限定処理だけに使用する
+- Data APIの`anon`アクセスを禁止し、`authenticated`は必要最小限の表・操作だけを明示GRANTする
+- 機密個人情報、原文、契約、財務、AI入出力、監査、Webhookはベーステーブルを直接公開せず、限定View/RPCを利用する
 - 主要業務本体は最新値、重要変更は専用履歴、一般操作は追記型監査ログとする
 - Transactional Outbox、共通Job、楽観ロックを採用する
 - Supabase標準バックアップに加えDB・Storageの外部バックアップを行う
@@ -121,16 +130,22 @@ docs/
 
 # 次にやること
 
-1. Supabaseマイグレーションのディレクトリと命名規則を作成
-2. スキーマ、拡張、共通関数、共通型のDDLを作成
-3. テナント、ユーザー、組織、権限のDDL・RLSを作成
-4. 中核業務テーブルのDDLを段階作成
-5. 共通基盤と財務テーブルのDDLを作成
-6. インデックス、限定ビュー、RPC、Seedを追加
-7. RLS、制約、状態変更、締め、消込の自動テストを作成
-8. OpenAPIとSupabase Auth前提の認証設計を同期
+1. `113_data_api_grants.sql`を実装し、`anon / authenticated / service_role`のGRANTを検証
+2. Supabase DashboardのExposed schemas設定を確認し、設定のGitHub管理方法を確定
+3. 機密情報、原文、契約、財務、AI、監査、Webhookの限定View/RPCを追加
+4. RLS、GRANT、Function実行権限の自動テストを作成
+5. RLS・FK判定用インデックスと`row_version`不足を修正
+6. 冪等Seedと主要トランザクションテストを追加
+7. 001〜120の最終整合性をレビューし、`main`へのマージ可否を判定
 
 # 更新履歴
+
+## 2026-07-28
+
+- Migration 001〜112の作成・再適用検証を完了
+- 複数テナント、組織スコープ、期限付きロール、明示共有の権限基盤へ更新
+- 104テーブルのRLS有効化・強制と詳細認可Policyを実装
+- Data API公開状態をレビューし、Migration 113のGRANT対象マトリクスを確定
 
 ## 2026-07-27
 
