@@ -22,12 +22,17 @@ create table app.project_position_skills (
   unique (project_position_id, skill_id, requirement_type),
   foreign key (tenant_id, project_position_id)
     references app.project_positions(tenant_id, id) on delete cascade,
-  foreign key (tenant_id, skill_id)
-    references app.skills(tenant_id, id) on delete restrict
+  constraint project_position_skills_skill_fk
+    foreign key (skill_id) references app.skills(id) on delete restrict
 );
 
 create index project_position_skills_position_idx
   on app.project_position_skills(tenant_id, project_position_id, requirement_type);
+
+create trigger project_position_skills_validate_skill_scope
+before insert or update of tenant_id, skill_id
+on app.project_position_skills
+for each row execute function app.validate_skill_tenant_scope();
 
 select app.attach_updated_at_trigger('app.project_position_skills'::regclass);
 
