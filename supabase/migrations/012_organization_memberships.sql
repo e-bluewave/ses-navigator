@@ -7,7 +7,7 @@ begin;
 create table app.organization_memberships (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references app.tenants(id) on delete cascade,
-  organization_id uuid not null references app.organizations(id) on delete cascade,
+  organization_id uuid not null,
   user_id uuid not null references auth.users(id) on delete cascade,
   position_title text,
   membership_status text not null default 'active'
@@ -18,6 +18,10 @@ create table app.organization_memberships (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (tenant_id, organization_id, user_id, valid_from),
+  foreign key (tenant_id, organization_id)
+    references app.organizations(tenant_id, id) on delete restrict,
+  foreign key (tenant_id, user_id)
+    references app.tenant_memberships(tenant_id, user_id) on delete cascade,
   check (valid_to is null or valid_to >= valid_from)
 );
 
@@ -28,6 +32,12 @@ create index organization_memberships_org_status_idx
 create unique index organization_memberships_one_primary_uidx
   on app.organization_memberships(tenant_id, user_id)
   where is_primary and membership_status = 'active' and valid_to is null;
+
+alter table app.user_roles
+  add constraint user_roles_tenant_membership_fk
+  foreign key (tenant_id, user_id)
+  references app.tenant_memberships(tenant_id, user_id)
+  on delete cascade;
 
 select app.attach_updated_at_trigger('app.organization_memberships'::regclass);
 
