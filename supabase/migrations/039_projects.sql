@@ -17,6 +17,7 @@ create table app.projects (
     check (recruitment_status in ('recruiting','paused','filled','ended')),
   primary_customer_company_id uuid,
   primary_owner_user_id uuid references auth.users(id) on delete set null,
+  owner_organization_id uuid,
   planned_start_on date,
   planned_end_on date,
   received_at timestamptz,
@@ -32,6 +33,9 @@ create table app.projects (
   unique (tenant_id, management_no),
   foreign key (tenant_id, primary_customer_company_id)
     references app.companies(tenant_id, id) on delete set null,
+  foreign key (tenant_id, owner_organization_id)
+    references app.organizations(tenant_id, id)
+    on delete set null (owner_organization_id),
   check (planned_end_on is null or planned_start_on is null or planned_end_on >= planned_start_on)
 );
 
@@ -41,6 +45,9 @@ create index projects_tenant_status_idx
 create index projects_tenant_name_idx
   on app.projects(tenant_id, project_name_normalized)
   where deleted_at is null;
+create index projects_owner_organization_idx
+  on app.projects(tenant_id, owner_organization_id)
+  where deleted_at is null and owner_organization_id is not null;
 
 select app.attach_updated_at_trigger('app.projects'::regclass);
 
