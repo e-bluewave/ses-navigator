@@ -22,6 +22,7 @@ create table app.engineers (
   nearest_station text,
   summary text,
   primary_owner_user_id uuid references auth.users(id) on delete set null,
+  owner_organization_id uuid,
   created_at timestamptz not null default now(),
   created_by uuid references auth.users(id) on delete set null,
   updated_at timestamptz not null default now(),
@@ -32,6 +33,9 @@ create table app.engineers (
   delete_reason text,
   unique (tenant_id, id),
   unique (tenant_id, management_no),
+  foreign key (tenant_id, owner_organization_id)
+    references app.organizations(tenant_id, id)
+    on delete set null (owner_organization_id),
   check (deleted_at is not null or deleted_by is null)
 );
 
@@ -44,6 +48,9 @@ create index engineers_tenant_name_idx
 create index engineers_available_from_idx
   on app.engineers(tenant_id, available_from)
   where deleted_at is null and availability_status = 'available';
+create index engineers_owner_organization_idx
+  on app.engineers(tenant_id, owner_organization_id)
+  where deleted_at is null and owner_organization_id is not null;
 
 select app.attach_updated_at_trigger('app.engineers'::regclass);
 
