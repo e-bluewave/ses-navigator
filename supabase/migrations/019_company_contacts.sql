@@ -26,6 +26,7 @@ create table app.company_contacts (
   contact_status text not null default 'active'
     check (contact_status in ('active','inactive','left_company','unknown')),
   primary_owner_user_id uuid references auth.users(id) on delete set null,
+  owner_organization_id uuid,
   notes text,
   created_at timestamptz not null default now(),
   created_by uuid references auth.users(id) on delete set null,
@@ -39,6 +40,9 @@ create table app.company_contacts (
   unique (tenant_id, management_no),
   foreign key (tenant_id, company_id)
     references app.companies(tenant_id, id) on delete cascade,
+  foreign key (tenant_id, owner_organization_id)
+    references app.organizations(tenant_id, id)
+    on delete set null (owner_organization_id),
   check (deleted_at is not null or deleted_by is null)
 );
 
@@ -54,6 +58,9 @@ create index company_contacts_email_idx
 create unique index company_contacts_one_primary_uidx
   on app.company_contacts(tenant_id, company_id)
   where is_primary and contact_status = 'active' and deleted_at is null;
+create index company_contacts_owner_organization_idx
+  on app.company_contacts(tenant_id, owner_organization_id)
+  where deleted_at is null and owner_organization_id is not null;
 
 select app.attach_updated_at_trigger('app.company_contacts'::regclass);
 
