@@ -11,7 +11,7 @@
 |項目|内容|
 |----|----|
 |Version|0.1.0 (MVP)|
-|Status|🟢 Migration 001〜119完了／Data API実機・回帰検証完了|
+|Status|🟢 DB基盤完了／AI設計初版完了／実装準備中|
 |Repository|ses-navigator|
 |優先基盤|Vercel + Supabase|
 |更新日時|2026-08-04|
@@ -67,9 +67,9 @@
 
 ## 現在作業中
 
-- Migration 001〜119、docs、supabase構成の最終整合性レビュー
-- `ddl-initial`から`Main`へのマージ可否判定
-- 冪等Seed
+- 不足設計文書の整備
+- AIプロンプト設計
+- 認証・テスト・運用設計
 - インデックス・楽観ロック・最終整合性レビュー
 
 # 開発進捗
@@ -83,7 +83,7 @@
 |状態遷移設計|100%|
 |API設計|100%|
 |画面設計|100%|
-|AI設計|40%|
+|AI設計|100%|
 |DDL・Migration|99%|
 |実装|0%|
 
@@ -114,7 +114,7 @@ docs/
 ├── 02_要件定義.md
 ├── 03_業務フロー.md
 ├── 04_DB設計.md
-├── 05_AI設計.md（未作成）
+├── 05_AI設計.md
 ├── 05_状態遷移設計.md
 ├── 06_API設計.md
 ├── 07_画面設計.md
@@ -132,23 +132,29 @@ docs/
 
 - Migration 001〜119：欠番なし、3桁連番のため辞書順と適用順が一致
 - `supabase/tests/data_api/`：検証SQL、PowerShell、手順書、レポートを配置済み
-- `supabase/config.toml`：未作成
-- `supabase/seed.sql`：未作成
-- 上記5件の設計文書：未作成
-- `ddl-initial`は`Main`より先行し、レビュー時点で遅れなし
-- 最終判定：**条件付きマージ可**。不足文書とSupabase CLI構成の扱いを確定・記録してからマージする
+- `ddl-initial`：Migration 001〜119を`Main`へマージ済み
+- `supabase/config.toml`：作成・`Main`反映済み
+- `supabase/seed.sql`：冪等Seedを作成・`Main`反映済み
+- `docs/05_AI設計.md`：初版作成済み
+- 未作成設計文書：`09_認証設計.md`、`10_AIプロンプト設計.md`、`11_テスト設計.md`、`12_運用設計.md`
 
 # 次にやること
 
-1. Migration 001〜119、docs、supabase構成の最終レビューを完了する
-2. `ddl-initial`を`Main`へマージする
-3. RLS・FK判定用インデックスと`row_version`不足を継続確認する
-4. 冪等Seedと主要トランザクションテストを追加する
+1. `docs/10_AIプロンプト設計.md`を作成する
+2. `docs/09_認証設計.md`を作成する
+3. `docs/11_テスト設計.md`を作成する
+4. `docs/12_運用設計.md`を作成する
+5. RLS・FK判定用インデックスと`row_version`不足を継続確認する
+6. フロントエンド・API実装へ進む
 
 # 更新履歴
 
 ## 2026-08-04
 
+- `ddl-initial`、Supabase CLI設定、冪等Seedを`Main`へ反映
+- `docs/05_AI設計.md`初版を作成
+- AIの入力、構造化、マッチング、生成、承認、監査、品質、障害対応を確定
+- 完全自動登録・自動送信・Embedding類似検索をMVP外として整理
 - Migration 001〜119の作成・適用を完了
 - Migration 118の`app.current_user_id()`安全な`search_path`固定を確認
 - Migration 119の`system_admin_update` Policy削除と`authenticated` UPDATE取消を確認
