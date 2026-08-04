@@ -11,10 +11,10 @@
 |項目|内容|
 |----|----|
 |Version|0.1.0 (MVP)|
-|Status|🟢 Migration 001〜112完了／113 Data API GRANT設計完了|
+|Status|🟢 Migration 001〜119完了／Data API実機・回帰検証完了|
 |Repository|ses-navigator|
 |優先基盤|Vercel + Supabase|
-|更新日時|2026-07-28|
+|更新日時|2026-08-04|
 
 ---
 
@@ -57,18 +57,18 @@
 - `docs/08_テーブル設計.md`
 - `docs/13_残課題・改善バックログ.md`
 - Decision Log DL-001〜DL-225相当
-- Migration 001〜112を欠番なく作成
+- Migration 001〜119を欠番なく作成
 - テナント、複数組織、ロール、権限、期限付き共有の権限基盤
 - 会社・担当者・技術者・案件・提案の所有組織対応
 - `app` 102テーブルと`audit` 2テーブルのRLS有効化・強制
 - 機能権限、組織階層、担当、割当、共有、親子継承を評価する詳細RLS
-- Data API公開状態レビューとMigration 113 GRANT対象マトリクス
+- Data API公開状態レビュー、限定View/RPC、権限ハードニングをMigration 113〜119へ実装
+- Data API実機検証37/37 PASS、cleanup完了、Migration 118・119回帰確認PASS
 
 ## 現在作業中
 
-- Migration 113 Data API GRANT
-- Migration 114 機密情報・契約・財務・AI・監査の限定View/RPC
-- RLS・GRANTの自動テスト
+- Migration 001〜119、docs、supabase構成の最終整合性レビュー
+- `ddl-initial`から`Main`へのマージ可否判定
 - 冪等Seed
 - インデックス・楽観ロック・最終整合性レビュー
 
@@ -84,7 +84,7 @@
 |API設計|100%|
 |画面設計|100%|
 |AI設計|40%|
-|DDL・Migration|93%|
+|DDL・Migration|99%|
 |実装|0%|
 
 # 今回の主要決定
@@ -130,15 +130,20 @@ docs/
 
 # 次にやること
 
-1. `113_data_api_grants.sql`を実装し、`anon / authenticated / service_role`のGRANTを検証
-2. Supabase DashboardのExposed schemas設定を確認し、設定のGitHub管理方法を確定
-3. 機密情報、原文、契約、財務、AI、監査、Webhookの限定View/RPCを追加
-4. RLS、GRANT、Function実行権限の自動テストを作成
-5. RLS・FK判定用インデックスと`row_version`不足を修正
-6. 冪等Seedと主要トランザクションテストを追加
-7. 001〜120の最終整合性をレビューし、`main`へのマージ可否を判定
+1. Migration 001〜119、docs、supabase構成の最終レビューを完了する
+2. `ddl-initial`を`Main`へマージする
+3. RLS・FK判定用インデックスと`row_version`不足を継続確認する
+4. 冪等Seedと主要トランザクションテストを追加する
 
 # 更新履歴
+
+## 2026-08-04
+
+- Migration 001〜119の作成・適用を完了
+- Migration 118の`app.current_user_id()`安全な`search_path`固定を確認
+- Migration 119の`system_admin_update` Policy削除と`authenticated` UPDATE取消を確認
+- 限定6 Viewを`public` Exposed schema経由で再検証し、HTTP 200・空配列・6/6 PASSを確認
+- Data API実機検証37/37 PASSおよびcleanup完了を記録
 
 ## 2026-07-28
 
