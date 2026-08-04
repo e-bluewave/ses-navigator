@@ -8,9 +8,10 @@
 | Branch | `ddl-initial` |
 | Supabase Project Ref | `zsgauwmkvvezdxvmcmdf` |
 | PostgreSQL | 16 |
-| Migration | 001～117 |
+| Migration | 001～119 |
 | 記録日 | 2026-07-31（JST） |
 | 後片付け完了日 | 2026-08-02（JST） |
+| 118・119回帰確認日 | 2026-08-04（JST） |
 
 ## 総合結果
 
@@ -66,6 +67,28 @@
 - 対象なし・Tenant不一致時の情報漏えい防止
 - service_roleへの限定RPC以外の公開抑止
 
+## Migration 118・119適用後の回帰確認
+
+### SQL回帰確認
+
+| 確認項目 | 結果 |
+|---|---|
+| `app.current_user_id()`の`search_path = pg_catalog, public` | PASS |
+| `app.system_admins`の`system_admin_update` Policyが存在しない | PASS |
+| `authenticated`が`app.system_admins`のUPDATE権限を持たない | PASS |
+
+### 限定6 Viewの簡易回帰確認
+
+Supabase Data APIのExposed schemaは`public`を使用した。Migration 114で作成し、117で`security_invoker=true`を設定した6 Viewについて、ログイン済み検証ユーザーで再確認した。
+
+| 期待結果 | 結果 |
+|---|---|
+| HTTP 200 | 6 / 6 PASS |
+| 応答 `[]` | 6 / 6 PASS |
+| 件数 0 | 6 / 6 PASS |
+
+**Migration 118・119回帰結果：PASS**
+
 ## データ変更
 
 - `03_validation.ps1`：読み取り専用
@@ -112,6 +135,6 @@
 
 ## 最終判定
 
-Data API実機検証37件および検証データの後片付けは、すべて正常に完了した。
+Data API実機検証37件、検証データの後片付け、Migration 118・119のSQL回帰確認および限定6 View再確認は、すべて正常に完了した。
 
 **最終結果：PASS**
