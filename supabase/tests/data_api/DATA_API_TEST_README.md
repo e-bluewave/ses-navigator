@@ -5,7 +5,7 @@
 - Repository：`e-bluewave/ses-navigator`
 - Branch：`ddl-initial`
 - PostgreSQL：16
-- Supabase Migration：001～117
+- Supabase Migration：001～119
 
 ## 実行順
 
@@ -42,6 +42,8 @@ PowerShellスクリプトは秘密情報を伏せ字で対話入力し、結果J
 - `03_validation.ps1`：18/18 PASS
 - `04_service_role_rpc_validation.ps1`：19/19 PASS
 - Data API総合検証：37/37 PASS
-- `05_cleanup.sql`：作成・構文解析済み（実行待ち）
+- `05_cleanup.sql`：`CLEANUP_PASSED`（検証データ残存0件）
+- Migration 118・119 SQL回帰確認：3/3 PASS
+- Migration 118・119適用後の6 View簡易回帰確認：6/6 PASS
 
-`05_cleanup.sql`の結果が`CLEANUP_PASSED`になるまで、後片付け完了とは判定しない。
+検証データの後片付けおよびMigration 118・119適用後の回帰確認まで完了している。
