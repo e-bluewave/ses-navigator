@@ -148,14 +148,17 @@ docs/
 
 # 次にやること
 
-1. `row_version`不足を更新主体テーブルと追記専用テーブルに分類する
-2. フロントエンド・APIの初期構成を確定する
-3. 実装フェーズの最初のIssue・作業ブランチを作成する
+1. 分類Aの30テーブルへ`row_version`を追加するMigration 122を作成する
+2. 既存を含む`row_version`保有テーブルへ自動加算トリガーを適用する
+3. 案件参照スライスの実装Issue・作業ブランチを作成する
+4. pnpm workspaceとWeb・APIの最小構成を実装する
 
 # 更新履歴
 
 ## 2026-08-08
 
+- `row_version`適用範囲を更新主体、条件付き更新、追記専用、集合・関連へ分類
+- フロントエンド・APIの初期構成をReact、Fastify、SupabaseのTypeScriptモノレポとして確定
 - PR #11を`Main`へマージ
 - Migration 120のRLS・FK判定用インデックス追加を完了
 - Migration 121で`private.redact_sensitive_jsonb(jsonb)`のvolatilityを`stable`へ修正
