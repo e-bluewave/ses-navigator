@@ -42,7 +42,8 @@ SES営業における案件・技術者・BP情報を一元管理し、AIを活�
 - 要件定義・主要設計書の初版完了
 - DB設計・DDL／Migration 001〜121完了
 - SupabaseリモートDB適用、Migration一致、DB Lint確認済み
-- フロントエンド・API実装準備中
+- `row_version`適用分類とフロントエンド・API初期構成を確定
+- 案件参照スライスの実装準備中
 
 詳細は PROJECT_STATUS.md を参照してください。
 
