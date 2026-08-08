@@ -39,9 +39,10 @@ SES営業における案件・技術者・BP情報を一元管理し、AIを活�
 
 ## 現在の開発状況
 
-- 要件定義完了
-- DB設計開始
-- API設計・画面設計・AI設計を順次実施予定
+- 要件定義・主要設計書の初版完了
+- DB設計・DDL／Migration 001〜121完了
+- SupabaseリモートDB適用、Migration一致、DB Lint確認済み
+- フロントエンド・API実装準備中
 
 詳細は PROJECT_STATUS.md を参照してください。
 
