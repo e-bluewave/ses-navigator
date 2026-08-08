@@ -24,4 +24,5 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm contract:check
       - run: pnpm build
