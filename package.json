@@ -8,6 +8,8 @@
   },
   "scripts": {
     "build": "pnpm -r build",
+    "client:generate": "node scripts/generate-api-client.mjs",
+    "client:check": "node scripts/generate-api-client.mjs --check",
     "contract:check": "node scripts/check-openapi.mjs",
     "dev": "pnpm -r --parallel dev",
     "format": "prettier --write \"apps/**/*.{ts,tsx,json,html,css}\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",

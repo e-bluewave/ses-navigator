@@ -25,4 +25,5 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm contract:check
+      - run: pnpm client:check
       - run: pnpm build
