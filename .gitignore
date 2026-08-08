@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo
+
+# TypeScript emits beside source files when a project does not set outDir.
+apps/web/src/**/*.js
+apps/web/vite.config.js

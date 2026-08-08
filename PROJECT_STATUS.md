@@ -11,7 +11,7 @@
 |項目|内容|
 |----|----|
 |Version|0.1.0 (MVP)|
-|Status|🟢 DB基盤・主要設計書初版完了／フロントエンド・API実装準備|
+|Status|🟢 DB基盤・主要設計書初版完了／フロントエンド・API基盤実装中|
 |Repository|ses-navigator|
 |優先基盤|Vercel + Supabase|
 |更新日時|2026-08-08|
@@ -57,7 +57,7 @@
 - `docs/08_テーブル設計.md`
 - `docs/13_残課題・改善バックログ.md`
 - Decision Log DL-001〜DL-225相当
-- Migration 001〜121を欠番なく作成・リモートDBへ適用
+- Migration 001〜122を欠番なく作成・リモートDBへ適用
 - テナント、複数組織、ロール、権限、期限付き共有の権限基盤
 - 会社・担当者・技術者・案件・提案の所有組織対応
 - `app` 102テーブルと`audit` 2テーブルのRLS有効化・強制
@@ -66,14 +66,14 @@
 - Data API実機検証37/37 PASS、cleanup完了、Migration 118・119回帰確認PASS
 - Migration 120でRLS・FK判定用インデックスを追加
 - Migration 121で`private.redact_sensitive_jsonb(jsonb)`のvolatilityを`stable`へ修正
+- Migration 122で58実テーブルへ`row_version`と自動加算Triggerを追加
 - Supabase DB Lint：`No schema errors found`
-- Local／Remote Migration 001〜121完全一致
+- Local／Remote Migration 001〜122完全一致
 
 ## 現在作業中
 
-- `row_version`適用範囲の最終分類
-- フロントエンド・API初期構成の確定
-- 実装フェーズ開始準備
+- 案件参照スライスのTypeScriptモノレポ・Web・API基盤
+- 案件一覧・案件詳細のAPI契約と認証境界
 
 # 開発進捗
 
@@ -134,7 +134,7 @@ docs/
 
 # 構成レビュー結果
 
-- Migration 001〜121：欠番なし、3桁連番のため辞書順と適用順が一致
+- Migration 001〜122：欠番なし、3桁連番のため辞書順と適用順が一致
 - `supabase/tests/data_api/`：検証SQL、PowerShell、手順書、レポートを配置済み
 - `ddl-initial`：Migration 001〜119を`Main`へマージ済み
 - `supabase/config.toml`：作成・`Main`反映済み
@@ -148,10 +148,10 @@ docs/
 
 # 次にやること
 
-1. 分類Aの30テーブルへ`row_version`を追加するMigration 122を作成する
-2. 既存を含む`row_version`保有テーブルへ自動加算トリガーを適用する
-3. 案件参照スライスの実装Issue・作業ブランチを作成する
-4. pnpm workspaceとWeb・APIの最小構成を実装する
+1. pnpm workspaceとWeb・APIの最小構成を検証する
+2. 案件一覧・案件詳細のOpenAPI契約を作成する
+3. 認証・認可境界を含む案件参照APIを実装する
+4. 案件一覧・詳細画面と生成APIクライアントを実装する
 
 # 更新履歴
 
@@ -164,6 +164,9 @@ docs/
 - Migration 121で`private.redact_sensitive_jsonb(jsonb)`のvolatilityを`stable`へ修正
 - ローカルSupabase環境のPostgreSQLメジャーバージョンを17へ更新
 - Migration 001〜121のリモートDB適用とLocal／Remote一致を確認
+- Migration 122のリモートDB適用、58実テーブルのTrigger設定、自動加算動作を確認
+- 案件参照スライス用のIssue #15と作業ブランチを作成
+- pnpm workspace、React + Vite、Fastify、Vitest、ESLint、Prettier、CIの基盤実装を開始
 - Supabase DB Lintで`No schema errors found`を確認
 - DDL・Migrationフェーズを100%完了として更新
 
