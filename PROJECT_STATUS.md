@@ -11,10 +11,10 @@
 |項目|内容|
 |----|----|
 |Version|0.1.0 (MVP)|
-|Status|🟢 DB基盤・主要設計書初版完了／最終整合性レビュー中|
+|Status|🟢 DB基盤・主要設計書初版完了／フロントエンド・API実装準備|
 |Repository|ses-navigator|
 |優先基盤|Vercel + Supabase|
-|更新日時|2026-08-04|
+|更新日時|2026-08-08|
 
 ---
 
@@ -57,19 +57,23 @@
 - `docs/08_テーブル設計.md`
 - `docs/13_残課題・改善バックログ.md`
 - Decision Log DL-001〜DL-225相当
-- Migration 001〜119を欠番なく作成
+- Migration 001〜121を欠番なく作成・リモートDBへ適用
 - テナント、複数組織、ロール、権限、期限付き共有の権限基盤
 - 会社・担当者・技術者・案件・提案の所有組織対応
 - `app` 102テーブルと`audit` 2テーブルのRLS有効化・強制
 - 機能権限、組織階層、担当、割当、共有、親子継承を評価する詳細RLS
 - Data API公開状態レビュー、限定View/RPC、権限ハードニングをMigration 113〜119へ実装
 - Data API実機検証37/37 PASS、cleanup完了、Migration 118・119回帰確認PASS
+- Migration 120でRLS・FK判定用インデックスを追加
+- Migration 121で`private.redact_sensitive_jsonb(jsonb)`のvolatilityを`stable`へ修正
+- Supabase DB Lint：`No schema errors found`
+- Local／Remote Migration 001〜121完全一致
 
 ## 現在作業中
 
-- RLS・FK判定用インデックス追加（Migration 120）
 - `row_version`適用範囲の最終分類
-- フロントエンド・API実装準備
+- フロントエンド・API初期構成の確定
+- 実装フェーズ開始準備
 
 # 開発進捗
 
@@ -84,7 +88,7 @@
 |画面設計|100%|
 |AI設計|100%|
 |認証設計|100%|
-|DDL・Migration|99%|
+|DDL・Migration|100%|
 |実装|0%|
 
 # 今回の主要決定
@@ -130,7 +134,7 @@ docs/
 
 # 構成レビュー結果
 
-- Migration 001〜119：欠番なし、3桁連番のため辞書順と適用順が一致
+- Migration 001〜121：欠番なし、3桁連番のため辞書順と適用順が一致
 - `supabase/tests/data_api/`：検証SQL、PowerShell、手順書、レポートを配置済み
 - `ddl-initial`：Migration 001〜119を`Main`へマージ済み
 - `supabase/config.toml`：作成・`Main`反映済み
@@ -144,11 +148,21 @@ docs/
 
 # 次にやること
 
-1. Migration 120を空DB・既存DBへ適用し、実行計画と回帰を確認する
-2. `row_version`不足を更新主体テーブルと追記専用テーブルに分類する
-3. フロントエンド・APIの初期構成を確定する
+1. `row_version`不足を更新主体テーブルと追記専用テーブルに分類する
+2. フロントエンド・APIの初期構成を確定する
+3. 実装フェーズの最初のIssue・作業ブランチを作成する
 
 # 更新履歴
+
+## 2026-08-08
+
+- PR #11を`Main`へマージ
+- Migration 120のRLS・FK判定用インデックス追加を完了
+- Migration 121で`private.redact_sensitive_jsonb(jsonb)`のvolatilityを`stable`へ修正
+- ローカルSupabase環境のPostgreSQLメジャーバージョンを17へ更新
+- Migration 001〜121のリモートDB適用とLocal／Remote一致を確認
+- Supabase DB Lintで`No schema errors found`を確認
+- DDL・Migrationフェーズを100%完了として更新
 
 ## 2026-08-04
 
