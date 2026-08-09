@@ -14,6 +14,83 @@ body {
 button {
   font: inherit;
 }
+.auth-loading {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  color: #52616a;
+}
+.login-shell {
+  display: grid;
+  min-height: 100vh;
+  padding: 1.5rem;
+  place-items: center;
+}
+.login-panel {
+  width: min(100%, 28rem);
+  padding: clamp(1.5rem, 5vw, 3rem);
+  border: 1px solid #d1dfe1;
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 1.25rem 3.5rem rgb(22 34 47 / 10%);
+}
+.login-panel h1 {
+  font-size: clamp(2rem, 10vw, 3rem);
+}
+.login-lead {
+  margin: 1rem 0 2rem;
+  color: #617079;
+}
+.login-form,
+.login-form label {
+  display: grid;
+  gap: 0.55rem;
+}
+.login-form {
+  gap: 1.2rem;
+}
+.login-form label {
+  color: #35454e;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+.login-form input {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #b9c9cc;
+  border-radius: 0.55rem;
+  font: inherit;
+}
+.login-form input:focus {
+  border-color: #267166;
+  outline: 0.2rem solid rgb(38 113 102 / 18%);
+}
+.primary-button,
+.secondary-button {
+  border: 0;
+  border-radius: 0.55rem;
+  cursor: pointer;
+  font-weight: 800;
+}
+.primary-button {
+  padding: 0.85rem 1rem;
+  background: #176a5f;
+  color: #fff;
+}
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.secondary-button {
+  padding: 0.55rem 0.75rem;
+  background: #d9e9e6;
+  color: #18564e;
+}
+.form-error {
+  margin: 0;
+  color: #9a2f37;
+  font-size: 0.86rem;
+}
 .app-shell {
   width: min(76rem, calc(100% - 3rem));
   margin: 0 auto;
@@ -25,6 +102,15 @@ button {
   justify-content: space-between;
   gap: 2rem;
   margin-bottom: 2rem;
+}
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.account-email {
+  color: #617079;
+  font-size: 0.82rem;
 }
 .eyebrow,
 .section-kicker {
@@ -183,7 +269,7 @@ dd {
     width: min(100% - 1.5rem, 76rem);
     padding-top: 1.5rem;
   }
-  .environment {
+  .account-email {
     display: none;
   }
   .detail-grid {

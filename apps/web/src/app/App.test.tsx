@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectsApi } from '../api/client.js';
 import type { Project } from '../api/generated.js';
+import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
 
 const project: Project = {
@@ -17,6 +18,22 @@ const project: Project = {
   updatedAt: '2026-08-08T12:00:00Z',
   rowVersion: 2,
 };
+
+const session: AuthSession = {
+  accessToken: 'access-token',
+  refreshToken: 'refresh-token',
+  expiresAt: 9_999_999_999,
+  user: { id: 'user-1', email: 'user@example.com' },
+};
+
+function auth(current: AuthSession | null = session): AuthService {
+  return {
+    getSession: vi.fn(() => Promise.resolve(current)),
+    signIn: vi.fn(() => Promise.resolve(session)),
+    signOut: vi.fn(() => Promise.resolve()),
+    onSessionChange: vi.fn(() => () => undefined),
+  };
+}
 
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
@@ -36,9 +53,9 @@ afterEach(cleanup);
 
 describe('App', () => {
   it('renders projects returned by the generated client', async () => {
-    render(<App api={api()} />);
+    render(<App auth={auth()} api={api()} />);
     expect(
-      screen.getByRole('heading', { name: '案件一覧' }),
+      await screen.findByRole('heading', { name: '案件一覧' }),
     ).toBeInTheDocument();
     expect(
       await screen.findByRole('button', { name: '基幹システム刷新' }),
@@ -50,7 +67,7 @@ describe('App', () => {
   it('navigates from the list to project detail', async () => {
     const getProject = vi.fn(() => Promise.resolve(project));
     const projects = api({ getProject });
-    render(<App api={projects} />);
+    render(<App auth={auth()} api={projects} />);
     fireEvent.click(
       await screen.findByRole('button', { name: '基幹システム刷新' }),
     );
@@ -66,6 +83,7 @@ describe('App', () => {
   it('renders an empty state', async () => {
     render(
       <App
+        auth={auth()}
         api={api({
           listProjects: () =>
             Promise.resolve({
@@ -78,5 +96,31 @@ describe('App', () => {
     expect(
       await screen.findByText('表示できる案件はありません。'),
     ).toBeInTheDocument();
+  });
+
+  it('shows login for an unauthenticated user and signs in', async () => {
+    const authentication = auth(null);
+    render(<App auth={authentication} api={api()} />);
+    expect(
+      await screen.findByRole('heading', { name: 'SES Navigator' }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('メールアドレス'), {
+      target: { value: 'user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('パスワード'), {
+      target: { value: 'password' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
+    expect(authentication.signIn).toHaveBeenCalledWith(
+      'user@example.com',
+      'password',
+    );
+  });
+
+  it('logs out from an authenticated session', async () => {
+    const authentication = auth();
+    render(<App auth={authentication} api={api()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'ログアウト' }));
+    expect(authentication.signOut).toHaveBeenCalledOnce();
   });
 });
