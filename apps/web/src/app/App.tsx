@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { ApiClientError, createProjectsApi } from '../api/client.js';
 import type { ProjectsApi } from '../api/client.js';
 import type { Project, ProjectStatus } from '../api/generated.js';
-
-const defaultApi = createProjectsApi({
-  getAccessToken: () => sessionStorage.getItem('sesn.accessToken'),
-});
+import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
+import { LoginPage } from '../auth/LoginPage.js';
+import type { AuthService } from '../auth/auth-client.js';
 
 const projectStatusLabels: Record<ProjectStatus, string> = {
   draft: '下書き',
@@ -32,7 +31,22 @@ function currentRoute(): Route {
     : { page: 'list' };
 }
 
-export function App({ api = defaultApi }: { api?: ProjectsApi }) {
+export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
+  return (
+    <AuthProvider auth={auth}>
+      <AuthenticatedApp {...(api === undefined ? {} : { api })} />
+    </AuthProvider>
+  );
+}
+
+function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
+  const { loading, session, signOut } = useAuth();
+  const api = useMemo(
+    () =>
+      providedApi ??
+      createProjectsApi({ getAccessToken: () => session?.accessToken ?? null }),
+    [providedApi, session?.accessToken],
+  );
   const [route, setRoute] = useState<Route>(currentRoute);
 
   useEffect(() => {
@@ -46,6 +60,14 @@ export function App({ api = defaultApi }: { api?: ProjectsApi }) {
     setRoute(currentRoute());
   }
 
+  if (loading)
+    return (
+      <main className="auth-loading" role="status">
+        認証状態を確認しています…
+      </main>
+    );
+  if (session === null) return <LoginPage />;
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -53,15 +75,25 @@ export function App({ api = defaultApi }: { api?: ProjectsApi }) {
           <p className="eyebrow">SES営業支援</p>
           <h1>SES Navigator</h1>
         </div>
-        <span className="environment">案件管理</span>
+        <div className="account-actions">
+          <span className="account-email">{session.user.email}</span>
+          <button className="secondary-button" onClick={() => void signOut()}>
+            ログアウト
+          </button>
+        </div>
       </header>
       {route.page === 'list' ? (
-        <ProjectList api={api} onOpen={(id) => navigate(`/projects/${id}`)} />
+        <ProjectList
+          api={api}
+          onOpen={(id) => navigate(`/projects/${id}`)}
+          onUnauthorized={signOut}
+        />
       ) : (
         <ProjectDetail
           api={api}
           id={route.id}
           onBack={() => navigate('/projects')}
+          onUnauthorized={signOut}
         />
       )}
     </main>
@@ -71,9 +103,11 @@ export function App({ api = defaultApi }: { api?: ProjectsApi }) {
 function ProjectList({
   api,
   onOpen,
+  onUnauthorized,
 }: {
   api: ProjectsApi;
   onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -83,11 +117,15 @@ function ProjectList({
     api
       .listProjects({ limit: 50 })
       .then((result) => active && setProjects(result.items))
-      .catch((reason: unknown) => active && setError(reason));
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else if (active) setError(reason);
+      });
     return () => {
       active = false;
     };
-  }, [api]);
+  }, [api, onUnauthorized]);
 
   return (
     <section aria-labelledby="projects-heading" className="panel">
@@ -151,10 +189,12 @@ function ProjectDetail({
   api,
   id,
   onBack,
+  onUnauthorized,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
+  onUnauthorized: () => Promise<void>;
 }) {
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -164,11 +204,15 @@ function ProjectDetail({
     api
       .getProject(id)
       .then((result) => active && setProject(result))
-      .catch((reason: unknown) => active && setError(reason));
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else if (active) setError(reason);
+      });
     return () => {
       active = false;
     };
-  }, [api, id]);
+  }, [api, id, onUnauthorized]);
 
   return (
     <section aria-labelledby="project-heading" className="panel">
