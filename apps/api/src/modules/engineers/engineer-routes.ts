@@ -7,6 +7,7 @@ import type {
   EngineerInput,
   EngineerPrivateInput,
   EngineerAffiliationInput,
+  EngineerPreferenceInput,
 } from './engineer-repository.js';
 
 const uuid =
@@ -30,6 +31,54 @@ export function registerEngineerRoutes(
   app: FastifyInstance,
   repository: EngineerRepository,
 ) {
+  app.get(
+    '/api/v1/engineers/:id/preferences',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      if (!uuid.test(id)) throw invalid('id must be a UUID');
+      await requireRead(repository, request.user.accessToken);
+      return {
+        items: await repository.listPreferences(request.user.accessToken, id),
+      };
+    },
+  );
+  app.put(
+    '/api/v1/engineers/:id/preferences/:preferenceId',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id, preferenceId } = request.params as {
+        id: string;
+        preferenceId: string;
+      };
+      if (
+        !uuid.test(id) ||
+        (preferenceId !== 'new' && !uuid.test(preferenceId))
+      )
+        throw invalid('id is invalid');
+      const rowVersion =
+        preferenceId === 'new'
+          ? parsePrivateIfMatch(request.headers['if-match'])
+          : parseIfMatch(request.headers['if-match']);
+      const input = parsePreferenceInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const saved = await repository.savePreference(
+        request.user.accessToken,
+        id,
+        preferenceId === 'new' ? null : preferenceId,
+        rowVersion,
+        input,
+        request.id,
+      );
+      if (!saved)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Preference was changed; reload and try again',
+        );
+      return reply.header('etag', `"${saved.rowVersion}"`).send(saved);
+    },
+  );
   app.get(
     '/api/v1/engineers/:id/affiliations',
     { preHandler: (request) => app.authenticate(request) },
@@ -282,6 +331,63 @@ export function registerEngineerRoutes(
       return engineer;
     },
   );
+}
+
+function parsePreferenceInput(body: unknown): EngineerPreferenceInput {
+  if (!body || typeof body !== 'object') throw invalid('preference is invalid');
+  const b = body as Record<string, unknown>;
+  const remotes = new Set(['onsite', 'hybrid', 'remote', 'flexible']);
+  const strings = (v: unknown) =>
+    Array.isArray(v) &&
+    v.every((x) => typeof x === 'string' && x.trim() !== '');
+  if (
+    typeof b.effectiveFrom !== 'string' ||
+    (b.effectiveTo !== null && typeof b.effectiveTo !== 'string') ||
+    !remotes.has(String(b.remotePreference)) ||
+    !strings(b.locations) ||
+    !strings(b.contractTypes)
+  )
+    throw invalid('preference is invalid');
+  const minRate = b.desiredRateMin as number | null;
+  const maxRate = b.desiredRateMax as number | null;
+  const minDays = b.weeklyDaysMin as number | null;
+  const maxDays = b.weeklyDaysMax as number | null;
+  const allowedContracts = new Set([
+    'employee',
+    'dispatch',
+    'quasi委任',
+    'contract',
+    'freelance',
+    'other',
+  ]);
+  if (
+    (minRate !== null && maxRate !== null && maxRate < minRate) ||
+    (minDays !== null &&
+      (minDays > 7 || (maxDays !== null && maxDays < minDays))) ||
+    (maxDays !== null && maxDays > 7) ||
+    (b.contractTypes as string[]).some((value) => !allowedContracts.has(value))
+  )
+    throw invalid('preference is invalid');
+  const nullableNumber = (v: unknown) =>
+    v === null || (typeof v === 'number' && Number.isFinite(v) && v >= 0);
+  if (
+    ![
+      b.desiredRateMin,
+      b.desiredRateMax,
+      b.weeklyDaysMin,
+      b.weeklyDaysMax,
+      b.overtimeLimitHours,
+    ].every(nullableNumber)
+  )
+    throw invalid('preference is invalid');
+  if (
+    typeof b.currencyCode !== 'string' ||
+    (b.availableFrom !== null && typeof b.availableFrom !== 'string') ||
+    (b.notes !== null && typeof b.notes !== 'string') ||
+    (b.effectiveTo && b.effectiveTo < b.effectiveFrom)
+  )
+    throw invalid('preference is invalid');
+  return b as unknown as EngineerPreferenceInput;
 }
 function parseAffiliationInput(value: unknown): EngineerAffiliationInput {
   if (typeof value !== 'object' || value === null || Array.isArray(value))

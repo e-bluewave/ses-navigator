@@ -22,6 +22,8 @@ import type {
   EngineerPrivateInput,
   EngineerAffiliation,
   EngineerAffiliationInput,
+  EngineerPreference,
+  EngineerPreferenceInput,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -532,6 +534,10 @@ function EngineerDetail({
     EngineerAffiliation[] | null
   >(null);
   const [affiliationError, setAffiliationError] = useState(false);
+  const [preferences, setPreferences] = useState<EngineerPreference[] | null>(
+    null,
+  );
+  const [preferenceError, setPreferenceError] = useState(false);
   useEffect(() => {
     let active = true;
     api
@@ -588,6 +594,14 @@ function EngineerDetail({
       setAffiliations((await api.listEngineerAffiliations(id)).items);
     } catch {
       setAffiliationError(true);
+    }
+  }
+  async function loadPreferences() {
+    setPreferenceError(false);
+    try {
+      setPreferences((await api.listEngineerPreferences(id)).items);
+    } catch {
+      setPreferenceError(true);
     }
   }
   return (
@@ -653,6 +667,12 @@ function EngineerDetail({
               所属・契約履歴
             </button>
             <button
+              className="secondary-button"
+              onClick={() => void loadPreferences()}
+            >
+              希望条件
+            </button>
+            <button
               className="danger-button"
               onClick={() => setShowDelete(true)}
             >
@@ -709,6 +729,11 @@ function EngineerDetail({
               所属・契約履歴の取得に失敗しました。
             </p>
           ) : null}
+          {preferenceError ? (
+            <p className="error" role="alert">
+              希望条件の取得に失敗しました。
+            </p>
+          ) : null}
           {showPrivate ? (
             <EngineerPrivateForm
               api={api}
@@ -723,6 +748,14 @@ function EngineerDetail({
               engineerId={id}
               items={affiliations}
               onSaved={() => void loadAffiliations()}
+            />
+          ) : null}
+          {preferences ? (
+            <EngineerPreferencePanel
+              api={api}
+              engineerId={id}
+              items={preferences}
+              onSaved={() => void loadPreferences()}
             />
           ) : null}
           {auditEvents ? (
@@ -1764,6 +1797,231 @@ function CompanyDetail({
           ) : null}
         </>
       )}
+    </section>
+  );
+}
+
+function EngineerPreferencePanel({
+  api,
+  engineerId,
+  items,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  engineerId: string;
+  items: EngineerPreference[];
+  onSaved: () => void;
+}) {
+  const empty: EngineerPreferenceInput = {
+    effectiveFrom: new Date().toISOString().slice(0, 10),
+    effectiveTo: null,
+    desiredRateMin: null,
+    desiredRateMax: null,
+    currencyCode: 'JPY',
+    remotePreference: 'flexible',
+    weeklyDaysMin: null,
+    weeklyDaysMax: null,
+    overtimeLimitHours: null,
+    availableFrom: null,
+    notes: null,
+    locations: [],
+    contractTypes: [],
+  };
+  const [editing, setEditing] = useState<EngineerPreference | null>(
+    items[0] ?? null,
+  );
+  const [input, setInput] = useState<EngineerPreferenceInput>(
+    items[0] ? { ...items[0] } : empty,
+  );
+  const [error, setError] = useState<unknown>(null);
+  const [saving, setSaving] = useState(false);
+  const set = (name: keyof EngineerPreferenceInput, value: unknown) =>
+    setInput((v) => ({ ...v, [name]: value }));
+  const number = (value: string) => (value === '' ? null : Number(value));
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.saveEngineerPreference(
+        engineerId,
+        editing?.id ?? null,
+        editing?.rowVersion ?? 0,
+        input,
+      );
+      onSaved();
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <section
+      className="audit-panel"
+      aria-labelledby="engineer-preference-heading"
+    >
+      <div className="section-heading">
+        <h3 id="engineer-preference-heading">希望条件</h3>
+        <button
+          className="secondary-button"
+          onClick={() => {
+            setEditing(null);
+            setInput(empty);
+          }}
+        >
+          履歴を追加
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <p>希望条件はありません。</p>
+      ) : (
+        <ul>
+          {items.map((item) => (
+            <li key={item.id}>
+              <strong>
+                {item.effectiveFrom}〜{item.effectiveTo ?? '現在'} /{' '}
+                {item.remotePreference}
+              </strong>
+              <span>
+                希望単価: {item.desiredRateMin ?? '未設定'}〜
+                {item.desiredRateMax ?? '未設定'} {item.currencyCode}
+              </span>
+              <button
+                className="secondary-button"
+                onClick={() => {
+                  setEditing(item);
+                  setInput({ ...item });
+                }}
+              >
+                編集
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error ? <ErrorNotice error={error} subject="希望条件" /> : null}
+      <form className="project-form" onSubmit={(e) => void submit(e)}>
+        <label>
+          開始日
+          <input
+            required
+            type="date"
+            value={input.effectiveFrom}
+            onChange={(e) => set('effectiveFrom', e.target.value)}
+          />
+        </label>
+        <label>
+          終了日
+          <input
+            type="date"
+            min={input.effectiveFrom}
+            value={input.effectiveTo ?? ''}
+            onChange={(e) => set('effectiveTo', e.target.value || null)}
+          />
+        </label>
+        <label>
+          希望単価（下限）
+          <input
+            type="number"
+            min="0"
+            value={input.desiredRateMin ?? ''}
+            onChange={(e) => set('desiredRateMin', number(e.target.value))}
+          />
+        </label>
+        <label>
+          希望単価（上限）
+          <input
+            type="number"
+            min="0"
+            value={input.desiredRateMax ?? ''}
+            onChange={(e) => set('desiredRateMax', number(e.target.value))}
+          />
+        </label>
+        <label>
+          リモート希望
+          <select
+            value={input.remotePreference}
+            onChange={(e) => set('remotePreference', e.target.value)}
+          >
+            <option value="flexible">柔軟</option>
+            <option value="onsite">常駐</option>
+            <option value="hybrid">併用</option>
+            <option value="remote">リモート</option>
+          </select>
+        </label>
+        <label>
+          週稼働日数（下限）
+          <input
+            type="number"
+            min="0"
+            max="7"
+            step="0.5"
+            value={input.weeklyDaysMin ?? ''}
+            onChange={(e) => set('weeklyDaysMin', number(e.target.value))}
+          />
+        </label>
+        <label>
+          週稼働日数（上限）
+          <input
+            type="number"
+            min="0"
+            max="7"
+            step="0.5"
+            value={input.weeklyDaysMax ?? ''}
+            onChange={(e) => set('weeklyDaysMax', number(e.target.value))}
+          />
+        </label>
+        <label>
+          稼働可能日
+          <input
+            type="date"
+            value={input.availableFrom ?? ''}
+            onChange={(e) => set('availableFrom', e.target.value || null)}
+          />
+        </label>
+        <label>
+          希望勤務地（改行区切り）
+          <textarea
+            value={input.locations.join('\n')}
+            onChange={(e) =>
+              set(
+                'locations',
+                e.target.value
+                  .split('\n')
+                  .map((x) => x.trim())
+                  .filter(Boolean),
+              )
+            }
+          />
+        </label>
+        <label>
+          希望契約形態（改行区切り）
+          <textarea
+            value={input.contractTypes.join('\n')}
+            onChange={(e) =>
+              set(
+                'contractTypes',
+                e.target.value
+                  .split('\n')
+                  .map((x) => x.trim())
+                  .filter(Boolean),
+              )
+            }
+          />
+        </label>
+        <label>
+          備考
+          <textarea
+            maxLength={2000}
+            value={input.notes ?? ''}
+            onChange={(e) => set('notes', e.target.value || null)}
+          />
+        </label>
+        <button className="primary-button" disabled={saving}>
+          {saving ? '保存中…' : editing ? '希望条件を更新' : '履歴を追加'}
+        </button>
+      </form>
     </section>
   );
 }

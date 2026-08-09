@@ -96,6 +96,33 @@ export type EngineerAffiliationInput = Omit<
 export interface EngineerAffiliationList {
   items: EngineerAffiliation[];
 }
+export type RemotePreference = 'onsite' | 'hybrid' | 'remote' | 'flexible';
+export interface EngineerPreference {
+  id: string;
+  engineerId: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  desiredRateMin: number | null;
+  desiredRateMax: number | null;
+  currencyCode: string;
+  remotePreference: RemotePreference;
+  weeklyDaysMin: number | null;
+  weeklyDaysMax: number | null;
+  overtimeLimitHours: number | null;
+  availableFrom: string | null;
+  notes: string | null;
+  locations: string[];
+  contractTypes: string[];
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerPreferenceInput = Omit<
+  EngineerPreference,
+  'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
+>;
+export interface EngineerPreferenceList {
+  items: EngineerPreference[];
+}
 export interface ListEngineersQuery {
   q?: string;
   status?: EngineerStatus;

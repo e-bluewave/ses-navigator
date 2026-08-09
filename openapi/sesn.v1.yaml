@@ -566,6 +566,74 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /engineers/{id}/preferences:
+    get:
+      operationId: listEngineerPreferences
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Engineer preference history
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: '#/components/schemas/EngineerPreferenceList' },
+                },
+            }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /engineers/{id}/preferences/{preferenceId}:
+    put:
+      operationId: saveEngineerPreference
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: preferenceId,
+            in: path,
+            required: true,
+            schema: { type: string },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  { $ref: '#/components/schemas/EngineerPreferenceInput' },
+              },
+          }
+      responses:
+        '200':
+          description: Engineer preference created or updated
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/EngineerPreference' } },
+            }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /auth/context:
     get:
       operationId: getAuthContext
@@ -904,6 +972,58 @@ components:
           {
             type: array,
             items: { $ref: '#/components/schemas/EngineerAffiliation' },
+          }
+    RemotePreference: { type: string, enum: [onsite, hybrid, remote, flexible] }
+    EngineerPreferenceInput:
+      type: object
+      required:
+        [
+          effectiveFrom,
+          effectiveTo,
+          desiredRateMin,
+          desiredRateMax,
+          currencyCode,
+          remotePreference,
+          weeklyDaysMin,
+          weeklyDaysMax,
+          overtimeLimitHours,
+          availableFrom,
+          notes,
+          locations,
+          contractTypes,
+        ]
+      properties:
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: [string, 'null'], format: date }
+        desiredRateMin: { type: [integer, 'null'], minimum: 0 }
+        desiredRateMax: { type: [integer, 'null'], minimum: 0 }
+        currencyCode: { type: string, minLength: 3, maxLength: 3 }
+        remotePreference: { $ref: '#/components/schemas/RemotePreference' }
+        weeklyDaysMin: { type: [number, 'null'], minimum: 0, maximum: 7 }
+        weeklyDaysMax: { type: [number, 'null'], minimum: 0, maximum: 7 }
+        overtimeLimitHours: { type: [number, 'null'], minimum: 0 }
+        availableFrom: { type: [string, 'null'], format: date }
+        notes: { type: [string, 'null'], maxLength: 2000 }
+        locations: { type: array, maxItems: 20, items: { type: string } }
+        contractTypes: { type: array, maxItems: 10, items: { type: string } }
+    EngineerPreference:
+      allOf:
+        - { $ref: '#/components/schemas/EngineerPreferenceInput' }
+        - type: object
+          required: [id, engineerId, updatedAt, rowVersion]
+          properties:
+            id: { type: string, format: uuid }
+            engineerId: { type: string, format: uuid }
+            updatedAt: { type: string, format: date-time }
+            rowVersion: { type: integer, minimum: 1 }
+    EngineerPreferenceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/EngineerPreference' },
           }
     CompanyStatus: { type: string, enum: [prospect, active, inactive, blocked] }
     ContactStatus:

@@ -62,6 +62,8 @@ function repository(
     ),
     listAffiliations: vi.fn(() => Promise.resolve([])),
     saveAffiliation: vi.fn(() => Promise.resolve(null)),
+    listPreferences: vi.fn(() => Promise.resolve([])),
+    savePreference: vi.fn(() => Promise.resolve(null)),
     ...overrides,
   };
 }
@@ -333,6 +335,94 @@ describe('engineer affiliation history API', () => {
           url: `/api/v1/engineers/${engineer.id}/affiliations/${affiliation.id}`,
           headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
           payload: { ...payload, endDate: null },
+        })
+      ).statusCode,
+    ).toBe(409);
+  });
+});
+
+describe('engineer preference API', () => {
+  const preference = {
+    id: '55555555-5555-4555-8555-555555555555',
+    engineerId: engineer.id,
+    effectiveFrom: '2026-09-01',
+    effectiveTo: null,
+    desiredRateMin: 700000,
+    desiredRateMax: 900000,
+    currencyCode: 'JPY',
+    remotePreference: 'hybrid' as const,
+    weeklyDaysMin: 4,
+    weeklyDaysMax: 5,
+    overtimeLimitHours: 20,
+    availableFrom: '2026-09-01',
+    notes: null,
+    locations: ['東京都'],
+    contractTypes: ['freelance'],
+    updatedAt: '2026-08-09T00:00:00Z',
+    rowVersion: 1,
+  };
+  it('lists and saves preferences with optimistic locking', async () => {
+    const engineers = repository({
+      listPreferences: vi.fn(() => Promise.resolve([preference])),
+      savePreference: vi.fn(() =>
+        Promise.resolve({ ...preference, rowVersion: 2 }),
+      ),
+    });
+    const list = await app(engineers).inject({
+      method: 'GET',
+      url: `/api/v1/engineers/${engineer.id}/preferences`,
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toMatchObject({ items: [preference] });
+    const saved = await app(engineers).inject({
+      method: 'PUT',
+      url: `/api/v1/engineers/${engineer.id}/preferences/${preference.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: {
+        ...preference,
+        id: undefined,
+        engineerId: undefined,
+        updatedAt: undefined,
+        rowVersion: undefined,
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.headers.etag).toBe('"2"');
+  });
+  it('rejects invalid periods and stale versions', async () => {
+    const payload = {
+      effectiveFrom: '2026-09-01',
+      effectiveTo: '2026-08-01',
+      desiredRateMin: null,
+      desiredRateMax: null,
+      currencyCode: 'JPY',
+      remotePreference: 'flexible',
+      weeklyDaysMin: null,
+      weeklyDaysMax: null,
+      overtimeLimitHours: null,
+      availableFrom: null,
+      notes: null,
+      locations: [],
+      contractTypes: [],
+    };
+    expect(
+      (
+        await app().inject({
+          method: 'PUT',
+          url: `/api/v1/engineers/${engineer.id}/preferences/new`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"0"' },
+          payload,
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await app().inject({
+          method: 'PUT',
+          url: `/api/v1/engineers/${engineer.id}/preferences/${preference.id}`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+          payload: { ...payload, effectiveTo: null },
         })
       ).statusCode,
     ).toBe(409);
