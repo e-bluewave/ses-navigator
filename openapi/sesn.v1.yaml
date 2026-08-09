@@ -193,6 +193,33 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /contacts/{id}:
+    delete:
+      operationId: deleteCompanyContact
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompanyContactDeleteInput' }
+      responses:
+        '204': { description: Company contact soft-deleted and audited }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     put:
       operationId: updateCompanyContact
       parameters:
@@ -243,6 +270,24 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /contacts/{id}/audit:
+    get:
+      operationId: listCompanyContactAudit
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Company contact audit event summaries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyContactAuditList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /auth/context:
     get:
       operationId: getAuthContext
@@ -570,6 +615,29 @@ components:
           {
             type: array,
             items: { $ref: '#/components/schemas/CompanyAuditEvent' },
+          }
+    CompanyContactDeleteInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CompanyContactAuditEvent:
+      type: object
+      required: [id, occurredAt, actorUserId, action, requestId]
+      properties:
+        id: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        actorUserId: { type: [string, 'null'], format: uuid }
+        action: { type: string }
+        requestId: { type: [string, 'null'] }
+    CompanyContactAuditList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/CompanyContactAuditEvent' },
           }
     CompanyList:
       type: object

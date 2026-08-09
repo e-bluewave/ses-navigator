@@ -24,10 +24,13 @@ function repository(
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
     canManage: vi.fn(() => Promise.resolve(true)),
+    canReadAudit: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [contact], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(contact)),
     create: vi.fn(() => Promise.resolve(contact)),
     update: vi.fn(() => Promise.resolve({ ...contact, rowVersion: 2 })),
+    softDelete: vi.fn(() => Promise.resolve(true)),
+    listAudit: vi.fn(() => Promise.resolve([])),
     ...overrides,
   };
 }
@@ -170,5 +173,80 @@ describe('company contact read API', () => {
       headers: { authorization: 'Bearer valid' },
     });
     expect(hidden.statusCode).toBe(404);
+  });
+  it('soft-deletes a contact and reads its audit trail', async () => {
+    const softDelete = vi.fn(() => Promise.resolve(true));
+    const contacts = repository({
+      softDelete,
+      listAudit: vi.fn(() =>
+        Promise.resolve([
+          {
+            id: '33333333-3333-4333-8333-333333333333',
+            occurredAt: '2026-08-09T06:00:00Z',
+            actorUserId: null,
+            action: 'company_contact.soft_deleted',
+            requestId: null,
+          },
+        ]),
+      ),
+    });
+    const deleted = await app(contacts).inject({
+      method: 'DELETE',
+      url: `/api/v1/contacts/${contact.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: { reason: '重複登録のため' },
+    });
+    expect(deleted.statusCode).toBe(204);
+    expect(softDelete).toHaveBeenCalledWith(
+      'valid',
+      contact.id,
+      1,
+      '重複登録のため',
+      expect.any(String),
+    );
+    const audit = await app(contacts).inject({
+      method: 'GET',
+      url: `/api/v1/contacts/${contact.id}/audit`,
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json<{ items: { action: string }[] }>().items[0]?.action).toBe(
+      'company_contact.soft_deleted',
+    );
+  });
+  it('validates contact deletion and audit permissions', async () => {
+    expect(
+      (
+        await app().inject({
+          method: 'DELETE',
+          url: `/api/v1/contacts/${contact.id}`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+          payload: { reason: '' },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await app(
+          repository({ softDelete: vi.fn(() => Promise.resolve(false)) }),
+        ).inject({
+          method: 'DELETE',
+          url: `/api/v1/contacts/${contact.id}`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+          payload: { reason: '退職のため' },
+        })
+      ).statusCode,
+    ).toBe(409);
+    expect(
+      (
+        await app(
+          repository({ canReadAudit: vi.fn(() => Promise.resolve(false)) }),
+        ).inject({
+          method: 'GET',
+          url: `/api/v1/contacts/${contact.id}/audit`,
+          headers: { authorization: 'Bearer valid' },
+        })
+      ).statusCode,
+    ).toBe(403);
   });
 });

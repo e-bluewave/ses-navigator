@@ -8,7 +8,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectsApi } from '../api/client.js';
-import type { Company, Project } from '../api/generated.js';
+import type { Company, CompanyContact, Project } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
 
@@ -40,6 +40,22 @@ const company: Company = {
   status: 'active',
   updatedAt: '2026-08-09T00:00:00Z',
   rowVersion: 1,
+};
+const contact: CompanyContact = {
+  id: '33333333-3333-4333-8333-333333333333',
+  companyId: company.id,
+  managementNo: 'CT-000001',
+  familyName: '青波',
+  givenName: '太郎',
+  departmentName: '営業部',
+  positionTitle: '部長',
+  email: 'taro@example.com',
+  phone: null,
+  mobilePhone: null,
+  isPrimary: true,
+  status: 'active',
+  updatedAt: '2026-08-09T00:00:00Z',
+  rowVersion: 2,
 };
 
 const session: AuthSession = {
@@ -105,6 +121,8 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     updateCompanyContact: vi.fn(() =>
       Promise.reject(new Error('not configured')),
     ),
+    deleteCompanyContact: vi.fn(() => Promise.resolve()),
+    listCompanyContactAudit: vi.fn(() => Promise.resolve({ items: [] })),
     ...overrides,
   };
 }
@@ -200,6 +218,49 @@ describe('App', () => {
         company.id,
         company.rowVersion,
         '重複登録のため',
+      ),
+    );
+  });
+  it('soft-deletes a company contact and shows its audit trail', async () => {
+    window.history.replaceState({}, '', `/contacts/${contact.id}`);
+    const deleteCompanyContact = vi.fn(() => Promise.resolve());
+    const listCompanyContactAudit = vi.fn(() =>
+      Promise.resolve({
+        items: [
+          {
+            id: '44444444-4444-4444-8444-444444444444',
+            occurredAt: '2026-08-09T06:00:00Z',
+            actorUserId: null,
+            action: 'company_contact.updated',
+            requestId: null,
+          },
+        ],
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getCompanyContact: () => Promise.resolve(contact),
+          deleteCompanyContact,
+          listCompanyContactAudit,
+        })}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '監査履歴' }));
+    expect(
+      await screen.findByText('company_contact.updated'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '削除' }));
+    fireEvent.change(screen.getByLabelText('削除理由'), {
+      target: { value: '退職のため' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '論理削除する' }));
+    await waitFor(() =>
+      expect(deleteCompanyContact).toHaveBeenCalledWith(
+        contact.id,
+        contact.rowVersion,
+        '退職のため',
       ),
     );
   });
