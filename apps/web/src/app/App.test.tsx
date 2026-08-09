@@ -77,7 +77,7 @@ describe('App', () => {
       await screen.findByRole('button', { name: '基幹システム刷新' }),
     ).toBeInTheDocument();
     expect(screen.getByText('PJ-000001')).toBeInTheDocument();
-    expect(screen.getByText('募集中')).toBeInTheDocument();
+    expect(screen.getAllByText('募集中')).toHaveLength(2);
   });
 
   it('navigates from the list to project detail', async () => {
@@ -112,6 +112,51 @@ describe('App', () => {
     expect(
       await screen.findByText('表示できる案件はありません。'),
     ).toBeInTheDocument();
+  });
+
+  it('searches, filters, and loads the next cursor page', async () => {
+    const listProjects = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [project],
+        page: { limit: 50, nextCursor: null },
+      })
+      .mockResolvedValueOnce({
+        items: [project],
+        page: { limit: 50, nextCursor: 'cursor-2' },
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            ...project,
+            id: '22222222-2222-4222-8222-222222222222',
+            managementNo: 'PJ-000002',
+          },
+        ],
+        page: { limit: 50, nextCursor: null },
+      });
+    render(<App auth={auth()} api={api({ listProjects })} />);
+    await screen.findByText('PJ-000001');
+    fireEvent.change(screen.getByLabelText('案件検索'), {
+      target: { value: '基幹' },
+    });
+    fireEvent.change(screen.getByLabelText('案件状態'), {
+      target: { value: 'open' },
+    });
+    fireEvent.change(screen.getByLabelText('募集状態'), {
+      target: { value: 'recruiting' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+    await screen.findByRole('button', { name: 'さらに表示' });
+    fireEvent.click(screen.getByRole('button', { name: 'さらに表示' }));
+    expect(await screen.findByText('PJ-000002')).toBeInTheDocument();
+    expect(listProjects).toHaveBeenLastCalledWith({
+      limit: 50,
+      cursor: 'cursor-2',
+      q: '基幹',
+      status: 'open',
+      recruitmentStatus: 'recruiting',
+    });
   });
 
   it('shows login for an unauthenticated user and signs in', async () => {

@@ -16,9 +16,15 @@ describe('generated projects API client', () => {
       getAccessToken: () => 'access-token',
       fetch: request,
     });
-    await api.listProjects({ status: 'open', limit: 20 });
+    await api.listProjects({
+      q: '基幹',
+      status: 'open',
+      recruitmentStatus: 'recruiting',
+      cursor: 'next-page',
+      limit: 20,
+    });
     expect(request).toHaveBeenCalledWith(
-      '/api/v1/projects?status=open&limit=20',
+      '/api/v1/projects?q=%E5%9F%BA%E5%B9%B9&status=open&recruitmentStatus=recruiting&cursor=next-page&limit=20',
       {
         headers: { authorization: 'Bearer access-token' },
       },

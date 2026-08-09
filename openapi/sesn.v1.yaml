@@ -21,7 +21,17 @@ paths:
     get:
       operationId: listProjects
       parameters:
-        - { name: managementNo, in: query, schema: { type: string } }
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, minLength: 1, maxLength: 100 },
+          }
+        - {
+            name: recruitmentStatus,
+            in: query,
+            schema: { $ref: '#/components/schemas/RecruitmentStatus' },
+          }
+        - { name: cursor, in: query, schema: { type: string } }
         - {
             name: status,
             in: query,
@@ -70,6 +80,8 @@ components:
         requiresMfa: { type: boolean }
     ProjectStatus:
       { type: string, enum: [draft, open, on_hold, closed, cancelled] }
+    RecruitmentStatus:
+      { type: string, enum: [recruiting, paused, filled, ended] }
     Project:
       type: object
       required:
@@ -91,8 +103,7 @@ components:
         projectName: { type: string }
         summary: { type: [string, 'null'] }
         projectStatus: { $ref: '#/components/schemas/ProjectStatus' }
-        recruitmentStatus:
-          { type: string, enum: [recruiting, paused, filled, ended] }
+        recruitmentStatus: { $ref: '#/components/schemas/RecruitmentStatus' }
         plannedStartOn: { type: [string, 'null'], format: date }
         plannedEndOn: { type: [string, 'null'], format: date }
         updatedAt: { type: string, format: date-time }

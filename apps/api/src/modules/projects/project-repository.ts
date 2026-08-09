@@ -16,13 +16,23 @@ export interface Project {
 
 export interface ProjectListQuery {
   limit: number;
-  managementNo?: string;
+  cursor?: { updatedAt: string; id: string };
+  query?: string;
+  recruitmentStatus?: string;
   status?: string;
+}
+
+export interface ProjectListResult {
+  items: Project[];
+  nextCursor: { updatedAt: string; id: string } | null;
 }
 
 export interface ProjectRepository {
   canRead(accessToken: string): Promise<boolean>;
-  list(accessToken: string, query: ProjectListQuery): Promise<Project[]>;
+  list(
+    accessToken: string,
+    query: ProjectListQuery,
+  ): Promise<ProjectListResult>;
   findById(accessToken: string, id: string): Promise<Project | null>;
 }
 
@@ -48,23 +58,50 @@ export class SupabaseProjectRepository implements ProjectRepository {
     return (await response.json()) === true;
   }
 
-  async list(token: string, query: ProjectListQuery): Promise<Project[]> {
+  async list(
+    token: string,
+    query: ProjectListQuery,
+  ): Promise<ProjectListResult> {
     const params = new URLSearchParams({
       select:
         'id,management_no,project_name,summary,project_status,recruitment_status,planned_start_on,planned_end_on,updated_at,row_version',
       deleted_at: 'is.null',
       order: 'updated_at.desc,id.desc',
-      limit: String(query.limit),
+      limit: String(query.limit + 1),
     });
-    if (query.managementNo !== undefined)
-      params.set('management_no', `eq.${query.managementNo}`);
+    const compoundFilters: string[] = [];
+    if (query.query !== undefined) {
+      const pattern = `"*${escapeFilterValue(query.query)}*"`;
+      compoundFilters.push(
+        `or(management_no.ilike.${pattern},project_name.ilike.${pattern})`,
+      );
+    }
     if (query.status !== undefined)
       params.set('project_status', `eq.${query.status}`);
+    if (query.recruitmentStatus !== undefined)
+      params.set('recruitment_status', `eq.${query.recruitmentStatus}`);
+    if (query.cursor !== undefined)
+      compoundFilters.push(
+        `or(updated_at.lt.${query.cursor.updatedAt},and(updated_at.eq.${query.cursor.updatedAt},id.lt.${query.cursor.id}))`,
+      );
+    if (compoundFilters.length === 1)
+      params.set('and', `(${compoundFilters[0]})`);
+    if (compoundFilters.length > 1)
+      params.set('and', `(${compoundFilters.join(',')})`);
     const response = await this.request(
       token,
       `/projects?${params.toString()}`,
     );
-    return ((await response.json()) as ProjectRow[]).map(toProject);
+    const rows = (await response.json()) as ProjectRow[];
+    const visibleRows = rows.slice(0, query.limit);
+    const last = visibleRows.at(-1);
+    return {
+      items: visibleRows.map(toProject),
+      nextCursor:
+        rows.length > query.limit && last !== undefined
+          ? { updatedAt: last.updated_at, id: last.id }
+          : null,
+    };
   }
 
   async findById(token: string, id: string): Promise<Project | null> {
@@ -108,6 +145,13 @@ export class SupabaseProjectRepository implements ProjectRepository {
       );
     return response;
   }
+}
+
+function escapeFilterValue(value: string): string {
+  return value
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('*', '\\*');
 }
 
 function toProject(row: ProjectRow): Project {

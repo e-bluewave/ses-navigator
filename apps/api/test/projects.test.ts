@@ -34,7 +34,7 @@ function repository(
 ): ProjectRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
-    list: vi.fn(() => Promise.resolve([project])),
+    list: vi.fn(() => Promise.resolve({ items: [project], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(project)),
     ...overrides,
   };
@@ -79,6 +79,36 @@ describe('project read API', () => {
       items: [project],
       page: { limit: 20, nextCursor: null },
     });
+  });
+
+  it('passes search, filters, and a cursor to the repository', async () => {
+    const next = { updatedAt: project.updatedAt, id: project.id };
+    const list = vi.fn(() =>
+      Promise.resolve({ items: [project], nextCursor: next }),
+    );
+    const response = await app(repository({ list })).inject({
+      method: 'GET',
+      url: '/api/v1/projects?q=%E5%9F%BA%E5%B9%B9&status=open&recruitmentStatus=recruiting&limit=20',
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(list).toHaveBeenCalledWith('valid', {
+      limit: 20,
+      query: '基幹',
+      status: 'open',
+      recruitmentStatus: 'recruiting',
+    });
+    const body = response.json<{ page: { nextCursor: string | null } }>();
+    expect(body.page.nextCursor).toEqual(expect.any(String));
+  });
+
+  it('rejects an invalid cursor', async () => {
+    const response = await app().inject({
+      method: 'GET',
+      url: '/api/v1/projects?cursor=invalid',
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(response.statusCode).toBe(400);
   });
 
   it('returns a project detail', async () => {
