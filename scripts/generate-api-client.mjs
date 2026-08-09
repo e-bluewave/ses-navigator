@@ -32,6 +32,8 @@ const requiredContractFragments = [
   'operationId: listEngineerAudit',
   'operationId: getEngineerPrivate',
   'operationId: updateEngineerPrivate',
+  'operationId: listEngineerAffiliations',
+  'operationId: saveEngineerAffiliation',
   'enum: [draft, open, on_hold, closed, cancelled]',
   'enum: [recruiting, paused, filled, ended]',
   'required: [items, page]',
@@ -121,6 +123,28 @@ export type EngineerPrivateInput = Omit<
   EngineerPrivateDetail,
   'engineerId' | 'updatedAt' | 'rowVersion'
 >;
+export type EngineerAffiliationType =
+  'employee' | 'freelance' | 'partner_employee' | 'subcontractor' | 'other';
+export interface EngineerAffiliation {
+  id: string;
+  engineerId: string;
+  companyId: string;
+  affiliationType: EngineerAffiliationType;
+  contractType: string | null;
+  startDate: string;
+  endDate: string | null;
+  isPrimary: boolean;
+  notes: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerAffiliationInput = Omit<
+  EngineerAffiliation,
+  'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
+>;
+export interface EngineerAffiliationList {
+  items: EngineerAffiliation[];
+}
 export interface ListEngineersQuery {
   q?: string;
   status?: EngineerStatus;

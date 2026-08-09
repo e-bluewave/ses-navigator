@@ -23,6 +23,9 @@ import type {
   ListEngineersQuery,
   EngineerPrivateDetail,
   EngineerPrivateInput,
+  EngineerAffiliation,
+  EngineerAffiliationInput,
+  EngineerAffiliationList,
 } from './generated.js';
 
 export interface ProjectsApi {
@@ -79,6 +82,13 @@ export interface ProjectsApi {
     rowVersion: number,
     input: EngineerPrivateInput,
   ): Promise<EngineerPrivateDetail>;
+  listEngineerAffiliations(id: string): Promise<EngineerAffiliationList>;
+  saveEngineerAffiliation(
+    id: string,
+    affiliationId: string | null,
+    rowVersion: number,
+    input: EngineerAffiliationInput,
+  ): Promise<EngineerAffiliation>;
 }
 
 export class ApiClientError extends Error {
@@ -310,6 +320,19 @@ export function createProjectsApi(options: {
     updateEngineerPrivate(id, rowVersion, input) {
       return send<EngineerPrivateDetail>(
         `/engineers/${encodeURIComponent(id)}/private`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    listEngineerAffiliations(id) {
+      return get<EngineerAffiliationList>(
+        `/engineers/${encodeURIComponent(id)}/affiliations`,
+      );
+    },
+    saveEngineerAffiliation(id, affiliationId, rowVersion, input) {
+      return send<EngineerAffiliation>(
+        `/engineers/${encodeURIComponent(id)}/affiliations/${affiliationId ? encodeURIComponent(affiliationId) : 'new'}`,
         'PUT',
         input,
         rowVersion,

@@ -60,6 +60,8 @@ function repository(
     savePrivate: vi.fn(() =>
       Promise.resolve({ ...privateDetail, rowVersion: 2 }),
     ),
+    listAffiliations: vi.fn(() => Promise.resolve([])),
+    saveAffiliation: vi.fn(() => Promise.resolve(null)),
     ...overrides,
   };
 }
@@ -253,6 +255,84 @@ describe('engineer private detail API', () => {
           url: `/api/v1/engineers/${engineer.id}/private`,
           headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
           payload: input,
+        })
+      ).statusCode,
+    ).toBe(409);
+  });
+});
+
+describe('engineer affiliation history API', () => {
+  const affiliation = {
+    id: '33333333-3333-4333-8333-333333333333',
+    engineerId: engineer.id,
+    companyId: '44444444-4444-4444-8444-444444444444',
+    affiliationType: 'employee' as const,
+    contractType: '正社員',
+    startDate: '2026-01-01',
+    endDate: null,
+    isPrimary: true,
+    notes: null,
+    updatedAt: '2026-08-09T00:00:00Z',
+    rowVersion: 1,
+  };
+  it('lists and saves affiliation history with optimistic locking', async () => {
+    const engineers = repository({
+      listAffiliations: vi.fn(() => Promise.resolve([affiliation])),
+      saveAffiliation: vi.fn(() =>
+        Promise.resolve({ ...affiliation, rowVersion: 2 }),
+      ),
+    });
+    const list = await app(engineers).inject({
+      method: 'GET',
+      url: `/api/v1/engineers/${engineer.id}/affiliations`,
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toMatchObject({ items: [affiliation] });
+    const saved = await app(engineers).inject({
+      method: 'PUT',
+      url: `/api/v1/engineers/${engineer.id}/affiliations/${affiliation.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: {
+        companyId: affiliation.companyId,
+        affiliationType: 'employee',
+        contractType: '正社員',
+        startDate: '2026-01-01',
+        endDate: null,
+        isPrimary: true,
+        notes: null,
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.headers.etag).toBe('"2"');
+  });
+  it('rejects invalid periods and stale versions', async () => {
+    const payload = {
+      companyId: affiliation.companyId,
+      affiliationType: 'employee',
+      contractType: null,
+      startDate: '2026-02-01',
+      endDate: '2026-01-01',
+      isPrimary: false,
+      notes: null,
+    };
+    expect(
+      (
+        await app().inject({
+          method: 'PUT',
+          url: `/api/v1/engineers/${engineer.id}/affiliations/new`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"0"' },
+          payload,
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await app().inject({
+          method: 'PUT',
+          url: `/api/v1/engineers/${engineer.id}/affiliations/${affiliation.id}`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+          payload: { ...payload, endDate: null },
         })
       ).statusCode,
     ).toBe(409);

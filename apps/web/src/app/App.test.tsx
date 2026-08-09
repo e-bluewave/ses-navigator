@@ -168,6 +168,8 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       }),
     ),
     updateEngineerPrivate: vi.fn(),
+    listEngineerAffiliations: vi.fn(() => Promise.resolve({ items: [] })),
+    saveEngineerAffiliation: vi.fn(),
     ...overrides,
   };
 }
