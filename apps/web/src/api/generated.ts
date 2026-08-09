@@ -86,6 +86,19 @@ export interface CompanyContactList {
   items: CompanyContact[];
   page: { limit: number; nextCursor: string | null };
 }
+export interface CompanyContactInput {
+  companyId: string;
+  managementNo: string;
+  familyName: string;
+  givenName: string | null;
+  departmentName: string | null;
+  positionTitle: string | null;
+  email: string | null;
+  phone: string | null;
+  mobilePhone: string | null;
+  isPrimary: boolean;
+  status: ContactStatus;
+}
 export interface ListCompanyContactsQuery {
   companyId?: string;
   q?: string;

@@ -12,6 +12,7 @@ import type {
   CompanyAuditList,
   ListCompaniesQuery,
   CompanyContact,
+  CompanyContactInput,
   CompanyContactList,
   ListCompanyContactsQuery,
 } from './generated.js';
@@ -42,6 +43,12 @@ export interface ProjectsApi {
     query?: ListCompanyContactsQuery,
   ): Promise<CompanyContactList>;
   getCompanyContact(id: string): Promise<CompanyContact>;
+  createCompanyContact(input: CompanyContactInput): Promise<CompanyContact>;
+  updateCompanyContact(
+    id: string,
+    rowVersion: number,
+    input: CompanyContactInput,
+  ): Promise<CompanyContact>;
 }
 
 export class ApiClientError extends Error {
@@ -202,6 +209,17 @@ export function createProjectsApi(options: {
     },
     getCompanyContact(id) {
       return get<CompanyContact>(`/contacts/${encodeURIComponent(id)}`);
+    },
+    createCompanyContact(input) {
+      return send<CompanyContact>('/contacts', 'POST', input);
+    },
+    updateCompanyContact(id, rowVersion, input) {
+      return send<CompanyContact>(
+        `/contacts/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
     },
   };
 }

@@ -20,6 +20,8 @@ const requiredContractFragments = [
   'operationId: listCompanyAudit',
   'operationId: listCompanyContacts',
   'operationId: getCompanyContact',
+  'operationId: createCompanyContact',
+  'operationId: updateCompanyContact',
   'enum: [draft, open, on_hold, closed, cancelled]',
   'enum: [recruiting, paused, filled, ended]',
   'required: [items, page]',
@@ -120,6 +122,19 @@ export interface CompanyContact {
 export interface CompanyContactList {
   items: CompanyContact[];
   page: { limit: number; nextCursor: string | null };
+}
+export interface CompanyContactInput {
+  companyId: string;
+  managementNo: string;
+  familyName: string;
+  givenName: string | null;
+  departmentName: string | null;
+  positionTitle: string | null;
+  email: string | null;
+  phone: string | null;
+  mobilePhone: string | null;
+  isPrimary: boolean;
+  status: ContactStatus;
 }
 export interface ListCompanyContactsQuery {
   companyId?: string;

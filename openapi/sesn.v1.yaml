@@ -147,6 +147,22 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /contacts:
+    post:
+      operationId: createCompanyContact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompanyContactInput' }
+      responses:
+        '201':
+          description: Company contact created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyContact' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     get:
       operationId: listCompanyContacts
       parameters:
@@ -177,6 +193,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /contacts/{id}:
+    put:
+      operationId: updateCompanyContact
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompanyContactInput' }
+      responses:
+        '200':
+          description: Company contact updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyContact' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     get:
       operationId: getCompanyContact
       parameters:
@@ -396,6 +443,34 @@ components:
         status: { $ref: '#/components/schemas/ContactStatus' }
         updatedAt: { type: string, format: date-time }
         rowVersion: { type: integer, minimum: 1 }
+    CompanyContactInput:
+      type: object
+      required:
+        [
+          companyId,
+          managementNo,
+          familyName,
+          givenName,
+          departmentName,
+          positionTitle,
+          email,
+          phone,
+          mobilePhone,
+          isPrimary,
+          status,
+        ]
+      properties:
+        companyId: { type: string, format: uuid }
+        managementNo: { type: string, minLength: 1, maxLength: 32 }
+        familyName: { type: string, minLength: 1, maxLength: 100 }
+        givenName: { type: [string, 'null'], maxLength: 100 }
+        departmentName: { type: [string, 'null'], maxLength: 200 }
+        positionTitle: { type: [string, 'null'], maxLength: 200 }
+        email: { type: [string, 'null'], format: email, maxLength: 320 }
+        phone: { type: [string, 'null'], maxLength: 50 }
+        mobilePhone: { type: [string, 'null'], maxLength: 50 }
+        isPrimary: { type: boolean }
+        status: { $ref: '#/components/schemas/ContactStatus' }
     CompanyContactList:
       type: object
       required: [items, page]

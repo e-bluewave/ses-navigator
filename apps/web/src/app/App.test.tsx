@@ -99,6 +99,12 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
     getCompanyContact: vi.fn(() => Promise.reject(new Error('not configured'))),
+    createCompanyContact: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    updateCompanyContact: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     ...overrides,
   };
 }
