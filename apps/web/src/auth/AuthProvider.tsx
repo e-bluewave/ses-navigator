@@ -18,6 +18,9 @@ type AuthState = {
   signOut: () => Promise<void>;
   enrollMfa: () => Promise<MfaEnrollment>;
   verifyMfa: (factorId: string, code: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
+  consumeAuthCallback: (url: string) => Promise<'recovery' | 'invite' | null>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -93,10 +96,48 @@ export function AuthProvider({
     },
     [auth],
   );
+  const requestPasswordReset = useCallback(
+    (email: string) =>
+      auth.requestPasswordReset(
+        email,
+        `${window.location.origin}/auth/callback`,
+      ),
+    [auth],
+  );
+  const updatePassword = useCallback(
+    (password: string) => auth.updatePassword(password),
+    [auth],
+  );
+  const consumeAuthCallback = useCallback(
+    (url: string) => auth.consumeAuthCallback(url),
+    [auth],
+  );
 
   const value = useMemo(
-    () => ({ loading, session, error, signIn, signOut, enrollMfa, verifyMfa }),
-    [loading, session, error, signIn, signOut, enrollMfa, verifyMfa],
+    () => ({
+      loading,
+      session,
+      error,
+      signIn,
+      signOut,
+      enrollMfa,
+      verifyMfa,
+      requestPasswordReset,
+      updatePassword,
+      consumeAuthCallback,
+    }),
+    [
+      loading,
+      session,
+      error,
+      signIn,
+      signOut,
+      enrollMfa,
+      verifyMfa,
+      requestPasswordReset,
+      updatePassword,
+      consumeAuthCallback,
+    ],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

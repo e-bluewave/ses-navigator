@@ -19,6 +19,9 @@ export interface AuthService {
   signOut: () => Promise<void>;
   enrollMfa: () => Promise<MfaEnrollment>;
   verifyMfa: (factorId: string, code: string) => Promise<AuthSession>;
+  requestPasswordReset: (email: string, redirectTo: string) => Promise<void>;
+  consumeAuthCallback: (url: string) => Promise<'recovery' | 'invite' | null>;
+  updatePassword: (password: string) => Promise<void>;
   onSessionChange: (
     listener: (session: AuthSession | null) => void,
   ) => () => void;
@@ -194,11 +197,100 @@ export function createSupabaseAuthService(options: {
       notify(next);
       return next;
     },
+    async requestPasswordReset(email, redirectTo) {
+      const response = await request(
+        `${options.url.replace(/\/$/, '')}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`,
+        {
+          method: 'POST',
+          headers: {
+            apikey: options.publishableKey,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ email }),
+        },
+      );
+      if (!response.ok)
+        throw new AuthenticationError('再設定メールを送信できませんでした。');
+    },
+    async consumeAuthCallback(url) {
+      const parsed = new URL(url);
+      const values = new URLSearchParams(parsed.hash.replace(/^#/, ''));
+      const type = values.get('type') ?? parsed.searchParams.get('type');
+      if (type !== 'recovery' && type !== 'invite') return null;
+      const accessToken = values.get('access_token');
+      const refreshToken = values.get('refresh_token');
+      if (accessToken && refreshToken) {
+        notify(
+          parseSession(
+            {
+              access_token: accessToken,
+              refresh_token: refreshToken,
+              expires_in: Number(values.get('expires_in') ?? 3600),
+              user: parseJwtUser(accessToken),
+            },
+            now(),
+          ),
+        );
+        return type;
+      }
+      const tokenHash = parsed.searchParams.get('token_hash');
+      if (!tokenHash) throw new AuthenticationError('認証リンクが無効です。');
+      const response = await request(
+        `${options.url.replace(/\/$/, '')}/auth/v1/verify`,
+        {
+          method: 'POST',
+          headers: {
+            apikey: options.publishableKey,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ token_hash: tokenHash, type }),
+        },
+      );
+      if (!response.ok)
+        throw new AuthenticationError('認証リンクが無効または期限切れです。');
+      notify(
+        parseSession((await response.json()) as SupabaseSessionResponse, now()),
+      );
+      return type;
+    },
+    async updatePassword(password) {
+      if (session === null) throw new AuthenticationError('認証が必要です。');
+      const response = await request(
+        `${options.url.replace(/\/$/, '')}/auth/v1/user`,
+        {
+          method: 'PUT',
+          headers: {
+            apikey: options.publishableKey,
+            authorization: `Bearer ${session.accessToken}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ password }),
+        },
+      );
+      if (!response.ok)
+        throw new AuthenticationError('パスワードを更新できませんでした。');
+    },
     onSessionChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
   };
+}
+
+function parseJwtUser(token: string): { id?: unknown; email?: unknown } {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return {};
+    const value = JSON.parse(
+      atob(payload.replace(/-/g, '+').replace(/_/g, '/')),
+    ) as {
+      sub?: unknown;
+      email?: unknown;
+    };
+    return { id: value.sub, email: value.email };
+  } catch {
+    return {};
+  }
 }
 
 export function createBrowserAuthService(): AuthService {

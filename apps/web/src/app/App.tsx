@@ -6,6 +6,7 @@ import type { Project, ProjectStatus } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
 import { MfaPage } from '../auth/MfaPage.js';
+import { PasswordUpdatePage } from '../auth/PasswordUpdatePage.js';
 import type { AuthService } from '../auth/auth-client.js';
 
 const projectStatusLabels: Record<ProjectStatus, string> = {
@@ -41,7 +42,27 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
 }
 
 function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
-  const { loading, session, signOut } = useAuth();
+  const { loading, session, signOut, consumeAuthCallback } = useAuth();
+  const [callback, setCallback] = useState<'recovery' | 'invite' | null>(null);
+  const [callbackLoading, setCallbackLoading] = useState(
+    window.location.pathname === '/auth/callback',
+  );
+  const [callbackError, setCallbackError] = useState(false);
+
+  useEffect(() => {
+    if (window.location.pathname !== '/auth/callback') return;
+    void consumeAuthCallback(window.location.href)
+      .then((kind) => {
+        window.history.replaceState({}, '', '/auth/callback');
+        if (kind === null) setCallbackError(true);
+        else setCallback(kind);
+      })
+      .catch(() => {
+        window.history.replaceState({}, '', '/auth/callback');
+        setCallbackError(true);
+      })
+      .finally(() => setCallbackLoading(false));
+  }, [consumeAuthCallback]);
   const api = useMemo(
     () =>
       providedApi ??
@@ -73,11 +94,32 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
     setRoute(currentRoute());
   }
 
-  if (loading)
+  if (loading || callbackLoading)
     return (
       <main className="auth-loading" role="status">
         認証状態を確認しています…
       </main>
+    );
+  if (callbackError)
+    return (
+      <main className="login-shell">
+        <section className="login-panel">
+          <h1>認証リンクを確認できません</h1>
+          <p role="alert">
+            リンクが無効または期限切れです。再度手続きを行ってください。
+          </p>
+        </section>
+      </main>
+    );
+  if (callback && session)
+    return (
+      <PasswordUpdatePage
+        kind={callback}
+        onComplete={() => {
+          setCallback(null);
+          window.history.replaceState({}, '', '/projects');
+        }}
+      />
     );
   if (session === null) return <LoginPage />;
   if (requiresMfa === null)
