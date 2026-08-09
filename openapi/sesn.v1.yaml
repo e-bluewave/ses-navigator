@@ -288,6 +288,60 @@ paths:
               schema: { $ref: '#/components/schemas/CompanyContactAuditList' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /engineers:
+    get:
+      operationId: listEngineers
+      parameters:
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, minLength: 1, maxLength: 100 },
+          }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/EngineerStatus' },
+          }
+        - {
+            name: availabilityStatus,
+            in: query,
+            schema: { $ref: '#/components/schemas/AvailabilityStatus' },
+          }
+        - { name: cursor, in: query, schema: { type: string } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: RLS-visible engineers
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EngineerList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /engineers/{id}:
+    get:
+      operationId: getEngineer
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: RLS-visible engineer public detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Engineer' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /auth/context:
     get:
       operationId: getAuthContext
@@ -451,6 +505,49 @@ components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
+    EngineerStatus:
+      { type: string, enum: [candidate, active, inactive, retired, blocked] }
+    AvailabilityStatus:
+      {
+        type: string,
+        enum: [unknown, available, proposed, engaged, unavailable],
+      }
+    Engineer:
+      type: object
+      required:
+        [
+          id,
+          managementNo,
+          familyName,
+          givenName,
+          displayName,
+          status,
+          availabilityStatus,
+          availableFrom,
+          nearestStation,
+          summary,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        managementNo: { type: string }
+        familyName: { type: string }
+        givenName: { type: string }
+        displayName: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/EngineerStatus' }
+        availabilityStatus: { $ref: '#/components/schemas/AvailabilityStatus' }
+        availableFrom: { type: [string, 'null'], format: date }
+        nearestStation: { type: [string, 'null'] }
+        summary: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    EngineerList:
+      type: object
+      required: [items, page]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Engineer' } }
+        page: { $ref: '#/components/schemas/Page' }
     CompanyStatus: { type: string, enum: [prospect, active, inactive, blocked] }
     ContactStatus:
       { type: string, enum: [active, inactive, left_company, unknown] }

@@ -14,6 +14,9 @@ import type {
   ProjectStatus,
   RecruitmentStatus,
   ProjectInput,
+  Engineer,
+  EngineerStatus,
+  AvailabilityStatus,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -46,9 +49,15 @@ type Route =
   | { page: 'company-new' }
   | { page: 'company-edit'; id: string }
   | { page: 'contacts' }
-  | { page: 'contact-detail'; id: string };
+  | { page: 'contact-detail'; id: string }
+  | { page: 'engineers' }
+  | { page: 'engineer-detail'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/engineers') return { page: 'engineers' };
+  const engineer = window.location.pathname.match(/^\/engineers\/([^/]+)$/);
+  if (engineer)
+    return { page: 'engineer-detail', id: decodeURIComponent(engineer[1]!) };
   if (window.location.pathname === '/contacts') return { page: 'contacts' };
   const contact = window.location.pathname.match(/^\/contacts\/([^/]+)$/);
   if (contact)
@@ -203,6 +212,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         >
           担当者
         </button>
+        <button
+          className="secondary-button"
+          onClick={() => navigate('/engineers')}
+        >
+          技術者
+        </button>
       </nav>
       {route.page === 'list' ? (
         <ProjectList
@@ -222,6 +237,19 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         <ContactList
           api={api}
           onOpen={(id) => navigate(`/contacts/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'engineers' ? (
+        <EngineerList
+          api={api}
+          onOpen={(id) => navigate(`/engineers/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'engineer-detail' ? (
+        <EngineerDetail
+          api={api}
+          id={route.id}
+          onBack={() => navigate('/engineers')}
           onUnauthorized={signOut}
         />
       ) : route.page === 'contact-detail' ? (
@@ -275,6 +303,239 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         />
       )}
     </main>
+  );
+}
+
+const engineerStatusLabels: Record<EngineerStatus, string> = {
+  candidate: '候補',
+  active: '稼働対象',
+  inactive: '休止',
+  retired: '退職',
+  blocked: '利用停止',
+};
+const availabilityLabels: Record<AvailabilityStatus, string> = {
+  unknown: '不明',
+  available: '提案可能',
+  proposed: '提案中',
+  engaged: '参画中',
+  unavailable: '提案不可',
+};
+function EngineerList({
+  api,
+  onOpen,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<Engineer[] | null>(null);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState<EngineerStatus | ''>('');
+  const [availabilityStatus, setAvailabilityStatus] = useState<
+    AvailabilityStatus | ''
+  >('');
+  const [filters, setFilters] = useState({
+    q: '',
+    status: '' as EngineerStatus | '',
+    availabilityStatus: '' as AvailabilityStatus | '',
+  });
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setItems(null);
+    setError(false);
+    api
+      .listEngineers({
+        limit: 50,
+        ...(filters.q ? { q: filters.q } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.availabilityStatus
+          ? { availabilityStatus: filters.availabilityStatus }
+          : {}),
+      })
+      .then((r) => {
+        if (active) setItems(r.items);
+      })
+      .catch((reason) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else if (active) setError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, filters, onUnauthorized]);
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <div>
+          <p className="section-kicker">ENGINEERS</p>
+          <h2>技術者一覧</h2>
+        </div>
+        {items && <span className="count">{items.length}件</span>}
+      </div>
+      <form
+        className="project-filters"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setFilters({ q: q.trim(), status, availabilityStatus });
+        }}
+      >
+        <label>
+          技術者検索
+          <input
+            type="search"
+            maxLength={100}
+            value={q}
+            placeholder="管理番号・氏名"
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </label>
+        <label>
+          状態
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as EngineerStatus | '')}
+          >
+            <option value="">すべて</option>
+            {Object.entries(engineerStatusLabels).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          稼働状態
+          <select
+            value={availabilityStatus}
+            onChange={(e) =>
+              setAvailabilityStatus(e.target.value as AvailabilityStatus | '')
+            }
+          >
+            <option value="">すべて</option>
+            {Object.entries(availabilityLabels).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="primary-button">検索</button>
+      </form>
+      {error ? (
+        <p role="alert">技術者一覧を読み込めませんでした。</p>
+      ) : items === null ? (
+        <p role="status">技術者を読み込んでいます…</p>
+      ) : items.length === 0 ? (
+        <p>表示できる技術者はありません。</p>
+      ) : (
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>管理番号</th>
+                <th>氏名</th>
+                <th>状態</th>
+                <th>稼働状態</th>
+                <th>最寄駅</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} onClick={() => onOpen(item.id)}>
+                  <td>
+                    <button className="link-button">{item.managementNo}</button>
+                  </td>
+                  <td>
+                    {item.displayName ?? `${item.familyName} ${item.givenName}`}
+                  </td>
+                  <td>{engineerStatusLabels[item.status]}</td>
+                  <td>{availabilityLabels[item.availabilityStatus]}</td>
+                  <td>{item.nearestStation ?? '未登録'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+function EngineerDetail({
+  api,
+  id,
+  onBack,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  id: string;
+  onBack: () => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [engineer, setEngineer] = useState<Engineer | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    api
+      .getEngineer(id)
+      .then((r) => {
+        if (active) setEngineer(r);
+      })
+      .catch((reason) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else if (active) setError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, id, onUnauthorized]);
+  return (
+    <section className="panel">
+      <button className="secondary-button" onClick={onBack}>
+        技術者一覧へ戻る
+      </button>
+      {error ? (
+        <p role="alert">技術者詳細を読み込めませんでした。</p>
+      ) : engineer === null ? (
+        <p role="status">技術者を読み込んでいます…</p>
+      ) : (
+        <>
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">{engineer.managementNo}</p>
+              <h2>
+                {engineer.displayName ??
+                  `${engineer.familyName} ${engineer.givenName}`}
+              </h2>
+            </div>
+            <span className="status-badge">
+              {availabilityLabels[engineer.availabilityStatus]}
+            </span>
+          </div>
+          <dl className="detail-grid">
+            <div>
+              <dt>状態</dt>
+              <dd>{engineerStatusLabels[engineer.status]}</dd>
+            </div>
+            <div>
+              <dt>提案可能日</dt>
+              <dd>{engineer.availableFrom ?? '未登録'}</dd>
+            </div>
+            <div>
+              <dt>最寄駅</dt>
+              <dd>{engineer.nearestStation ?? '未登録'}</dd>
+            </div>
+            <div>
+              <dt>概要</dt>
+              <dd>{engineer.summary ?? '未登録'}</dd>
+            </div>
+          </dl>
+        </>
+      )}
+    </section>
   );
 }
 

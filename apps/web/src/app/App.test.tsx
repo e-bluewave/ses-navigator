@@ -8,7 +8,12 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectsApi } from '../api/client.js';
-import type { Company, CompanyContact, Project } from '../api/generated.js';
+import type {
+  Company,
+  CompanyContact,
+  Engineer,
+  Project,
+} from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
 
@@ -56,6 +61,20 @@ const contact: CompanyContact = {
   status: 'active',
   updatedAt: '2026-08-09T00:00:00Z',
   rowVersion: 2,
+};
+const engineer: Engineer = {
+  id: '55555555-5555-4555-8555-555555555555',
+  managementNo: 'EN-000001',
+  familyName: '青波',
+  givenName: '太郎',
+  displayName: '青波 太郎',
+  status: 'active',
+  availabilityStatus: 'available',
+  availableFrom: '2026-09-01',
+  nearestStation: '東京',
+  summary: 'TypeScriptエンジニア',
+  updatedAt: '2026-08-09T00:00:00Z',
+  rowVersion: 1,
 };
 
 const session: AuthSession = {
@@ -123,6 +142,10 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     ),
     deleteCompanyContact: vi.fn(() => Promise.resolve()),
     listCompanyContactAudit: vi.fn(() => Promise.resolve({ items: [] })),
+    listEngineers: vi.fn(() =>
+      Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
+    ),
+    getEngineer: vi.fn(() => Promise.reject(new Error('not configured'))),
     ...overrides,
   };
 }
@@ -131,6 +154,24 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('renders the engineer list and opens public detail', async () => {
+    window.history.replaceState({}, '', '/engineers');
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          listEngineers: () =>
+            Promise.resolve({
+              items: [engineer],
+              page: { limit: 50, nextCursor: null },
+            }),
+          getEngineer: () => Promise.resolve(engineer),
+        })}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'EN-000001' }));
+    expect(await screen.findByText('TypeScriptエンジニア')).toBeInTheDocument();
+  });
   it('navigates to the company list and detail', async () => {
     const getCompany = vi.fn(() => Promise.resolve(company));
     render(

@@ -17,6 +17,9 @@ import { registerCompanyRoutes } from './modules/companies/company-routes.js';
 import { SupabaseContactRepository } from './modules/contacts/contact-repository.js';
 import type { ContactRepository } from './modules/contacts/contact-repository.js';
 import { registerContactRoutes } from './modules/contacts/contact-routes.js';
+import { SupabaseEngineerRepository } from './modules/engineers/engineer-repository.js';
+import type { EngineerRepository } from './modules/engineers/engineer-repository.js';
+import { registerEngineerRoutes } from './modules/engineers/engineer-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -24,6 +27,7 @@ export interface AppDependencies {
   authContext?: AuthContextRepository;
   companies?: CompanyRepository;
   contacts?: ContactRepository;
+  engineers?: EngineerRepository;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -62,6 +66,10 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerContactRoutes(
     app,
     dependencies.contacts ?? new SupabaseContactRepository(),
+  );
+  registerEngineerRoutes(
+    app,
+    dependencies.engineers ?? new SupabaseEngineerRepository(),
   );
 
   return app;
