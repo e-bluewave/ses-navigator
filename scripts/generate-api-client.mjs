@@ -16,6 +16,8 @@ const requiredContractFragments = [
   'operationId: getCompany',
   'operationId: createCompany',
   'operationId: updateCompany',
+  'operationId: deleteCompany',
+  'operationId: listCompanyAudit',
   'enum: [draft, open, on_hold, closed, cancelled]',
   'enum: [recruiting, paused, filled, ended]',
   'required: [items, page]',
@@ -61,6 +63,18 @@ export interface Company {
 export interface CompanyList {
   items: Company[];
   page: { limit: number; nextCursor: string | null };
+}
+
+export interface CompanyAuditEvent {
+  id: string;
+  occurredAt: string;
+  actorUserId: string | null;
+  action: string;
+  requestId: string | null;
+}
+
+export interface CompanyAuditList {
+  items: CompanyAuditEvent[];
 }
 
 export interface CompanyInput {

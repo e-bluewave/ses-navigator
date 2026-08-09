@@ -32,6 +32,18 @@ export interface CompanyList {
   page: { limit: number; nextCursor: string | null };
 }
 
+export interface CompanyAuditEvent {
+  id: string;
+  occurredAt: string;
+  actorUserId: string | null;
+  action: string;
+  requestId: string | null;
+}
+
+export interface CompanyAuditList {
+  items: CompanyAuditEvent[];
+}
+
 export interface CompanyInput {
   managementNo: string;
   legalName: string;
