@@ -25,8 +25,23 @@ export interface CompanyListQuery {
   status?: string;
 }
 
+export interface CompanyInput {
+  managementNo: string;
+  legalName: string;
+  displayName: string | null;
+  corporateNumber: string | null;
+  postalCode: string | null;
+  prefecture: string | null;
+  city: string | null;
+  addressLine: string | null;
+  websiteUrl: string | null;
+  representativeName: string | null;
+  status: string;
+}
+
 export interface CompanyRepository {
   canRead(accessToken: string): Promise<boolean>;
+  canManage(accessToken: string): Promise<boolean>;
   list(
     accessToken: string,
     query: CompanyListQuery,
@@ -35,6 +50,13 @@ export interface CompanyRepository {
     nextCursor: { updatedAt: string; id: string } | null;
   }>;
   findById(accessToken: string, id: string): Promise<Company | null>;
+  create(accessToken: string, input: CompanyInput): Promise<Company>;
+  update(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: CompanyInput,
+  ): Promise<Company | null>;
 }
 
 type CompanyRow = {
@@ -62,6 +84,14 @@ export class SupabaseCompanyRepository implements CompanyRepository {
     const response = await this.request(token, '/rpc/has_permission', {
       method: 'POST',
       body: JSON.stringify({ required_permission: 'company.read' }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async canManage(token: string): Promise<boolean> {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'company.manage' }),
     });
     return (await response.json()) === true;
   }
@@ -117,6 +147,46 @@ export class SupabaseCompanyRepository implements CompanyRepository {
     return rows[0] ? toCompany(rows[0]) : null;
   }
 
+  async create(token: string, input: CompanyInput): Promise<Company> {
+    const tenantResponse = await this.request(token, '/rpc/current_tenant_id', {
+      method: 'POST',
+      body: '{}',
+    });
+    const tenantId = (await tenantResponse.json()) as string | null;
+    if (tenantId === null)
+      throw new ApiError(403, 'forbidden', 'An active tenant is required');
+    const response = await this.request(token, '/companies', {
+      method: 'POST',
+      headers: { prefer: 'return=representation' },
+      body: JSON.stringify(toCompanyWriteRow(input, tenantId)),
+    });
+    return toCompany(((await response.json()) as CompanyRow[])[0]!);
+  }
+
+  async update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: CompanyInput,
+  ): Promise<Company | null> {
+    const params = new URLSearchParams({
+      id: `eq.${id}`,
+      row_version: `eq.${rowVersion}`,
+      deleted_at: 'is.null',
+    });
+    const response = await this.request(
+      token,
+      `/companies?${params.toString()}`,
+      {
+        method: 'PATCH',
+        headers: { prefer: 'return=representation' },
+        body: JSON.stringify(toCompanyWriteRow(input)),
+      },
+    );
+    const rows = (await response.json()) as CompanyRow[];
+    return rows[0] ? toCompany(rows[0]) : null;
+  }
+
   private async request(token: string, path: string, init: RequestInit = {}) {
     const response = await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
@@ -145,6 +215,24 @@ function escapeFilterValue(value: string) {
     .replaceAll('\\', '\\\\')
     .replaceAll('"', '\\"')
     .replaceAll('*', '\\*');
+}
+
+function toCompanyWriteRow(input: CompanyInput, tenantId?: string) {
+  return {
+    ...(tenantId ? { tenant_id: tenantId } : {}),
+    management_no: input.managementNo,
+    legal_name: input.legalName,
+    legal_name_normalized: input.legalName.normalize('NFKC').toLowerCase(),
+    display_name: input.displayName,
+    corporate_number: input.corporateNumber,
+    postal_code: input.postalCode,
+    prefecture: input.prefecture,
+    city: input.city,
+    address_line: input.addressLine,
+    website_url: input.websiteUrl,
+    representative_name: input.representativeName,
+    status: input.status,
+  };
 }
 
 function toCompany(row: CompanyRow): Company {

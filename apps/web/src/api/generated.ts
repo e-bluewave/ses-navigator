@@ -32,6 +32,20 @@ export interface CompanyList {
   page: { limit: number; nextCursor: string | null };
 }
 
+export interface CompanyInput {
+  managementNo: string;
+  legalName: string;
+  displayName: string | null;
+  corporateNumber: string | null;
+  postalCode: string | null;
+  prefecture: string | null;
+  city: string | null;
+  addressLine: string | null;
+  websiteUrl: string | null;
+  representativeName: string | null;
+  status: CompanyStatus;
+}
+
 export interface ListCompaniesQuery {
   q?: string;
   status?: CompanyStatus;

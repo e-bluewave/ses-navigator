@@ -6,6 +6,7 @@ import type { ProjectsApi } from '../api/client.js';
 import type {
   Company,
   CompanyStatus,
+  CompanyInput,
   Project,
   ProjectStatus,
   RecruitmentStatus,
@@ -38,10 +39,19 @@ type Route =
   | { page: 'new' }
   | { page: 'edit'; id: string }
   | { page: 'companies' }
-  | { page: 'company-detail'; id: string };
+  | { page: 'company-detail'; id: string }
+  | { page: 'company-new' }
+  | { page: 'company-edit'; id: string };
 
 function currentRoute(): Route {
   if (window.location.pathname === '/companies') return { page: 'companies' };
+  if (window.location.pathname === '/companies/new')
+    return { page: 'company-new' };
+  const companyEdit = window.location.pathname.match(
+    /^\/companies\/([^/]+)\/edit$/,
+  );
+  if (companyEdit)
+    return { page: 'company-edit', id: decodeURIComponent(companyEdit[1]!) };
   const company = window.location.pathname.match(/^\/companies\/([^/]+)$/);
   if (company)
     return { page: 'company-detail', id: decodeURIComponent(company[1]!) };
@@ -191,6 +201,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           api={api}
           onOpen={(id) => navigate(`/companies/${id}`)}
           onUnauthorized={signOut}
+          onCreate={() => navigate('/companies/new')}
         />
       ) : route.page === 'company-detail' ? (
         <CompanyDetail
@@ -198,6 +209,20 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           id={route.id}
           onBack={() => navigate('/companies')}
           onUnauthorized={signOut}
+          onEdit={() => navigate(`/companies/${route.id}/edit`)}
+        />
+      ) : route.page === 'company-new' || route.page === 'company-edit' ? (
+        <CompanyForm
+          api={api}
+          {...(route.page === 'company-edit' ? { id: route.id } : {})}
+          onCancel={() =>
+            navigate(
+              route.page === 'company-edit'
+                ? `/companies/${route.id}`
+                : '/companies',
+            )
+          }
+          onSaved={(id) => navigate(`/companies/${id}`)}
         />
       ) : route.page === 'detail' ? (
         <ProjectDetail
@@ -235,10 +260,12 @@ function CompanyList({
   api,
   onOpen,
   onUnauthorized,
+  onCreate,
 }: {
   api: ProjectsApi;
   onOpen: (id: string) => void;
   onUnauthorized: () => Promise<void>;
+  onCreate: () => void;
 }) {
   const [companies, setCompanies] = useState<Company[] | null>(null);
   const [query, setQuery] = useState('');
@@ -277,7 +304,12 @@ function CompanyList({
           <p className="section-kicker">COMPANIES</p>
           <h2 id="companies-heading">会社一覧</h2>
         </div>
-        {companies && <span className="count">{companies.length}件</span>}
+        <div className="account-actions">
+          {companies && <span className="count">{companies.length}件</span>}
+          <button className="primary-button" onClick={onCreate}>
+            会社を登録
+          </button>
+        </div>
       </div>
       <form
         className="project-filters"
@@ -357,11 +389,13 @@ function CompanyDetail({
   id,
   onBack,
   onUnauthorized,
+  onEdit,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
   onUnauthorized: () => Promise<void>;
+  onEdit: () => void;
 }) {
   const [company, setCompany] = useState<Company | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -402,6 +436,9 @@ function CompanyDetail({
             <span className="status-badge">
               {companyStatusLabels[company.status]}
             </span>
+            <button className="primary-button" onClick={onEdit}>
+              編集
+            </button>
           </div>
           <dl className="detail-grid">
             <div>
@@ -444,6 +481,194 @@ function CompanyDetail({
           </dl>
         </>
       )}
+    </section>
+  );
+}
+
+function CompanyForm({
+  api,
+  id,
+  onCancel,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  id?: string;
+  onCancel: () => void;
+  onSaved: (id: string) => void;
+}) {
+  const empty: CompanyInput = {
+    managementNo: '',
+    legalName: '',
+    displayName: null,
+    corporateNumber: null,
+    postalCode: null,
+    prefecture: null,
+    city: null,
+    addressLine: null,
+    websiteUrl: null,
+    representativeName: null,
+    status: 'prospect',
+  };
+  const [input, setInput] = useState<CompanyInput>(empty);
+  const [rowVersion, setRowVersion] = useState<number | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!id) return;
+    void api
+      .getCompany(id)
+      .then((company) => {
+        setInput({
+          managementNo: company.managementNo,
+          legalName: company.legalName,
+          displayName: company.displayName,
+          corporateNumber: company.corporateNumber,
+          postalCode: company.postalCode,
+          prefecture: company.prefecture,
+          city: company.city,
+          addressLine: company.addressLine,
+          websiteUrl: company.websiteUrl,
+          representativeName: company.representativeName,
+          status: company.status,
+        });
+        setRowVersion(company.rowVersion);
+      })
+      .catch(setError);
+  }, [api, id]);
+  const set = (name: keyof CompanyInput, value: string) =>
+    setInput((current) => ({
+      ...current,
+      [name]:
+        value === '' && !['managementNo', 'legalName', 'status'].includes(name)
+          ? null
+          : value,
+    }));
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = id
+        ? await api.updateCompany(id, rowVersion!, input)
+        : await api.createCompany(input);
+      onSaved(saved.id);
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <section className="panel">
+      <h2>{id ? '会社編集' : '会社登録'}</h2>
+      {error ? <ErrorNotice error={error} subject="会社" /> : null}
+      <form className="project-form" onSubmit={(event) => void submit(event)}>
+        <label>
+          管理番号
+          <input
+            required
+            maxLength={32}
+            value={input.managementNo}
+            onChange={(e) => set('managementNo', e.target.value)}
+          />
+        </label>
+        <label>
+          正式名称
+          <input
+            required
+            maxLength={200}
+            value={input.legalName}
+            onChange={(e) => set('legalName', e.target.value)}
+          />
+        </label>
+        <label>
+          表示名
+          <input
+            maxLength={200}
+            value={input.displayName ?? ''}
+            onChange={(e) => set('displayName', e.target.value)}
+          />
+        </label>
+        <label>
+          法人番号
+          <input
+            pattern="[0-9]{13}"
+            maxLength={13}
+            value={input.corporateNumber ?? ''}
+            onChange={(e) => set('corporateNumber', e.target.value)}
+          />
+        </label>
+        <label>
+          郵便番号
+          <input
+            maxLength={8}
+            value={input.postalCode ?? ''}
+            onChange={(e) => set('postalCode', e.target.value)}
+          />
+        </label>
+        <label>
+          都道府県
+          <input
+            maxLength={100}
+            value={input.prefecture ?? ''}
+            onChange={(e) => set('prefecture', e.target.value)}
+          />
+        </label>
+        <label>
+          市区町村
+          <input
+            maxLength={100}
+            value={input.city ?? ''}
+            onChange={(e) => set('city', e.target.value)}
+          />
+        </label>
+        <label>
+          住所
+          <input
+            maxLength={500}
+            value={input.addressLine ?? ''}
+            onChange={(e) => set('addressLine', e.target.value)}
+          />
+        </label>
+        <label>
+          Webサイト
+          <input
+            type="url"
+            maxLength={2048}
+            value={input.websiteUrl ?? ''}
+            onChange={(e) => set('websiteUrl', e.target.value)}
+          />
+        </label>
+        <label>
+          代表者
+          <input
+            maxLength={200}
+            value={input.representativeName ?? ''}
+            onChange={(e) => set('representativeName', e.target.value)}
+          />
+        </label>
+        <label>
+          会社状態
+          <select
+            value={input.status}
+            onChange={(e) => set('status', e.target.value)}
+          >
+            {Object.entries(companyStatusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="account-actions">
+          <button type="button" className="secondary-button" onClick={onCancel}>
+            キャンセル
+          </button>
+          <button className="primary-button" disabled={saving}>
+            {saving ? '保存中…' : '保存'}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }
@@ -1006,11 +1231,17 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ErrorNotice({ error }: { error: unknown }) {
+function ErrorNotice({
+  error,
+  subject = '案件',
+}: {
+  error: unknown;
+  subject?: string;
+}) {
   const notFound = error instanceof ApiClientError && error.status === 404;
   const message = notFound
-    ? '案件が見つからないか、表示する権限がありません。'
-    : '案件を取得できませんでした。時間をおいて再度お試しください。';
+    ? `${subject}が見つからないか、表示する権限がありません。`
+    : `${subject}を取得できませんでした。時間をおいて再度お試しください。`;
   return (
     <div className="error" role="alert">
       <strong>{message}</strong>

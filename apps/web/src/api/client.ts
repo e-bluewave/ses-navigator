@@ -7,6 +7,7 @@ import type {
   ProjectList,
   ProjectAuditList,
   Company,
+  CompanyInput,
   CompanyList,
   ListCompaniesQuery,
 } from './generated.js';
@@ -25,6 +26,12 @@ export interface ProjectsApi {
   listProjectAudit(id: string): Promise<ProjectAuditList>;
   listCompanies(query?: ListCompaniesQuery): Promise<CompanyList>;
   getCompany(id: string): Promise<Company>;
+  createCompany(input: CompanyInput): Promise<Company>;
+  updateCompany(
+    id: string,
+    rowVersion: number,
+    input: CompanyInput,
+  ): Promise<Company>;
 }
 
 export class ApiClientError extends Error {
@@ -148,6 +155,17 @@ export function createProjectsApi(options: {
     },
     getCompany(id) {
       return get<Company>(`/companies/${encodeURIComponent(id)}`);
+    },
+    createCompany(input) {
+      return send<Company>('/companies', 'POST', input);
+    },
+    updateCompany(id, rowVersion, input) {
+      return send<Company>(
+        `/companies/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
     },
   };
 }

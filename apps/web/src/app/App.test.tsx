@@ -85,6 +85,8 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
     getCompany: vi.fn(() => Promise.reject(new Error('not configured'))),
+    createCompany: vi.fn(() => Promise.resolve(company)),
+    updateCompany: vi.fn(() => Promise.resolve(company)),
     ...overrides,
   };
 }
@@ -118,6 +120,48 @@ describe('App', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('青波株式会社')).toBeInTheDocument();
     expect(getCompany).toHaveBeenCalledWith(company.id);
+  });
+
+  it('creates a company from the company list', async () => {
+    const createCompany = vi.fn(() => Promise.resolve(company));
+    render(<App auth={auth()} api={api({ createCompany })} />);
+    fireEvent.click(await screen.findByRole('button', { name: '会社' }));
+    fireEvent.click(await screen.findByRole('button', { name: '会社を登録' }));
+    expect(
+      await screen.findByRole('heading', { name: '会社登録' }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('管理番号'), {
+      target: { value: 'CO-000001' },
+    });
+    fireEvent.change(screen.getByLabelText('正式名称'), {
+      target: { value: '青波株式会社' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(createCompany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        managementNo: 'CO-000001',
+        legalName: '青波株式会社',
+        status: 'prospect',
+      }),
+    );
+  });
+
+  it('loads and updates a company with its row version', async () => {
+    window.history.replaceState({}, '', `/companies/${company.id}/edit`);
+    const updateCompany = vi.fn(() => Promise.resolve(company));
+    render(
+      <App
+        auth={auth()}
+        api={api({ getCompany: () => Promise.resolve(company), updateCompany })}
+      />,
+    );
+    expect(await screen.findByDisplayValue('青波株式会社')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(updateCompany).toHaveBeenCalledWith(
+      company.id,
+      company.rowVersion,
+      expect.objectContaining({ legalName: '青波株式会社' }),
+    );
   });
   it('renders projects returned by the generated client', async () => {
     render(<App auth={auth()} api={api()} />);

@@ -8,6 +8,22 @@ security:
   - bearerAuth: []
 paths:
   /companies:
+    post:
+      operationId: createCompany
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompanyInput' }
+      responses:
+        '201':
+          description: Company created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     get:
       operationId: listCompanies
       parameters:
@@ -36,6 +52,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /companies/{id}:
+    put:
+      operationId: updateCompany
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompanyInput' }
+      responses:
+        '200':
+          description: Company updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     get:
       operationId: getCompany
       parameters:
@@ -252,6 +299,34 @@ components:
         status: { $ref: '#/components/schemas/CompanyStatus' }
         updatedAt: { type: string, format: date-time }
         rowVersion: { type: integer, minimum: 1 }
+    CompanyInput:
+      type: object
+      required:
+        [
+          managementNo,
+          legalName,
+          displayName,
+          corporateNumber,
+          postalCode,
+          prefecture,
+          city,
+          addressLine,
+          websiteUrl,
+          representativeName,
+          status,
+        ]
+      properties:
+        managementNo: { type: string, minLength: 1, maxLength: 32 }
+        legalName: { type: string, minLength: 1, maxLength: 200 }
+        displayName: { type: [string, 'null'], maxLength: 200 }
+        corporateNumber: { type: [string, 'null'], pattern: '^[0-9]{13}$' }
+        postalCode: { type: [string, 'null'], maxLength: 8 }
+        prefecture: { type: [string, 'null'], maxLength: 100 }
+        city: { type: [string, 'null'], maxLength: 100 }
+        addressLine: { type: [string, 'null'], maxLength: 500 }
+        websiteUrl: { type: [string, 'null'], format: uri, maxLength: 2048 }
+        representativeName: { type: [string, 'null'], maxLength: 200 }
+        status: { $ref: '#/components/schemas/CompanyStatus' }
     CompanyList:
       type: object
       required: [items, page]
