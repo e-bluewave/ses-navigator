@@ -60,6 +60,8 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       }),
     ),
     getProject: vi.fn(() => Promise.resolve(project)),
+    createProject: vi.fn(() => Promise.resolve(project)),
+    updateProject: vi.fn(() => Promise.resolve(project)),
     ...overrides,
   };
 }

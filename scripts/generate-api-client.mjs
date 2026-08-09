@@ -7,6 +7,8 @@ const contract = await readFile(contractPath, 'utf8');
 const requiredContractFragments = [
   'operationId: listProjects',
   'operationId: getProject',
+  'operationId: createProject',
+  'operationId: updateProject',
   'operationId: getAuthContext',
   'enum: [draft, open, on_hold, closed, cancelled]',
   'enum: [recruiting, paused, filled, ended]',
@@ -48,6 +50,16 @@ export interface Project {
 export interface ProjectList {
   items: Project[];
   page: { limit: number; nextCursor: string | null };
+}
+
+export interface ProjectInput {
+  managementNo: string;
+  projectName: string;
+  summary: string | null;
+  projectStatus: ProjectStatus;
+  recruitmentStatus: RecruitmentStatus;
+  plannedStartOn: string | null;
+  plannedEndOn: string | null;
 }
 
 export interface ApiErrorBody {

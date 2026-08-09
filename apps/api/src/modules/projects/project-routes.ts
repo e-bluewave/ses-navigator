@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { ApiError } from '../../shared/errors.js';
 import type { ProjectRepository } from './project-repository.js';
+import type { ProjectInput } from './project-repository.js';
 
 const statuses = new Set(['draft', 'open', 'on_hold', 'closed', 'cancelled']);
 const recruitmentStatuses = new Set([
@@ -17,6 +18,44 @@ export function registerProjectRoutes(
   app: FastifyInstance,
   repository: ProjectRepository,
 ): void {
+  app.post(
+    '/api/v1/projects',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const input = parseProjectInput(request.body);
+      await requireProjectManage(repository, request.user.accessToken);
+      const project = await repository.create(request.user.accessToken, input);
+      return reply
+        .code(201)
+        .header('etag', `"${project.rowVersion}"`)
+        .send(project);
+    },
+  );
+
+  app.put(
+    '/api/v1/projects/:id',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const input = parseProjectInput(request.body);
+      await requireProjectManage(repository, request.user.accessToken);
+      const project = await repository.update(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        input,
+      );
+      if (project === null)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Project was changed; reload and try again',
+        );
+      return reply.header('etag', `"${project.rowVersion}"`).send(project);
+    },
+  );
   app.get(
     '/api/v1/projects',
     { preHandler: (request) => app.authenticate(request) },
@@ -78,6 +117,77 @@ export function registerProjectRoutes(
       return project;
     },
   );
+}
+
+function parseProjectInput(value: unknown): ProjectInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const body = value as Record<string, unknown>;
+  const text = (name: string, max: number) => {
+    const item = body[name];
+    if (typeof item !== 'string' || item.trim().length < 1 || item.length > max)
+      throw invalid(`${name} is invalid`);
+    return item.trim();
+  };
+  const nullable = (name: string, max: number) => {
+    const item = body[name];
+    if (item === null || item === undefined || item === '') return null;
+    if (typeof item !== 'string' || item.length > max)
+      throw invalid(`${name} is invalid`);
+    return item.trim();
+  };
+  const projectStatus = body.projectStatus;
+  const recruitmentStatus = body.recruitmentStatus;
+  if (typeof projectStatus !== 'string' || !statuses.has(projectStatus))
+    throw invalid('projectStatus is invalid');
+  if (
+    typeof recruitmentStatus !== 'string' ||
+    !recruitmentStatuses.has(recruitmentStatus)
+  )
+    throw invalid('recruitmentStatus is invalid');
+  const plannedStartOn = parseDate(body.plannedStartOn, 'plannedStartOn');
+  const plannedEndOn = parseDate(body.plannedEndOn, 'plannedEndOn');
+  if (plannedStartOn && plannedEndOn && plannedEndOn < plannedStartOn)
+    throw invalid('plannedEndOn must not precede plannedStartOn');
+  return {
+    managementNo: text('managementNo', 32),
+    projectName: text('projectName', 200),
+    summary: nullable('summary', 4000),
+    projectStatus,
+    recruitmentStatus,
+    plannedStartOn,
+    plannedEndOn,
+  };
+}
+
+function parseDate(value: unknown, name: string): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  )
+    throw invalid(`${name} is invalid`);
+  return value;
+}
+
+function parseIfMatch(value: string | undefined): number {
+  const match = value?.match(/^(?:W\/)?"([1-9]\d*)"$/);
+  if (!match)
+    throw new ApiError(428, 'precondition_required', 'If-Match is required');
+  return Number(match[1]);
+}
+
+async function requireProjectManage(
+  repository: ProjectRepository,
+  token: string,
+) {
+  if (!(await repository.canManage(token)))
+    throw new ApiError(
+      403,
+      'forbidden',
+      'project.manage permission is required',
+    );
 }
 
 async function requireProjectRead(

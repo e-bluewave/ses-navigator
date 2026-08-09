@@ -18,6 +18,24 @@ paths:
               schema: { $ref: '#/components/schemas/AuthContext' }
         '401': { $ref: '#/components/responses/Unauthorized' }
   /projects:
+    post:
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectInput' }
+      responses:
+        '201':
+          description: Project created
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/Project' } },
+            }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     get:
       operationId: listProjects
       parameters:
@@ -51,6 +69,40 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /projects/{id}:
+    put:
+      operationId: updateProject
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/ProjectInput' } },
+          }
+      responses:
+        '200':
+          {
+            description: Project updated,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/Project' } },
+              },
+          }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     get:
       operationId: getProject
       parameters:
@@ -108,6 +160,17 @@ components:
         plannedEndOn: { type: [string, 'null'], format: date }
         updatedAt: { type: string, format: date-time }
         rowVersion: { type: integer, minimum: 1 }
+    ProjectInput:
+      type: object
+      required: [managementNo, projectName, projectStatus, recruitmentStatus]
+      properties:
+        managementNo: { type: string, minLength: 1, maxLength: 32 }
+        projectName: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: [string, 'null'], maxLength: 4000 }
+        projectStatus: { $ref: '#/components/schemas/ProjectStatus' }
+        recruitmentStatus: { $ref: '#/components/schemas/RecruitmentStatus' }
+        plannedStartOn: { type: [string, 'null'], format: date }
+        plannedEndOn: { type: [string, 'null'], format: date }
     ProjectList:
       type: object
       required: [items, page]
@@ -131,6 +194,33 @@ components:
             message: { type: string }
             requestId: { type: string }
   responses:
+    BadRequest:
+      {
+        description: Invalid request,
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/ApiError' } },
+          },
+      }
+    Conflict:
+      {
+        description: Optimistic locking conflict,
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/ApiError' } },
+          },
+      }
+    PreconditionRequired:
+      {
+        description: If-Match is required,
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/ApiError' } },
+          },
+      }
     Unauthorized:
       {
         description: Authentication required,

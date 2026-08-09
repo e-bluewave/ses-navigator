@@ -27,6 +27,16 @@ export interface ProjectList {
   page: { limit: number; nextCursor: string | null };
 }
 
+export interface ProjectInput {
+  managementNo: string;
+  projectName: string;
+  summary: string | null;
+  projectStatus: ProjectStatus;
+  recruitmentStatus: RecruitmentStatus;
+  plannedStartOn: string | null;
+  plannedEndOn: string | null;
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string; requestId: string };
 }
