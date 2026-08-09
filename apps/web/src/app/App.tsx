@@ -7,6 +7,7 @@ import type {
   Project,
   ProjectStatus,
   RecruitmentStatus,
+  ProjectInput,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -29,9 +30,16 @@ const recruitmentStatusLabels = {
   ended: '募集終了',
 } as const;
 
-type Route = { page: 'list' } | { page: 'detail'; id: string };
+type Route =
+  | { page: 'list' }
+  | { page: 'detail'; id: string }
+  | { page: 'new' }
+  | { page: 'edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/projects/new') return { page: 'new' };
+  const edit = window.location.pathname.match(/^\/projects\/([^/]+)\/edit$/);
+  if (edit) return { page: 'edit', id: decodeURIComponent(edit[1]!) };
   const match = window.location.pathname.match(/^\/projects\/([^/]+)$/);
   return match
     ? { page: 'detail', id: decodeURIComponent(match[1]!) }
@@ -154,13 +162,26 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           api={api}
           onOpen={(id) => navigate(`/projects/${id}`)}
           onUnauthorized={signOut}
+          onCreate={() => navigate('/projects/new')}
         />
-      ) : (
+      ) : route.page === 'detail' ? (
         <ProjectDetail
           api={api}
           id={route.id}
           onBack={() => navigate('/projects')}
           onUnauthorized={signOut}
+          onEdit={() => navigate(`/projects/${route.id}/edit`)}
+        />
+      ) : (
+        <ProjectForm
+          api={api}
+          {...(route.page === 'edit' ? { id: route.id } : {})}
+          onCancel={() =>
+            navigate(
+              route.page === 'edit' ? `/projects/${route.id}` : '/projects',
+            )
+          }
+          onSaved={(id) => navigate(`/projects/${id}`)}
         />
       )}
     </main>
@@ -171,10 +192,12 @@ function ProjectList({
   api,
   onOpen,
   onUnauthorized,
+  onCreate,
 }: {
   api: ProjectsApi;
   onOpen: (id: string) => void;
   onUnauthorized: () => Promise<void>;
+  onCreate: () => void;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [query, setQuery] = useState('');
@@ -260,7 +283,12 @@ function ProjectList({
           <p className="section-kicker">PROJECTS</p>
           <h2 id="projects-heading">案件一覧</h2>
         </div>
-        {projects && <span className="count">{projects.length}件</span>}
+        <div className="account-actions">
+          <button className="primary-button" onClick={onCreate}>
+            案件を登録
+          </button>
+          {projects && <span className="count">{projects.length}件</span>}
+        </div>
       </div>
       <form className="project-filters" onSubmit={applyFilters}>
         <label>
@@ -374,11 +402,13 @@ function ProjectDetail({
   id,
   onBack,
   onUnauthorized,
+  onEdit,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
   onUnauthorized: () => Promise<void>;
+  onEdit: () => void;
 }) {
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -418,6 +448,9 @@ function ProjectDetail({
               value={project.projectStatus}
               label={projectStatusLabels[project.projectStatus]}
             />
+            <button className="primary-button" onClick={onEdit}>
+              編集
+            </button>
           </div>
           <p className="summary">
             {project.summary ?? '概要は登録されていません。'}
@@ -442,6 +475,158 @@ function ProjectDetail({
           </dl>
         </>
       ) : null}
+    </section>
+  );
+}
+
+function ProjectForm({
+  api,
+  id,
+  onCancel,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  id?: string;
+  onCancel: () => void;
+  onSaved: (id: string) => void;
+}) {
+  const empty: ProjectInput = {
+    managementNo: '',
+    projectName: '',
+    summary: null,
+    projectStatus: 'draft',
+    recruitmentStatus: 'recruiting',
+    plannedStartOn: null,
+    plannedEndOn: null,
+  };
+  const [input, setInput] = useState<ProjectInput>(empty);
+  const [rowVersion, setRowVersion] = useState<number | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!id) return;
+    void api
+      .getProject(id)
+      .then((p) => {
+        setInput({
+          managementNo: p.managementNo,
+          projectName: p.projectName,
+          summary: p.summary,
+          projectStatus: p.projectStatus,
+          recruitmentStatus: p.recruitmentStatus,
+          plannedStartOn: p.plannedStartOn,
+          plannedEndOn: p.plannedEndOn,
+        });
+        setRowVersion(p.rowVersion);
+      })
+      .catch(setError);
+  }, [api, id]);
+  const set = (name: keyof ProjectInput, value: string) =>
+    setInput((v) => ({
+      ...v,
+      [name]:
+        value === '' &&
+        ['summary', 'plannedStartOn', 'plannedEndOn'].includes(name)
+          ? null
+          : value,
+    }));
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = id
+        ? await api.updateProject(id, rowVersion!, input)
+        : await api.createProject(input);
+      onSaved(saved.id);
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <section className="panel">
+      <h2>{id ? '案件編集' : '案件登録'}</h2>
+      {error ? <ErrorNotice error={error} /> : null}
+      <form className="project-form" onSubmit={(e) => void submit(e)}>
+        <label>
+          管理番号
+          <input
+            required
+            maxLength={32}
+            value={input.managementNo}
+            onChange={(e) => set('managementNo', e.target.value)}
+          />
+        </label>
+        <label>
+          案件名
+          <input
+            required
+            maxLength={200}
+            value={input.projectName}
+            onChange={(e) => set('projectName', e.target.value)}
+          />
+        </label>
+        <label>
+          概要
+          <textarea
+            maxLength={4000}
+            value={input.summary ?? ''}
+            onChange={(e) => set('summary', e.target.value)}
+          />
+        </label>
+        <label>
+          案件状態
+          <select
+            value={input.projectStatus}
+            onChange={(e) => set('projectStatus', e.target.value)}
+          >
+            {Object.entries(projectStatusLabels).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          募集状態
+          <select
+            value={input.recruitmentStatus}
+            onChange={(e) => set('recruitmentStatus', e.target.value)}
+          >
+            {Object.entries(recruitmentStatusLabels).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          開始予定日
+          <input
+            type="date"
+            value={input.plannedStartOn ?? ''}
+            onChange={(e) => set('plannedStartOn', e.target.value)}
+          />
+        </label>
+        <label>
+          終了予定日
+          <input
+            type="date"
+            value={input.plannedEndOn ?? ''}
+            onChange={(e) => set('plannedEndOn', e.target.value)}
+          />
+        </label>
+        <div className="account-actions">
+          <button type="button" className="secondary-button" onClick={onCancel}>
+            キャンセル
+          </button>
+          <button className="primary-button" disabled={saving}>
+            {saving ? '保存中…' : '保存'}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }

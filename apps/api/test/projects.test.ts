@@ -34,8 +34,11 @@ function repository(
 ): ProjectRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
+    canManage: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [project], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(project)),
+    create: vi.fn(() => Promise.resolve(project)),
+    update: vi.fn(() => Promise.resolve(project)),
     ...overrides,
   };
 }
@@ -143,5 +146,59 @@ describe('project read API', () => {
     expect(response.json()).toMatchObject({
       error: { code: 'invalid_request' },
     });
+  });
+});
+
+describe('project write API', () => {
+  const body = {
+    managementNo: 'PJ-000001',
+    projectName: '基幹システム刷新',
+    summary: null,
+    projectStatus: 'open',
+    recruitmentStatus: 'recruiting',
+    plannedStartOn: '2026-09-01',
+    plannedEndOn: null,
+  };
+
+  it('creates a project with manage permission', async () => {
+    const response = await app().inject({
+      method: 'POST',
+      url: '/api/v1/projects',
+      headers: { authorization: 'Bearer valid' },
+      payload: body,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.headers.etag).toBe('"2"');
+  });
+
+  it('updates with optimistic locking', async () => {
+    const update = vi.fn(() => Promise.resolve(project));
+    const response = await app(repository({ update })).inject({
+      method: 'PUT',
+      url: `/api/v1/projects/${project.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: body,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith('valid', project.id, 2, body);
+  });
+
+  it('requires If-Match and reports conflicts', async () => {
+    const missing = await app().inject({
+      method: 'PUT',
+      url: `/api/v1/projects/${project.id}`,
+      headers: { authorization: 'Bearer valid' },
+      payload: body,
+    });
+    expect(missing.statusCode).toBe(428);
+    const conflict = await app(
+      repository({ update: vi.fn(() => Promise.resolve(null)) }),
+    ).inject({
+      method: 'PUT',
+      url: `/api/v1/projects/${project.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: body,
+    });
+    expect(conflict.statusCode).toBe(409);
   });
 });

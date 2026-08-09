@@ -3,6 +3,7 @@ import type {
   AuthContext,
   ListProjectsQuery,
   Project,
+  ProjectInput,
   ProjectList,
 } from './generated.js';
 
@@ -10,6 +11,12 @@ export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
   listProjects(query?: ListProjectsQuery): Promise<ProjectList>;
   getProject(id: string): Promise<Project>;
+  createProject(input: ProjectInput): Promise<Project>;
+  updateProject(
+    id: string,
+    rowVersion: number,
+    input: ProjectInput,
+  ): Promise<Project>;
 }
 
 export class ApiClientError extends Error {
@@ -50,6 +57,36 @@ export function createProjectsApi(options: {
     return response.json() as Promise<T>;
   }
 
+  async function send<T>(
+    path: string,
+    method: 'POST' | 'PUT',
+    body: unknown,
+    rowVersion?: number,
+  ): Promise<T> {
+    const token = options.getAccessToken();
+    const response = await request(`${baseUrl}${path}`, {
+      method,
+      headers: {
+        'content-type': 'application/json',
+        ...(token === null ? {} : { authorization: `Bearer ${token}` }),
+        ...(rowVersion === undefined ? {} : { 'if-match': `"${rowVersion}"` }),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const error = (await response
+        .json()
+        .catch(() => null)) as ApiErrorBody | null;
+      throw new ApiClientError(
+        response.status,
+        error?.error.code ?? 'unexpected_error',
+        error?.error.message ?? 'APIへの接続に失敗しました。',
+        error?.error.requestId,
+      );
+    }
+    return response.json() as Promise<T>;
+  }
+
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
@@ -67,6 +104,17 @@ export function createProjectsApi(options: {
     },
     getProject(id) {
       return get<Project>(`/projects/${encodeURIComponent(id)}`);
+    },
+    createProject(input) {
+      return send<Project>('/projects', 'POST', input);
+    },
+    updateProject(id, rowVersion, input) {
+      return send<Project>(
+        `/projects/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
     },
   };
 }

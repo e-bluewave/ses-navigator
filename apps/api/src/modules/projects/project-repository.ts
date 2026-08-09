@@ -27,13 +27,31 @@ export interface ProjectListResult {
   nextCursor: { updatedAt: string; id: string } | null;
 }
 
+export interface ProjectInput {
+  managementNo: string;
+  projectName: string;
+  summary: string | null;
+  projectStatus: string;
+  recruitmentStatus: string;
+  plannedStartOn: string | null;
+  plannedEndOn: string | null;
+}
+
 export interface ProjectRepository {
   canRead(accessToken: string): Promise<boolean>;
+  canManage(accessToken: string): Promise<boolean>;
   list(
     accessToken: string,
     query: ProjectListQuery,
   ): Promise<ProjectListResult>;
   findById(accessToken: string, id: string): Promise<Project | null>;
+  create(accessToken: string, input: ProjectInput): Promise<Project>;
+  update(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: ProjectInput,
+  ): Promise<Project | null>;
 }
 
 type ProjectRow = {
@@ -54,6 +72,14 @@ export class SupabaseProjectRepository implements ProjectRepository {
     const response = await this.request(token, '/rpc/has_permission', {
       method: 'POST',
       body: JSON.stringify({ required_permission: 'project.read' }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async canManage(token: string): Promise<boolean> {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'project.manage' }),
     });
     return (await response.json()) === true;
   }
@@ -120,6 +146,46 @@ export class SupabaseProjectRepository implements ProjectRepository {
     return rows[0] === undefined ? null : toProject(rows[0]);
   }
 
+  async create(token: string, input: ProjectInput): Promise<Project> {
+    const tenantResponse = await this.request(token, '/rpc/current_tenant_id', {
+      method: 'POST',
+      body: '{}',
+    });
+    const tenantId = (await tenantResponse.json()) as string | null;
+    if (tenantId === null)
+      throw new ApiError(403, 'forbidden', 'An active tenant is required');
+    const response = await this.request(token, '/projects', {
+      method: 'POST',
+      headers: { prefer: 'return=representation' },
+      body: JSON.stringify(toProjectWriteRow(input, tenantId)),
+    });
+    return toProject(((await response.json()) as ProjectRow[])[0]!);
+  }
+
+  async update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: ProjectInput,
+  ): Promise<Project | null> {
+    const params = new URLSearchParams({
+      id: `eq.${id}`,
+      row_version: `eq.${rowVersion}`,
+      deleted_at: 'is.null',
+    });
+    const response = await this.request(
+      token,
+      `/projects?${params.toString()}`,
+      {
+        method: 'PATCH',
+        headers: { prefer: 'return=representation' },
+        body: JSON.stringify(toProjectWriteRow(input)),
+      },
+    );
+    const rows = (await response.json()) as ProjectRow[];
+    return rows[0] === undefined ? null : toProject(rows[0]);
+  }
+
   private async request(
     token: string,
     path: string,
@@ -145,6 +211,20 @@ export class SupabaseProjectRepository implements ProjectRepository {
       );
     return response;
   }
+}
+
+function toProjectWriteRow(input: ProjectInput, tenantId?: string) {
+  return {
+    ...(tenantId === undefined ? {} : { tenant_id: tenantId }),
+    management_no: input.managementNo,
+    project_name: input.projectName,
+    project_name_normalized: input.projectName.normalize('NFKC').toLowerCase(),
+    summary: input.summary,
+    project_status: input.projectStatus,
+    recruitment_status: input.recruitmentStatus,
+    planned_start_on: input.plannedStartOn,
+    planned_end_on: input.plannedEndOn,
+  };
 }
 
 function escapeFilterValue(value: string): string {
