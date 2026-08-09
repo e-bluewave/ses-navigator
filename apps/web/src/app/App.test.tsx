@@ -172,6 +172,10 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     saveEngineerAffiliation: vi.fn(),
     listEngineerPreferences: vi.fn(() => Promise.resolve({ items: [] })),
     saveEngineerPreference: vi.fn(),
+    listEngineerSkills: vi.fn(() => Promise.resolve({ items: [] })),
+    saveEngineerSkill: vi.fn(),
+    listEngineerQualifications: vi.fn(() => Promise.resolve({ items: [] })),
+    saveEngineerQualification: vi.fn(),
     ...overrides,
   };
 }

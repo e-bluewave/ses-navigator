@@ -8,6 +8,8 @@ import type {
   EngineerPrivateInput,
   EngineerAffiliationInput,
   EngineerPreferenceInput,
+  EngineerSkillInput,
+  EngineerQualificationInput,
 } from './engineer-repository.js';
 
 const uuid =
@@ -31,6 +33,93 @@ export function registerEngineerRoutes(
   app: FastifyInstance,
   repository: EngineerRepository,
 ) {
+  app.get(
+    '/api/v1/engineers/:id/skills',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      if (!uuid.test(id)) throw invalid('id must be a UUID');
+      await requireRead(repository, request.user.accessToken);
+      return {
+        items: await repository.listSkills(request.user.accessToken, id),
+      };
+    },
+  );
+  app.put(
+    '/api/v1/engineers/:id/skills/:itemId',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id, itemId } = request.params as { id: string; itemId: string };
+      if (!uuid.test(id) || (itemId !== 'new' && !uuid.test(itemId)))
+        throw invalid('id is invalid');
+      const version =
+        itemId === 'new'
+          ? parsePrivateIfMatch(request.headers['if-match'])
+          : parseIfMatch(request.headers['if-match']);
+      const input = parseSkillInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const saved = await repository.saveSkill(
+        request.user.accessToken,
+        id,
+        itemId === 'new' ? null : itemId,
+        version,
+        input,
+        request.id,
+      );
+      if (!saved)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Skill was changed; reload and try again',
+        );
+      return reply.header('etag', `"${saved.rowVersion}"`).send(saved);
+    },
+  );
+  app.get(
+    '/api/v1/engineers/:id/qualifications',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      if (!uuid.test(id)) throw invalid('id must be a UUID');
+      await requireRead(repository, request.user.accessToken);
+      return {
+        items: await repository.listQualifications(
+          request.user.accessToken,
+          id,
+        ),
+      };
+    },
+  );
+  app.put(
+    '/api/v1/engineers/:id/qualifications/:itemId',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id, itemId } = request.params as { id: string; itemId: string };
+      if (!uuid.test(id) || (itemId !== 'new' && !uuid.test(itemId)))
+        throw invalid('id is invalid');
+      const version =
+        itemId === 'new'
+          ? parsePrivateIfMatch(request.headers['if-match'])
+          : parseIfMatch(request.headers['if-match']);
+      const input = parseQualificationInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const saved = await repository.saveQualification(
+        request.user.accessToken,
+        id,
+        itemId === 'new' ? null : itemId,
+        version,
+        input,
+        request.id,
+      );
+      if (!saved)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Qualification was changed; reload and try again',
+        );
+      return reply.header('etag', `"${saved.rowVersion}"`).send(saved);
+    },
+  );
   app.get(
     '/api/v1/engineers/:id/preferences',
     { preHandler: (request) => app.authenticate(request) },
@@ -333,6 +422,50 @@ export function registerEngineerRoutes(
   );
 }
 
+function parseSkillInput(body: unknown): EngineerSkillInput {
+  if (!body || typeof body !== 'object') throw invalid('skill is invalid');
+  const b = body as Record<string, unknown>;
+  if (
+    typeof b.skillId !== 'string' ||
+    !uuid.test(b.skillId) ||
+    (b.experienceMonths !== null &&
+      (!Number.isInteger(b.experienceMonths) ||
+        Number(b.experienceMonths) < 0)) ||
+    (b.proficiencyLevel !== null &&
+      (!Number.isInteger(b.proficiencyLevel) ||
+        Number(b.proficiencyLevel) < 1 ||
+        Number(b.proficiencyLevel) > 5)) ||
+    typeof b.verificationStatus !== 'string' ||
+    typeof b.isPrimary !== 'boolean'
+  )
+    throw invalid('skill is invalid');
+  return b as unknown as EngineerSkillInput;
+}
+function parseQualificationInput(body: unknown): EngineerQualificationInput {
+  if (!body || typeof body !== 'object')
+    throw invalid('qualification is invalid');
+  const b = body as Record<string, unknown>;
+  if (
+    typeof b.name !== 'string' ||
+    b.name.trim().length < 1 ||
+    b.name.length > 200
+  )
+    throw invalid('qualification is invalid');
+  for (const k of [
+    'issuer',
+    'credentialId',
+    'acquiredOn',
+    'expiresOn',
+    'notes',
+  ])
+    if (b[k] !== null && typeof b[k] !== 'string')
+      throw invalid('qualification is invalid');
+  const acquiredOn = b.acquiredOn as string | null;
+  const expiresOn = b.expiresOn as string | null;
+  if (acquiredOn && expiresOn && expiresOn < acquiredOn)
+    throw invalid('qualification is invalid');
+  return b as unknown as EngineerQualificationInput;
+}
 function parsePreferenceInput(body: unknown): EngineerPreferenceInput {
   if (!body || typeof body !== 'object') throw invalid('preference is invalid');
   const b = body as Record<string, unknown>;
