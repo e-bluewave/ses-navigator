@@ -24,6 +24,8 @@ const requiredContractFragments = [
   'operationId: updateCompanyContact',
   'operationId: deleteCompanyContact',
   'operationId: listCompanyContactAudit',
+  'operationId: listEngineers',
+  'operationId: getEngineer',
   'enum: [draft, open, on_hold, closed, cancelled]',
   'enum: [recruiting, paused, filled, ended]',
   'required: [items, page]',
@@ -45,9 +47,39 @@ export type ProjectStatus =
 export type RecruitmentStatus = 'recruiting' | 'paused' | 'filled' | 'ended';
 export type CompanyStatus = 'prospect' | 'active' | 'inactive' | 'blocked';
 export type ContactStatus = 'active' | 'inactive' | 'left_company' | 'unknown';
+export type EngineerStatus =
+  'candidate' | 'active' | 'inactive' | 'retired' | 'blocked';
+export type AvailabilityStatus =
+  'unknown' | 'available' | 'proposed' | 'engaged' | 'unavailable';
 
 export interface AuthContext {
   requiresMfa: boolean;
+}
+
+export interface Engineer {
+  id: string;
+  managementNo: string;
+  familyName: string;
+  givenName: string;
+  displayName: string | null;
+  status: EngineerStatus;
+  availabilityStatus: AvailabilityStatus;
+  availableFrom: string | null;
+  nearestStation: string | null;
+  summary: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface EngineerList {
+  items: Engineer[];
+  page: { limit: number; nextCursor: string | null };
+}
+export interface ListEngineersQuery {
+  q?: string;
+  status?: EngineerStatus;
+  availabilityStatus?: AvailabilityStatus;
+  cursor?: string;
+  limit?: number;
 }
 
 export interface Company {
