@@ -86,6 +86,16 @@ export interface CompanyContactList {
   items: CompanyContact[];
   page: { limit: number; nextCursor: string | null };
 }
+export interface CompanyContactAuditEvent {
+  id: string;
+  occurredAt: string;
+  actorUserId: string | null;
+  action: string;
+  requestId: string | null;
+}
+export interface CompanyContactAuditList {
+  items: CompanyContactAuditEvent[];
+}
 export interface CompanyContactInput {
   companyId: string;
   managementNo: string;

@@ -436,6 +436,13 @@ function ContactDetail({
   const [contact, setContact] = useState<CompanyContact | null>(null);
   const [error, setError] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [auditEvents, setAuditEvents] = useState<
+    Awaited<ReturnType<ProjectsApi['listCompanyContactAudit']>>['items'] | null
+  >(null);
+  const [auditError, setAuditError] = useState(false);
   useEffect(() => {
     let active = true;
     api
@@ -452,6 +459,32 @@ function ContactDetail({
       active = false;
     };
   }, [api, id, onUnauthorized]);
+  async function removeContact(event: FormEvent) {
+    event.preventDefault();
+    if (!contact) return;
+    setDeleting(true);
+    setError(false);
+    try {
+      await api.deleteCompanyContact(
+        contact.id,
+        contact.rowVersion,
+        deleteReason,
+      );
+      onBack();
+    } catch {
+      setError(true);
+    } finally {
+      setDeleting(false);
+    }
+  }
+  async function loadAudit() {
+    setAuditError(false);
+    try {
+      setAuditEvents((await api.listCompanyContactAudit(id)).items);
+    } catch {
+      setAuditError(true);
+    }
+  }
   return (
     <section className="panel">
       <button className="secondary-button" onClick={onBack}>
@@ -476,6 +509,12 @@ function ContactDetail({
           </div>
           <button className="primary-button" onClick={() => setEditing(true)}>
             編集
+          </button>
+          <button className="secondary-button" onClick={() => void loadAudit()}>
+            監査履歴
+          </button>
+          <button className="danger-button" onClick={() => setShowDelete(true)}>
+            削除
           </button>
           {editing && (
             <ContactForm
@@ -518,6 +557,66 @@ function ContactDetail({
               <dd>{contact.isPrimary ? 'はい' : 'いいえ'}</dd>
             </div>
           </dl>
+          {showDelete ? (
+            <form
+              className="delete-panel"
+              onSubmit={(event) => void removeContact(event)}
+            >
+              <h3>担当者を削除</h3>
+              <p>
+                一覧から非表示になります。削除理由と操作履歴は監査ログへ保存されます。
+              </p>
+              <label>
+                削除理由
+                <textarea
+                  required
+                  maxLength={500}
+                  value={deleteReason}
+                  onChange={(event) => setDeleteReason(event.target.value)}
+                />
+              </label>
+              <div className="account-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setShowDelete(false)}
+                >
+                  キャンセル
+                </button>
+                <button
+                  className="danger-button"
+                  disabled={deleting || deleteReason.trim() === ''}
+                >
+                  {deleting ? '削除中…' : '論理削除する'}
+                </button>
+              </div>
+            </form>
+          ) : null}
+          {auditError ? (
+            <p className="error" role="alert">
+              監査履歴を表示する権限がないか、取得に失敗しました。
+            </p>
+          ) : null}
+          {auditEvents ? (
+            <section
+              className="audit-panel"
+              aria-labelledby="contact-audit-heading"
+            >
+              <h3 id="contact-audit-heading">監査履歴</h3>
+              {auditEvents.length === 0 ? (
+                <p>監査履歴はありません。</p>
+              ) : (
+                <ul>
+                  {auditEvents.map((event) => (
+                    <li key={event.id}>
+                      <strong>{event.action}</strong>
+                      <span>{formatDateTime(event.occurredAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : null}
         </>
       )}
     </section>

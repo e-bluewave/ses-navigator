@@ -42,6 +42,33 @@ describe('generated projects API client', () => {
       body: JSON.stringify(input),
     });
   });
+  it('soft-deletes a contact and reads its audit trail', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [] }), { status: 200 }),
+      );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    await api.deleteCompanyContact('contact-1', 3, '退職のため');
+    expect(request).toHaveBeenNthCalledWith(1, '/api/v1/contacts/contact-1', {
+      method: 'DELETE',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer access-token',
+        'if-match': '"3"',
+      },
+      body: JSON.stringify({ reason: '退職のため' }),
+    });
+    await api.listCompanyContactAudit('contact-1');
+    expect(request).toHaveBeenLastCalledWith(
+      '/api/v1/contacts/contact-1/audit',
+      { headers: { authorization: 'Bearer access-token' } },
+    );
+  });
   it('lists and reads company contacts with bearer authentication', async () => {
     const request = vi
       .fn()

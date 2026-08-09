@@ -14,6 +14,7 @@ import type {
   CompanyContact,
   CompanyContactInput,
   CompanyContactList,
+  CompanyContactAuditList,
   ListCompanyContactsQuery,
 } from './generated.js';
 
@@ -49,6 +50,12 @@ export interface ProjectsApi {
     rowVersion: number,
     input: CompanyContactInput,
   ): Promise<CompanyContact>;
+  deleteCompanyContact(
+    id: string,
+    rowVersion: number,
+    reason: string,
+  ): Promise<void>;
+  listCompanyContactAudit(id: string): Promise<CompanyContactAuditList>;
 }
 
 export class ApiClientError extends Error {
@@ -219,6 +226,19 @@ export function createProjectsApi(options: {
         'PUT',
         input,
         rowVersion,
+      );
+    },
+    deleteCompanyContact(id, rowVersion, reason) {
+      return send<void>(
+        `/contacts/${encodeURIComponent(id)}`,
+        'DELETE',
+        { reason },
+        rowVersion,
+      );
+    },
+    listCompanyContactAudit(id) {
+      return get<CompanyContactAuditList>(
+        `/contacts/${encodeURIComponent(id)}/audit`,
       );
     },
   };
