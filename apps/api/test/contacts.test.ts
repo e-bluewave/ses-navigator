@@ -23,8 +23,11 @@ function repository(
 ): ContactRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
+    canManage: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [contact], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(contact)),
+    create: vi.fn(() => Promise.resolve(contact)),
+    update: vi.fn(() => Promise.resolve({ ...contact, rowVersion: 2 })),
     ...overrides,
   };
 }
@@ -46,6 +49,86 @@ afterEach(async () => {
 });
 
 describe('company contact read API', () => {
+  it('creates and updates contacts with company.manage and optimistic locking', async () => {
+    const body = {
+      companyId: contact.companyId,
+      managementNo: 'CT-001',
+      familyName: '青波',
+      givenName: '太郎',
+      departmentName: '営業部',
+      positionTitle: '部長',
+      email: 'taro@example.com',
+      phone: null,
+      mobilePhone: null,
+      isPrimary: true,
+      status: 'active',
+    };
+    const created = await app().inject({
+      method: 'POST',
+      url: '/api/v1/contacts',
+      headers: { authorization: 'Bearer valid' },
+      payload: body,
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.headers.etag).toBe('"1"');
+    const updated = await app().inject({
+      method: 'PUT',
+      url: `/api/v1/contacts/${contact.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: body,
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.headers.etag).toBe('"2"');
+  });
+  it('enforces manage permission, validation, If-Match, and conflicts', async () => {
+    const body = {
+      companyId: contact.companyId,
+      managementNo: 'CT-001',
+      familyName: '青波',
+      givenName: null,
+      departmentName: null,
+      positionTitle: null,
+      email: null,
+      phone: null,
+      mobilePhone: null,
+      isPrimary: false,
+      status: 'active',
+    };
+    expect(
+      (
+        await app(
+          repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+        ).inject({
+          method: 'POST',
+          url: '/api/v1/contacts',
+          headers: { authorization: 'Bearer valid' },
+          payload: body,
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect(
+      (
+        await app().inject({
+          method: 'PUT',
+          url: `/api/v1/contacts/${contact.id}`,
+          headers: { authorization: 'Bearer valid' },
+          payload: body,
+        })
+      ).statusCode,
+    ).toBe(428);
+    expect(
+      (
+        await app(
+          repository({ update: vi.fn(() => Promise.resolve(null)) }),
+        ).inject({
+          method: 'PUT',
+          url: `/api/v1/contacts/${contact.id}`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+          payload: body,
+        })
+      ).statusCode,
+    ).toBe(409);
+  });
   it('lists and returns contact details through company.read', async () => {
     const list = await app().inject({
       method: 'GET',

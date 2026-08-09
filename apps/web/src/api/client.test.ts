@@ -3,6 +3,45 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('sends contact create and versioned update requests', async () => {
+    const request = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ id: 'contact-1' }), { status: 200 }),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    const input = {
+      companyId: '11111111-1111-4111-8111-111111111111',
+      managementNo: 'CT-001',
+      familyName: '青波',
+      givenName: '太郎',
+      departmentName: null,
+      positionTitle: null,
+      email: 'taro@example.com',
+      phone: null,
+      mobilePhone: null,
+      isPrimary: true,
+      status: 'active' as const,
+    };
+    await api.createCompanyContact(input);
+    expect(request).toHaveBeenLastCalledWith(
+      '/api/v1/contacts',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    await api.updateCompanyContact('contact-1', 4, input);
+    expect(request).toHaveBeenLastCalledWith('/api/v1/contacts/contact-1', {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer access-token',
+        'if-match': '"4"',
+      },
+      body: JSON.stringify(input),
+    });
+  });
   it('lists and reads company contacts with bearer authentication', async () => {
     const request = vi
       .fn()

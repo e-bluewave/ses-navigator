@@ -8,6 +8,7 @@ import type {
   CompanyStatus,
   CompanyInput,
   CompanyContact,
+  CompanyContactInput,
   ContactStatus,
   Project,
   ProjectStatus,
@@ -300,6 +301,7 @@ function ContactList({
     status: '' as ContactStatus | '',
   });
   const [error, setError] = useState(false);
+  const [creating, setCreating] = useState(false);
   useEffect(() => {
     let active = true;
     setItems(null);
@@ -329,8 +331,23 @@ function ContactList({
           <p className="section-kicker">CONTACTS</p>
           <h2>担当者一覧</h2>
         </div>
-        {items && <span className="count">{items.length}件</span>}
+        <div>
+          <button className="primary-button" onClick={() => setCreating(true)}>
+            担当者を登録
+          </button>
+          {items && <span className="count">{items.length}件</span>}
+        </div>
       </div>
+      {creating && (
+        <ContactForm
+          onCancel={() => setCreating(false)}
+          onSubmit={async (input) => {
+            const value = await api.createCompanyContact(input);
+            setCreating(false);
+            onOpen(value.id);
+          }}
+        />
+      )}
       <form
         className="project-filters"
         onSubmit={(e) => {
@@ -418,6 +435,7 @@ function ContactDetail({
 }) {
   const [contact, setContact] = useState<CompanyContact | null>(null);
   const [error, setError] = useState(false);
+  const [editing, setEditing] = useState(false);
   useEffect(() => {
     let active = true;
     api
@@ -456,6 +474,24 @@ function ContactDetail({
               {contactStatusLabels[contact.status]}
             </span>
           </div>
+          <button className="primary-button" onClick={() => setEditing(true)}>
+            編集
+          </button>
+          {editing && (
+            <ContactForm
+              contact={contact}
+              onCancel={() => setEditing(false)}
+              onSubmit={async (input) => {
+                const value = await api.updateCompanyContact(
+                  contact.id,
+                  contact.rowVersion,
+                  input,
+                );
+                setContact(value);
+                setEditing(false);
+              }}
+            />
+          )}
           <dl className="detail-grid">
             <div>
               <dt>部署</dt>
@@ -485,6 +521,161 @@ function ContactDetail({
         </>
       )}
     </section>
+  );
+}
+
+function ContactForm({
+  contact,
+  onSubmit,
+  onCancel,
+}: {
+  contact?: CompanyContact;
+  onSubmit: (input: CompanyContactInput) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState<CompanyContactInput>({
+    companyId: contact?.companyId ?? '',
+    managementNo: contact?.managementNo ?? '',
+    familyName: contact?.familyName ?? '',
+    givenName: contact?.givenName ?? null,
+    departmentName: contact?.departmentName ?? null,
+    positionTitle: contact?.positionTitle ?? null,
+    email: contact?.email ?? null,
+    phone: contact?.phone ?? null,
+    mobilePhone: contact?.mobilePhone ?? null,
+    isPrimary: contact?.isPrimary ?? false,
+    status: contact?.status ?? 'active',
+  });
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const text = (name: keyof CompanyContactInput, raw: string) =>
+    setValue((current) => ({ ...current, [name]: raw || null }));
+  return (
+    <form
+      className="entity-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setSaving(true);
+        setError('');
+        void onSubmit(value)
+          .catch((reason) => {
+            setError(
+              reason instanceof ApiClientError && reason.status === 409
+                ? '他のユーザーが更新しました。再読み込みしてください。'
+                : '担当者を保存できませんでした。',
+            );
+          })
+          .finally(() => setSaving(false));
+      }}
+    >
+      <label>
+        会社ID
+        <input
+          required
+          value={value.companyId}
+          onChange={(e) => setValue({ ...value, companyId: e.target.value })}
+        />
+      </label>
+      <label>
+        管理番号
+        <input
+          required
+          maxLength={32}
+          value={value.managementNo}
+          onChange={(e) => setValue({ ...value, managementNo: e.target.value })}
+        />
+      </label>
+      <label>
+        姓
+        <input
+          required
+          maxLength={100}
+          value={value.familyName}
+          onChange={(e) => setValue({ ...value, familyName: e.target.value })}
+        />
+      </label>
+      <label>
+        名
+        <input
+          maxLength={100}
+          value={value.givenName ?? ''}
+          onChange={(e) => text('givenName', e.target.value)}
+        />
+      </label>
+      <label>
+        部署
+        <input
+          maxLength={200}
+          value={value.departmentName ?? ''}
+          onChange={(e) => text('departmentName', e.target.value)}
+        />
+      </label>
+      <label>
+        役職
+        <input
+          maxLength={200}
+          value={value.positionTitle ?? ''}
+          onChange={(e) => text('positionTitle', e.target.value)}
+        />
+      </label>
+      <label>
+        メール
+        <input
+          type="email"
+          maxLength={320}
+          value={value.email ?? ''}
+          onChange={(e) => text('email', e.target.value)}
+        />
+      </label>
+      <label>
+        電話
+        <input
+          maxLength={50}
+          value={value.phone ?? ''}
+          onChange={(e) => text('phone', e.target.value)}
+        />
+      </label>
+      <label>
+        携帯電話
+        <input
+          maxLength={50}
+          value={value.mobilePhone ?? ''}
+          onChange={(e) => text('mobilePhone', e.target.value)}
+        />
+      </label>
+      <label>
+        状態
+        <select
+          value={value.status}
+          onChange={(e) =>
+            setValue({ ...value, status: e.target.value as ContactStatus })
+          }
+        >
+          {Object.entries(contactStatusLabels).map(([key, label]) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={value.isPrimary}
+          onChange={(e) => setValue({ ...value, isPrimary: e.target.checked })}
+        />
+        主担当
+      </label>
+      {error && <p role="alert">{error}</p>}
+      <div>
+        <button className="primary-button" disabled={saving}>
+          {saving ? '保存中…' : '保存'}
+        </button>
+        <button type="button" className="secondary-button" onClick={onCancel}>
+          キャンセル
+        </button>
+      </div>
+    </form>
   );
 }
 

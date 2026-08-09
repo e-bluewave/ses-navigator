@@ -1,4 +1,5 @@
 import { requiredEnv } from '../../plugins/authentication.js';
+import { ApiError } from '../../shared/errors.js';
 
 export type ContactStatus = 'active' | 'inactive' | 'left_company' | 'unknown';
 
@@ -18,9 +19,23 @@ export interface CompanyContact {
   updatedAt: string;
   rowVersion: number;
 }
+export interface ContactInput {
+  companyId: string;
+  managementNo: string;
+  familyName: string;
+  givenName: string | null;
+  departmentName: string | null;
+  positionTitle: string | null;
+  email: string | null;
+  phone: string | null;
+  mobilePhone: string | null;
+  isPrimary: boolean;
+  status: ContactStatus;
+}
 
 export interface ContactRepository {
   canRead(token: string): Promise<boolean>;
+  canManage(token: string): Promise<boolean>;
   list(
     token: string,
     query: {
@@ -35,6 +50,13 @@ export interface ContactRepository {
     nextCursor: { updatedAt: string; id: string } | null;
   }>;
   findById(token: string, id: string): Promise<CompanyContact | null>;
+  create(token: string, input: ContactInput): Promise<CompanyContact>;
+  update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: ContactInput,
+  ): Promise<CompanyContact | null>;
 }
 
 type Row = {
@@ -61,6 +83,13 @@ export class SupabaseContactRepository implements ContactRepository {
     const response = await this.request(token, '/rpc/has_permission', {
       method: 'POST',
       body: JSON.stringify({ required_permission: 'company.read' }),
+    });
+    return (await response.json()) === true;
+  }
+  async canManage(token: string) {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'company.manage' }),
     });
     return (await response.json()) === true;
   }
@@ -123,6 +152,44 @@ export class SupabaseContactRepository implements ContactRepository {
     const row = ((await response.json()) as Row[])[0];
     return row ? map(row) : null;
   }
+  async create(token: string, input: ContactInput) {
+    const tenantResponse = await this.request(token, '/rpc/current_tenant_id', {
+      method: 'POST',
+      body: '{}',
+    });
+    const tenantId = (await tenantResponse.json()) as string | null;
+    if (!tenantId)
+      throw new ApiError(403, 'forbidden', 'An active tenant is required');
+    const response = await this.request(token, '/company_contacts', {
+      method: 'POST',
+      headers: { prefer: 'return=representation' },
+      body: JSON.stringify(writeRow(input, tenantId)),
+    });
+    return map(((await response.json()) as Row[])[0]!);
+  }
+  async update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: ContactInput,
+  ) {
+    const params = new URLSearchParams({
+      id: `eq.${id}`,
+      row_version: `eq.${rowVersion}`,
+      deleted_at: 'is.null',
+    });
+    const response = await this.request(
+      token,
+      `/company_contacts?${params.toString()}`,
+      {
+        method: 'PATCH',
+        headers: { prefer: 'return=representation' },
+        body: JSON.stringify(writeRow(input)),
+      },
+    );
+    const row = ((await response.json()) as Row[])[0];
+    return row ? map(row) : null;
+  }
   private async request(token: string, path: string, init: RequestInit = {}) {
     const response = await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
@@ -140,6 +207,31 @@ export class SupabaseContactRepository implements ContactRepository {
       throw new Error(`Supabase Data API failed with ${response.status}`);
     return response;
   }
+}
+function writeRow(input: ContactInput, tenantId?: string) {
+  const fullName = `${input.familyName} ${input.givenName ?? ''}`
+    .trim()
+    .normalize('NFKC')
+    .toLowerCase();
+  const digits = (value: string | null) => value?.replace(/\D/g, '') || null;
+  return {
+    ...(tenantId ? { tenant_id: tenantId } : {}),
+    company_id: input.companyId,
+    management_no: input.managementNo,
+    family_name: input.familyName,
+    given_name: input.givenName,
+    full_name_normalized: fullName,
+    department_name: input.departmentName,
+    position_title: input.positionTitle,
+    email: input.email,
+    email_normalized: input.email?.normalize('NFKC').toLowerCase() ?? null,
+    phone: input.phone,
+    phone_normalized: digits(input.phone),
+    mobile_phone: input.mobilePhone,
+    mobile_phone_normalized: digits(input.mobilePhone),
+    is_primary: input.isPrimary,
+    contact_status: input.status,
+  };
 }
 
 function map(row: Row): CompanyContact {
