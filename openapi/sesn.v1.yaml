@@ -1,0 +1,134 @@
+openapi: 3.1.0
+info:
+  title: SES Navigator API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /projects:
+    get:
+      operationId: listProjects
+      parameters:
+        - { name: managementNo, in: query, schema: { type: string } }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/ProjectStatus' },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Project list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /projects/{id}:
+    get:
+      operationId: getProject
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Project detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    ProjectStatus:
+      { type: string, enum: [draft, open, on_hold, closed, cancelled] }
+    Project:
+      type: object
+      required:
+        [
+          id,
+          managementNo,
+          projectName,
+          summary,
+          projectStatus,
+          recruitmentStatus,
+          plannedStartOn,
+          plannedEndOn,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        managementNo: { type: string }
+        projectName: { type: string }
+        summary: { type: [string, 'null'] }
+        projectStatus: { $ref: '#/components/schemas/ProjectStatus' }
+        recruitmentStatus:
+          { type: string, enum: [recruiting, paused, filled, ended] }
+        plannedStartOn: { type: [string, 'null'], format: date }
+        plannedEndOn: { type: [string, 'null'], format: date }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    ProjectList:
+      type: object
+      required: [items, page]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Project' } }
+        page:
+          type: object
+          required: [limit, nextCursor]
+          properties:
+            limit: { type: integer }
+            nextCursor: { type: ['string', 'null'] }
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }
+  responses:
+    Unauthorized:
+      {
+        description: Authentication required,
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/ApiError' } },
+          },
+      }
+    Forbidden:
+      {
+        description: Permission denied,
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/ApiError' } },
+          },
+      }
+    NotFound:
+      {
+        description: Not found or not visible,
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/ApiError' } },
+          },
+      }
