@@ -135,4 +135,52 @@ describe('Supabase Auth service', () => {
       }),
     );
   });
+
+  it('requests a password reset without exposing credentials', async () => {
+    const request = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response('{}', { status: 200 })),
+    );
+    const auth = createSupabaseAuthService({
+      url: 'https://example.supabase.co',
+      publishableKey: 'key',
+      fetch: request,
+      storage: memoryStorage(),
+    });
+    await auth.requestPasswordReset(
+      'user@example.com',
+      'https://app.example.com/auth/callback',
+    );
+    expect(request).toHaveBeenCalledWith(
+      expect.stringContaining('/auth/v1/recover?redirect_to='),
+      expect.objectContaining({
+        body: JSON.stringify({ email: 'user@example.com' }),
+      }),
+    );
+  });
+
+  it('consumes a recovery link and updates the password', async () => {
+    const accessToken = `e30.${btoa(JSON.stringify({ sub: 'user-1', email: 'user@example.com' }))}.signature`;
+    const request = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response('{}', { status: 200 })),
+    );
+    const auth = createSupabaseAuthService({
+      url: 'https://example.supabase.co',
+      publishableKey: 'key',
+      fetch: request,
+      storage: memoryStorage(),
+    });
+    await expect(
+      auth.consumeAuthCallback(
+        `https://app.example.com/auth/callback#type=recovery&access_token=${accessToken}&refresh_token=refresh-1&expires_in=3600`,
+      ),
+    ).resolves.toBe('recovery');
+    await auth.updatePassword('long-password-value');
+    expect(request).toHaveBeenCalledWith(
+      'https://example.supabase.co/auth/v1/user',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ password: 'long-password-value' }),
+      }),
+    );
+  });
 });

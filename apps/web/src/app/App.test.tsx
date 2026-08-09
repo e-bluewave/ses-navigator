@@ -43,6 +43,9 @@ function auth(current: AuthSession | null = session): AuthService {
     verifyMfa: vi.fn(() =>
       Promise.resolve({ ...session, assuranceLevel: 'aal2' as const }),
     ),
+    requestPasswordReset: vi.fn(() => Promise.resolve()),
+    consumeAuthCallback: vi.fn(() => Promise.resolve(null)),
+    updatePassword: vi.fn(() => Promise.resolve()),
     onSessionChange: vi.fn(() => () => undefined),
   };
 }
