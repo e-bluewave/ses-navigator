@@ -26,6 +26,9 @@ import type {
   EngineerAffiliation,
   EngineerAffiliationInput,
   EngineerAffiliationList,
+  EngineerPreference,
+  EngineerPreferenceInput,
+  EngineerPreferenceList,
 } from './generated.js';
 
 export interface ProjectsApi {
@@ -89,6 +92,13 @@ export interface ProjectsApi {
     rowVersion: number,
     input: EngineerAffiliationInput,
   ): Promise<EngineerAffiliation>;
+  listEngineerPreferences(id: string): Promise<EngineerPreferenceList>;
+  saveEngineerPreference(
+    id: string,
+    preferenceId: string | null,
+    rowVersion: number,
+    input: EngineerPreferenceInput,
+  ): Promise<EngineerPreference>;
 }
 
 export class ApiClientError extends Error {
@@ -333,6 +343,19 @@ export function createProjectsApi(options: {
     saveEngineerAffiliation(id, affiliationId, rowVersion, input) {
       return send<EngineerAffiliation>(
         `/engineers/${encodeURIComponent(id)}/affiliations/${affiliationId ? encodeURIComponent(affiliationId) : 'new'}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    listEngineerPreferences(id) {
+      return get<EngineerPreferenceList>(
+        `/engineers/${encodeURIComponent(id)}/preferences`,
+      );
+    },
+    saveEngineerPreference(id, preferenceId, rowVersion, input) {
+      return send<EngineerPreference>(
+        `/engineers/${encodeURIComponent(id)}/preferences/${preferenceId ? encodeURIComponent(preferenceId) : 'new'}`,
         'PUT',
         input,
         rowVersion,

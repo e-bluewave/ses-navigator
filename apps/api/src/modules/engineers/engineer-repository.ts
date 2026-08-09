@@ -77,6 +77,30 @@ export type EngineerAffiliationInput = Omit<
   EngineerAffiliation,
   'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
 >;
+export type RemotePreference = 'onsite' | 'hybrid' | 'remote' | 'flexible';
+export interface EngineerPreference {
+  id: string;
+  engineerId: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  desiredRateMin: number | null;
+  desiredRateMax: number | null;
+  currencyCode: string;
+  remotePreference: RemotePreference;
+  weeklyDaysMin: number | null;
+  weeklyDaysMax: number | null;
+  overtimeLimitHours: number | null;
+  availableFrom: string | null;
+  notes: string | null;
+  locations: string[];
+  contractTypes: string[];
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerPreferenceInput = Omit<
+  EngineerPreference,
+  'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
+>;
 
 export interface EngineerRepository {
   canRead(token: string): Promise<boolean>;
@@ -133,6 +157,18 @@ export interface EngineerRepository {
     input: EngineerAffiliationInput,
     requestId: string,
   ): Promise<EngineerAffiliation | null>;
+  listPreferences(
+    token: string,
+    engineerId: string,
+  ): Promise<EngineerPreference[]>;
+  savePreference(
+    token: string,
+    engineerId: string,
+    preferenceId: string | null,
+    rowVersion: number,
+    input: EngineerPreferenceInput,
+    requestId: string,
+  ): Promise<EngineerPreference | null>;
 }
 
 type Row = {
@@ -406,6 +442,83 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     const row = (await response.json()) as AffiliationRow | null;
     return row ? mapAffiliation(row) : null;
   }
+  async listPreferences(token: string, engineerId: string) {
+    const params = new URLSearchParams({
+      select:
+        'id,engineer_id,effective_from,effective_to,desired_rate_min,desired_rate_max,currency_code,remote_preference,weekly_days_min,weekly_days_max,overtime_limit_hours,available_from,notes,updated_at,row_version',
+      engineer_id: `eq.${engineerId}`,
+      order: 'effective_from.desc,id.desc',
+    });
+    const rows = (await (
+      await this.request(token, `/engineer_preferences?${params.toString()}`)
+    ).json()) as PreferenceRow[];
+    const locations = (await (
+      await this.request(
+        token,
+        `/engineer_preferred_locations?select=prefecture,city,station_name&engineer_id=eq.${engineerId}&order=priority.asc`,
+      )
+    ).json()) as {
+      prefecture: string | null;
+      city: string | null;
+      station_name: string | null;
+    }[];
+    const contracts = (await (
+      await this.request(
+        token,
+        `/engineer_preferred_contract_types?select=contract_type&engineer_id=eq.${engineerId}&order=priority.asc`,
+      )
+    ).json()) as { contract_type: string }[];
+    return rows.map((row) =>
+      mapPreference(
+        row,
+        locations.map((x) =>
+          [x.prefecture, x.city, x.station_name].filter(Boolean).join(' '),
+        ),
+        contracts.map((x) => x.contract_type),
+      ),
+    );
+  }
+  async savePreference(
+    token: string,
+    engineerId: string,
+    preferenceId: string | null,
+    rowVersion: number,
+    input: EngineerPreferenceInput,
+    requestId: string,
+  ) {
+    const response = await this.request(
+      token,
+      '/rpc/save_engineer_preference',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          p_engineer_id: engineerId,
+          p_preference_id: preferenceId,
+          p_row_version: rowVersion,
+          p_preference: {
+            effective_from: input.effectiveFrom,
+            effective_to: input.effectiveTo,
+            desired_rate_min: input.desiredRateMin,
+            desired_rate_max: input.desiredRateMax,
+            currency_code: input.currencyCode,
+            remote_preference: input.remotePreference,
+            weekly_days_min: input.weeklyDaysMin,
+            weekly_days_max: input.weeklyDaysMax,
+            overtime_limit_hours: input.overtimeLimitHours,
+            available_from: input.availableFrom,
+            notes: input.notes,
+          },
+          p_locations: input.locations.map((prefecture) => ({ prefecture })),
+          p_contract_types: input.contractTypes,
+          p_request_id: requestId,
+        }),
+      },
+    );
+    const row = (await response.json()) as PreferenceRow | null;
+    return row
+      ? mapPreference(row, input.locations, input.contractTypes)
+      : null;
+  }
   private async request(token: string, path: string, init: RequestInit = {}) {
     const response = await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
@@ -449,6 +562,46 @@ const mapAffiliation = (row: AffiliationRow): EngineerAffiliation => ({
   notes: row.notes,
   updatedAt: row.updated_at,
   rowVersion: row.row_version,
+});
+type PreferenceRow = {
+  id: string;
+  engineer_id: string;
+  effective_from: string;
+  effective_to: string | null;
+  desired_rate_min: number | null;
+  desired_rate_max: number | null;
+  currency_code: string;
+  remote_preference: RemotePreference;
+  weekly_days_min: number | null;
+  weekly_days_max: number | null;
+  overtime_limit_hours: number | null;
+  available_from: string | null;
+  notes: string | null;
+  updated_at: string;
+  row_version: number;
+};
+const mapPreference = (
+  r: PreferenceRow,
+  locations: string[],
+  contractTypes: string[],
+): EngineerPreference => ({
+  id: r.id,
+  engineerId: r.engineer_id,
+  effectiveFrom: r.effective_from,
+  effectiveTo: r.effective_to,
+  desiredRateMin: r.desired_rate_min,
+  desiredRateMax: r.desired_rate_max,
+  currencyCode: r.currency_code,
+  remotePreference: r.remote_preference,
+  weeklyDaysMin: r.weekly_days_min,
+  weeklyDaysMax: r.weekly_days_max,
+  overtimeLimitHours: r.overtime_limit_hours,
+  availableFrom: r.available_from,
+  notes: r.notes,
+  locations,
+  contractTypes,
+  updatedAt: r.updated_at,
+  rowVersion: r.row_version,
 });
 
 type PrivateRow = {
