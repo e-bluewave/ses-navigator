@@ -123,6 +123,65 @@ export type EngineerPreferenceInput = Omit<
 export interface EngineerPreferenceList {
   items: EngineerPreference[];
 }
+export interface EngineerCareerHistory {
+  id: string;
+  engineerId: string;
+  projectName: string;
+  clientName: string | null;
+  roleName: string | null;
+  industry: string | null;
+  overview: string | null;
+  responsibilities: string | null;
+  achievements: string | null;
+  teamSize: number | null;
+  startedOn: string | null;
+  endedOn: string | null;
+  displayOrder: number;
+  sourceResumeVersionId: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerCareerHistoryInput = Omit<
+  EngineerCareerHistory,
+  'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
+>;
+export interface EngineerCareerHistoryList {
+  items: EngineerCareerHistory[];
+}
+export interface EngineerResumeVersion {
+  id: string;
+  versionNo: number;
+  fileStoragePath: string | null;
+  originalFileName: string | null;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  fileChecksum: string | null;
+  sourceType: string;
+  createdAt: string;
+}
+export interface EngineerResume {
+  id: string;
+  engineerId: string;
+  title: string;
+  resumeStatus: string;
+  currentVersionId: string | null;
+  updatedAt: string;
+  rowVersion: number;
+  versions: EngineerResumeVersion[];
+}
+export interface EngineerResumeVersionInput {
+  title: string;
+  resumeStatus: string;
+  fileStoragePath: string | null;
+  originalFileName: string | null;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  fileChecksum: string | null;
+  sourceType: string;
+}
+export interface EngineerResumeList {
+  items: EngineerResume[];
+}
 export interface EngineerSkill {
   id: string;
   engineerId: string;

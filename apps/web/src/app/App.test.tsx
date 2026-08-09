@@ -111,6 +111,14 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    listEngineerCareerHistories: vi.fn(() => Promise.resolve({ items: [] })),
+    saveEngineerCareerHistory: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    listEngineerResumes: vi.fn(() => Promise.resolve({ items: [] })),
+    addEngineerResumeVersion: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listProjects: vi.fn(() =>
       Promise.resolve({
         items: [project],

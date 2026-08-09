@@ -634,6 +634,144 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /engineers/{id}/career-histories:
+    get:
+      operationId: listEngineerCareerHistories
+      parameters:
+        [
+          {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      responses:
+        '200':
+          {
+            description: Career histories,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        $ref: '#/components/schemas/EngineerCareerHistoryList',
+                      },
+                  },
+              },
+          }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /engineers/{id}/career-histories/{itemId}:
+    put:
+      operationId: saveEngineerCareerHistory
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: '#/components/schemas/EngineerCareerHistoryInput' },
+                },
+            },
+        }
+      responses:
+        '200':
+          {
+            description: Career history saved,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      { $ref: '#/components/schemas/EngineerCareerHistory' },
+                  },
+              },
+          }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /engineers/{id}/resumes:
+    get:
+      operationId: listEngineerResumes
+      parameters:
+        [
+          {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      responses:
+        '200':
+          {
+            description: Resume versions,
+            content:
+              {
+                application/json:
+                  {
+                    schema: { $ref: '#/components/schemas/EngineerResumeList' },
+                  },
+              },
+          }
+  /engineers/{id}/resumes/{resumeId}/versions:
+    post:
+      operationId: addEngineerResumeVersion
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - { name: resumeId, in: path, required: true, schema: { type: string } }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: '#/components/schemas/EngineerResumeVersionInput' },
+                },
+            },
+        }
+      responses:
+        '201':
+          {
+            description: Immutable resume version added,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/EngineerResume' } },
+              },
+          }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /engineers/{id}/skills:
     get:
       operationId: listEngineerSkills
@@ -1160,6 +1298,102 @@ components:
             type: array,
             items: { $ref: '#/components/schemas/EngineerPreference' },
           }
+    EngineerCareerHistoryInput:
+      type: object
+      required: [projectName, displayOrder]
+      properties:
+        projectName: { type: string, minLength: 1, maxLength: 300 }
+        clientName: { type: [string, 'null'] }
+        roleName: { type: [string, 'null'] }
+        industry: { type: [string, 'null'] }
+        overview: { type: [string, 'null'] }
+        responsibilities: { type: [string, 'null'] }
+        achievements: { type: [string, 'null'] }
+        teamSize: { type: [integer, 'null'], minimum: 0 }
+        startedOn: { type: [string, 'null'], format: date }
+        endedOn: { type: [string, 'null'], format: date }
+        displayOrder: { type: integer }
+        sourceResumeVersionId: { type: [string, 'null'], format: uuid }
+    EngineerCareerHistory:
+      allOf:
+        - { $ref: '#/components/schemas/EngineerCareerHistoryInput' }
+        - {
+            type: object,
+            required: [id, engineerId, updatedAt, rowVersion],
+            properties:
+              {
+                id: { type: string, format: uuid },
+                engineerId: { type: string, format: uuid },
+                updatedAt: { type: string, format: date-time },
+                rowVersion: { type: integer, minimum: 1 },
+              },
+          }
+    EngineerCareerHistoryList:
+      {
+        type: object,
+        required: [items],
+        properties:
+          {
+            items:
+              {
+                type: array,
+                items: { $ref: '#/components/schemas/EngineerCareerHistory' },
+              },
+          },
+      }
+    EngineerResumeVersionInput:
+      type: object
+      required: [title, resumeStatus, sourceType]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        resumeStatus: { type: string, enum: [draft, active, archived] }
+        fileStoragePath: { type: [string, 'null'] }
+        originalFileName: { type: [string, 'null'] }
+        mimeType: { type: [string, 'null'] }
+        fileSizeBytes: { type: [integer, 'null'], minimum: 0 }
+        fileChecksum: { type: [string, 'null'] }
+        sourceType:
+          { type: string, enum: [upload, manual, migration, generated] }
+    EngineerResumeVersion: { type: object }
+    EngineerResume:
+      type: object
+      required:
+        [
+          id,
+          engineerId,
+          title,
+          resumeStatus,
+          currentVersionId,
+          updatedAt,
+          rowVersion,
+          versions,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        title: { type: string }
+        resumeStatus: { type: string }
+        currentVersionId: { type: [string, 'null'], format: uuid }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer }
+        versions:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/EngineerResumeVersion' },
+          }
+    EngineerResumeList:
+      {
+        type: object,
+        required: [items],
+        properties:
+          {
+            items:
+              {
+                type: array,
+                items: { $ref: '#/components/schemas/EngineerResume' },
+              },
+          },
+      }
     EngineerSkill:
       type: object
       required:

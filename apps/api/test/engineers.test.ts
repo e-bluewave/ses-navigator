@@ -68,6 +68,10 @@ function repository(
     saveSkill: vi.fn(() => Promise.resolve(null)),
     listQualifications: vi.fn(() => Promise.resolve([])),
     saveQualification: vi.fn(() => Promise.resolve(null)),
+    listCareerHistories: vi.fn(() => Promise.resolve([])),
+    saveCareerHistory: vi.fn(() => Promise.resolve(null)),
+    listResumes: vi.fn(() => Promise.resolve([])),
+    addResumeVersion: vi.fn(() => Promise.resolve(null)),
     ...overrides,
   };
 }
@@ -168,6 +172,132 @@ describe('engineer skill and qualification API', () => {
       },
     });
     expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('engineer career and resume API', () => {
+  it('lists and saves career histories with optimistic locking', async () => {
+    const item = {
+      id: '22222222-2222-4222-8222-222222222222',
+      engineerId: engineer.id,
+      projectName: '販売管理刷新',
+      clientName: null,
+      roleName: 'SE',
+      industry: null,
+      overview: null,
+      responsibilities: '設計・実装',
+      achievements: null,
+      teamSize: 5,
+      startedOn: '2025-01-01',
+      endedOn: '2025-12-31',
+      displayOrder: 1,
+      sourceResumeVersionId: null,
+      updatedAt: engineer.updatedAt,
+      rowVersion: 1,
+    };
+    const a = app(
+      repository({
+        listCareerHistories: vi.fn(() => Promise.resolve([item])),
+        saveCareerHistory: vi.fn(() => Promise.resolve(item)),
+      }),
+    );
+    expect(
+      (
+        await a.inject({
+          method: 'GET',
+          url: `/api/v1/engineers/${engineer.id}/career-histories`,
+          headers: { authorization: 'Bearer valid' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await a.inject({
+          method: 'PUT',
+          url: `/api/v1/engineers/${engineer.id}/career-histories/new`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"0"' },
+          payload: {
+            projectName: item.projectName,
+            clientName: null,
+            roleName: 'SE',
+            industry: null,
+            overview: null,
+            responsibilities: item.responsibilities,
+            achievements: null,
+            teamSize: 5,
+            startedOn: '2025-01-01',
+            endedOn: '2025-12-31',
+            displayOrder: 1,
+            sourceResumeVersionId: null,
+          },
+        })
+      ).statusCode,
+    ).toBe(200);
+  });
+  it('lists resumes, adds an immutable version, and validates file size', async () => {
+    const resume = {
+      id: '33333333-3333-4333-8333-333333333333',
+      engineerId: engineer.id,
+      title: '職務経歴書',
+      resumeStatus: 'active',
+      currentVersionId: '44444444-4444-4444-8444-444444444444',
+      updatedAt: engineer.updatedAt,
+      rowVersion: 2,
+      versions: [],
+    };
+    const a = app(
+      repository({
+        listResumes: vi.fn(() => Promise.resolve([resume])),
+        addResumeVersion: vi.fn(() => Promise.resolve(resume)),
+      }),
+    );
+    expect(
+      (
+        await a.inject({
+          method: 'GET',
+          url: `/api/v1/engineers/${engineer.id}/resumes`,
+          headers: { authorization: 'Bearer valid' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await a.inject({
+          method: 'POST',
+          url: `/api/v1/engineers/${engineer.id}/resumes/new/versions`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"0"' },
+          payload: {
+            title: '職務経歴書',
+            resumeStatus: 'active',
+            fileStoragePath: 'tenant/engineer/resume.pdf',
+            originalFileName: 'resume.pdf',
+            mimeType: 'application/pdf',
+            fileSizeBytes: 1024,
+            fileChecksum: 'sha256:abc',
+            sourceType: 'upload',
+          },
+        })
+      ).statusCode,
+    ).toBe(201);
+    expect(
+      (
+        await a.inject({
+          method: 'POST',
+          url: `/api/v1/engineers/${engineer.id}/resumes/new/versions`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"0"' },
+          payload: {
+            title: '職務経歴書',
+            resumeStatus: 'active',
+            fileStoragePath: null,
+            originalFileName: null,
+            mimeType: null,
+            fileSizeBytes: -1,
+            fileChecksum: null,
+            sourceType: 'manual',
+          },
+        })
+      ).statusCode,
+    ).toBe(400);
   });
 });
 
