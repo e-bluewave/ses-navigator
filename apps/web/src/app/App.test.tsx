@@ -150,6 +150,24 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     updateEngineer: vi.fn(() => Promise.resolve(engineer)),
     deleteEngineer: vi.fn(() => Promise.resolve()),
     listEngineerAudit: vi.fn(() => Promise.resolve({ items: [] })),
+    getEngineerPrivate: vi.fn(() =>
+      Promise.resolve({
+        engineerId: engineer.id,
+        birthDate: null,
+        gender: null,
+        personalEmail: null,
+        phone: null,
+        postalCode: null,
+        prefecture: null,
+        city: null,
+        addressLine: null,
+        emergencyContact: null,
+        notes: null,
+        updatedAt: '2026-08-09T00:00:00Z',
+        rowVersion: 1,
+      }),
+    ),
+    updateEngineerPrivate: vi.fn(),
     ...overrides,
   };
 }
@@ -246,6 +264,54 @@ describe('App', () => {
         engineer.id,
         engineer.rowVersion,
         '重複登録のため',
+      ),
+    );
+  });
+  it('loads and updates engineer private details with their own row version', async () => {
+    window.history.replaceState({}, '', `/engineers/${engineer.id}`);
+    const detail = {
+      engineerId: engineer.id,
+      birthDate: null,
+      gender: null,
+      personalEmail: 'engineer@example.com',
+      phone: null,
+      postalCode: null,
+      prefecture: null,
+      city: null,
+      addressLine: null,
+      emergencyContact: null,
+      notes: null,
+      updatedAt: '2026-08-09T00:00:00Z',
+      rowVersion: 4,
+    };
+    const updateEngineerPrivate = vi.fn(() =>
+      Promise.resolve({ ...detail, phone: '090-0000-0000', rowVersion: 5 }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getEngineer: () => Promise.resolve(engineer),
+          getEngineerPrivate: () => Promise.resolve(detail),
+          updateEngineerPrivate,
+        })}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: '機密個人情報' }),
+    );
+    expect(
+      await screen.findByDisplayValue('engineer@example.com'),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('電話'), {
+      target: { value: '090-0000-0000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '機密個人情報を保存' }));
+    await waitFor(() =>
+      expect(updateEngineerPrivate).toHaveBeenCalledWith(
+        engineer.id,
+        4,
+        expect.objectContaining({ phone: '090-0000-0000' }),
       ),
     );
   });

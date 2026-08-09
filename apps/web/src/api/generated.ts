@@ -54,6 +54,26 @@ export interface EngineerAuditEvent {
 export interface EngineerAuditList {
   items: EngineerAuditEvent[];
 }
+export type EngineerGender = 'male' | 'female' | 'other' | 'undisclosed';
+export interface EngineerPrivateDetail {
+  engineerId: string;
+  birthDate: string | null;
+  gender: EngineerGender | null;
+  personalEmail: string | null;
+  phone: string | null;
+  postalCode: string | null;
+  prefecture: string | null;
+  city: string | null;
+  addressLine: string | null;
+  emergencyContact: string | null;
+  notes: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerPrivateInput = Omit<
+  EngineerPrivateDetail,
+  'engineerId' | 'updatedAt' | 'rowVersion'
+>;
 export interface ListEngineersQuery {
   q?: string;
   status?: EngineerStatus;

@@ -434,6 +434,68 @@ paths:
               schema: { $ref: '#/components/schemas/EngineerAuditList' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /engineers/{id}/private:
+    get:
+      operationId: getEngineerPrivate
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Permission-limited engineer private detail
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: '#/components/schemas/EngineerPrivateDetail' },
+                },
+            }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateEngineerPrivate
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/EngineerPrivateInput' } },
+          }
+      responses:
+        '200':
+          description: Engineer private detail created or updated
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: '#/components/schemas/EngineerPrivateDetail' },
+                },
+            }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /auth/context:
     get:
       operationId: getAuthContext
@@ -685,6 +747,49 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/EngineerAuditEvent' }
+    EngineerGender: { type: string, enum: [male, female, other, undisclosed] }
+    EngineerPrivateInput:
+      type: object
+      required:
+        [
+          birthDate,
+          gender,
+          personalEmail,
+          phone,
+          postalCode,
+          prefecture,
+          city,
+          addressLine,
+          emergencyContact,
+          notes,
+        ]
+      properties:
+        birthDate: { type: [string, 'null'], format: date }
+        gender:
+          {
+            anyOf:
+              [
+                { $ref: '#/components/schemas/EngineerGender' },
+                { type: 'null' },
+              ],
+          }
+        personalEmail: { type: [string, 'null'], format: email, maxLength: 320 }
+        phone: { type: [string, 'null'], maxLength: 50 }
+        postalCode: { type: [string, 'null'], maxLength: 8 }
+        prefecture: { type: [string, 'null'], maxLength: 100 }
+        city: { type: [string, 'null'], maxLength: 200 }
+        addressLine: { type: [string, 'null'], maxLength: 500 }
+        emergencyContact: { type: [string, 'null'], maxLength: 500 }
+        notes: { type: [string, 'null'], maxLength: 2000 }
+    EngineerPrivateDetail:
+      allOf:
+        - { $ref: '#/components/schemas/EngineerPrivateInput' }
+        - type: object
+          required: [engineerId, updatedAt, rowVersion]
+          properties:
+            engineerId: { type: string, format: uuid }
+            updatedAt: { type: string, format: date-time }
+            rowVersion: { type: integer, minimum: 1 }
     CompanyStatus: { type: string, enum: [prospect, active, inactive, blocked] }
     ContactStatus:
       { type: string, enum: [active, inactive, left_company, unknown] }
