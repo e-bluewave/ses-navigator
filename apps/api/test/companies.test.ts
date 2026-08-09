@@ -33,8 +33,11 @@ function repository(
 ): CompanyRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
+    canManage: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [company], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(company)),
+    create: vi.fn(() => Promise.resolve(company)),
+    update: vi.fn(() => Promise.resolve(company)),
     ...overrides,
   };
 }
@@ -128,5 +131,89 @@ describe('company read API', () => {
         })
       ).statusCode,
     ).toBe(400);
+  });
+});
+
+describe('company write API', () => {
+  const body = {
+    managementNo: 'CO-000001',
+    legalName: '青波株式会社',
+    displayName: '青波',
+    corporateNumber: '1234567890123',
+    postalCode: '100-0001',
+    prefecture: '東京都',
+    city: '千代田区',
+    addressLine: '千代田1-1',
+    websiteUrl: 'https://example.com',
+    representativeName: '青波 太郎',
+    status: 'active',
+  };
+
+  it('creates with company.manage and returns an ETag', async () => {
+    const response = await app().inject({
+      method: 'POST',
+      url: '/api/v1/companies',
+      headers: { authorization: 'Bearer valid' },
+      payload: body,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.headers.etag).toBe('"1"');
+  });
+
+  it('updates with optimistic locking', async () => {
+    const update = vi.fn(() => Promise.resolve(company));
+    const response = await app(repository({ update })).inject({
+      method: 'PUT',
+      url: `/api/v1/companies/${company.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: body,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith('valid', company.id, 1, body);
+  });
+
+  it('requires manage permission and If-Match, and reports conflicts', async () => {
+    const forbidden = await app(
+      repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: '/api/v1/companies',
+      headers: { authorization: 'Bearer valid' },
+      payload: body,
+    });
+    expect(forbidden.statusCode).toBe(403);
+    const missing = await app().inject({
+      method: 'PUT',
+      url: `/api/v1/companies/${company.id}`,
+      headers: { authorization: 'Bearer valid' },
+      payload: body,
+    });
+    expect(missing.statusCode).toBe(428);
+    const conflict = await app(
+      repository({ update: vi.fn(() => Promise.resolve(null)) }),
+    ).inject({
+      method: 'PUT',
+      url: `/api/v1/companies/${company.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: body,
+    });
+    expect(conflict.statusCode).toBe(409);
+  });
+
+  it('rejects invalid corporate numbers and URLs', async () => {
+    const invalidCorporate = await app().inject({
+      method: 'POST',
+      url: '/api/v1/companies',
+      headers: { authorization: 'Bearer valid' },
+      payload: { ...body, corporateNumber: '123' },
+    });
+    expect(invalidCorporate.statusCode).toBe(400);
+    const invalidUrl = await app().inject({
+      method: 'POST',
+      url: '/api/v1/companies',
+      headers: { authorization: 'Bearer valid' },
+      payload: { ...body, websiteUrl: 'javascript:alert(1)' },
+    });
+    expect(invalidUrl.statusCode).toBe(400);
   });
 });

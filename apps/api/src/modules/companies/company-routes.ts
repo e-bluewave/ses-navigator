@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ApiError } from '../../shared/errors.js';
 import type { CompanyRepository } from './company-repository.js';
+import type { CompanyInput } from './company-repository.js';
 
 const statuses = new Set(['prospect', 'active', 'inactive', 'blocked']);
 const uuidPattern =
@@ -10,6 +11,45 @@ export function registerCompanyRoutes(
   app: FastifyInstance,
   repository: CompanyRepository,
 ) {
+  app.post(
+    '/api/v1/companies',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const input = parseCompanyInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const company = await repository.create(request.user.accessToken, input);
+      return reply
+        .code(201)
+        .header('etag', `"${company.rowVersion}"`)
+        .send(company);
+    },
+  );
+
+  app.put(
+    '/api/v1/companies/:id',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const input = parseCompanyInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const company = await repository.update(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        input,
+      );
+      if (!company)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Company was changed; reload and try again',
+        );
+      return reply.header('etag', `"${company.rowVersion}"`).send(company);
+    },
+  );
+
   app.get(
     '/api/v1/companies',
     { preHandler: (request) => app.authenticate(request) },
@@ -68,6 +108,66 @@ export function registerCompanyRoutes(
 async function requireRead(repository: CompanyRepository, token: string) {
   if (!(await repository.canRead(token)))
     throw new ApiError(403, 'forbidden', 'company.read permission is required');
+}
+async function requireManage(repository: CompanyRepository, token: string) {
+  if (!(await repository.canManage(token)))
+    throw new ApiError(
+      403,
+      'forbidden',
+      'company.manage permission is required',
+    );
+}
+function parseCompanyInput(value: unknown): CompanyInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const body = value as Record<string, unknown>;
+  const required = (name: string, max: number) => {
+    const item = body[name];
+    if (typeof item !== 'string' || item.trim().length < 1 || item.length > max)
+      throw invalid(`${name} is invalid`);
+    return item.trim();
+  };
+  const nullable = (name: string, max: number) => {
+    const item = body[name];
+    if (item === null || item === undefined || item === '') return null;
+    if (typeof item !== 'string' || item.length > max)
+      throw invalid(`${name} is invalid`);
+    return item.trim();
+  };
+  const corporateNumber = nullable('corporateNumber', 13);
+  if (corporateNumber && !/^\d{13}$/.test(corporateNumber))
+    throw invalid('corporateNumber is invalid');
+  const websiteUrl = nullable('websiteUrl', 2048);
+  if (websiteUrl) {
+    try {
+      const url = new URL(websiteUrl);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+    } catch {
+      throw invalid('websiteUrl is invalid');
+    }
+  }
+  const status = body.status;
+  if (typeof status !== 'string' || !statuses.has(status))
+    throw invalid('status is invalid');
+  return {
+    managementNo: required('managementNo', 32),
+    legalName: required('legalName', 200),
+    displayName: nullable('displayName', 200),
+    corporateNumber,
+    postalCode: nullable('postalCode', 8),
+    prefecture: nullable('prefecture', 100),
+    city: nullable('city', 100),
+    addressLine: nullable('addressLine', 500),
+    websiteUrl,
+    representativeName: nullable('representativeName', 200),
+    status,
+  };
+}
+function parseIfMatch(value: string | undefined) {
+  const match = value?.match(/^(?:W\/)?"([1-9]\d*)"$/);
+  if (!match)
+    throw new ApiError(428, 'precondition_required', 'If-Match is required');
+  return Number(match[1]);
 }
 function invalid(message: string) {
   return new ApiError(400, 'invalid_request', message);

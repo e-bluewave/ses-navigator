@@ -3,6 +3,45 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('sends company create and versioned update requests', async () => {
+    const request = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ id: 'company-1' }), { status: 200 }),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    const input = {
+      managementNo: 'CO-000001',
+      legalName: '青波株式会社',
+      displayName: null,
+      corporateNumber: null,
+      postalCode: null,
+      prefecture: null,
+      city: null,
+      addressLine: null,
+      websiteUrl: null,
+      representativeName: null,
+      status: 'active' as const,
+    };
+    await api.createCompany(input);
+    expect(request).toHaveBeenLastCalledWith(
+      '/api/v1/companies',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    await api.updateCompany('company-1', 3, input);
+    expect(request).toHaveBeenLastCalledWith('/api/v1/companies/company-1', {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer access-token',
+        'if-match': '"3"',
+      },
+      body: JSON.stringify(input),
+    });
+  });
   it('sends typed company list parameters and reads a detail', async () => {
     const request = vi.fn(() =>
       Promise.resolve(

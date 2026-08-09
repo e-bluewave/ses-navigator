@@ -14,6 +14,8 @@ const requiredContractFragments = [
   'operationId: getAuthContext',
   'operationId: listCompanies',
   'operationId: getCompany',
+  'operationId: createCompany',
+  'operationId: updateCompany',
   'enum: [draft, open, on_hold, closed, cancelled]',
   'enum: [recruiting, paused, filled, ended]',
   'required: [items, page]',
@@ -59,6 +61,20 @@ export interface Company {
 export interface CompanyList {
   items: Company[];
   page: { limit: number; nextCursor: string | null };
+}
+
+export interface CompanyInput {
+  managementNo: string;
+  legalName: string;
+  displayName: string | null;
+  corporateNumber: string | null;
+  postalCode: string | null;
+  prefecture: string | null;
+  city: string | null;
+  addressLine: string | null;
+  websiteUrl: string | null;
+  representativeName: string | null;
+  status: CompanyStatus;
 }
 
 export interface ListCompaniesQuery {
