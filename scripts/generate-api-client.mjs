@@ -55,8 +55,10 @@ export interface ApiErrorBody {
 }
 
 export interface ListProjectsQuery {
-  managementNo?: string;
+  q?: string;
   status?: ProjectStatus;
+  recruitmentStatus?: RecruitmentStatus;
+  cursor?: string;
   limit?: number;
 }
 `;

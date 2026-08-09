@@ -56,8 +56,11 @@ export function createProjectsApi(options: {
     },
     listProjects(query = {}) {
       const params = new URLSearchParams();
-      if (query.managementNo) params.set('managementNo', query.managementNo);
+      if (query.q) params.set('q', query.q);
       if (query.status) params.set('status', query.status);
+      if (query.recruitmentStatus)
+        params.set('recruitmentStatus', query.recruitmentStatus);
+      if (query.cursor) params.set('cursor', query.cursor);
       if (query.limit !== undefined) params.set('limit', String(query.limit));
       const suffix = params.size === 0 ? '' : `?${params.toString()}`;
       return get<ProjectList>(`/projects${suffix}`);

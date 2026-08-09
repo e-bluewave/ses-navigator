@@ -170,6 +170,37 @@ h2 {
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
+.project-filters {
+  display: grid;
+  grid-template-columns: minmax(14rem, 2fr) repeat(2, minmax(9rem, 1fr)) auto;
+  align-items: end;
+  gap: 0.8rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  border-radius: 0.8rem;
+  background: #f3f7f7;
+}
+.project-filters label {
+  display: grid;
+  gap: 0.4rem;
+  color: #52616a;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+.project-filters input,
+.project-filters select {
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid #b9c9cc;
+  border-radius: 0.5rem;
+  background: #fff;
+  font: inherit;
+}
+.pagination-actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 1.25rem;
+}
 .table-wrap {
   overflow-x: auto;
 }
@@ -289,6 +320,9 @@ dd {
     display: none;
   }
   .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .project-filters {
     grid-template-columns: 1fr;
   }
 }

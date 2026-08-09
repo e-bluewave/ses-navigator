@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { FormEvent } from 'react';
 
 import { ApiClientError, createProjectsApi } from '../api/client.js';
 import type { ProjectsApi } from '../api/client.js';
-import type { Project, ProjectStatus } from '../api/generated.js';
+import type {
+  Project,
+  ProjectStatus,
+  RecruitmentStatus,
+} from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
 import { MfaPage } from '../auth/MfaPage.js';
@@ -172,13 +177,40 @@ function ProjectList({
   onUnauthorized: () => Promise<void>;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<ProjectStatus | ''>('');
+  const [recruitmentStatus, setRecruitmentStatus] = useState<
+    RecruitmentStatus | ''
+  >('');
+  const [filters, setFilters] = useState({
+    query: '',
+    status: '',
+    recruitmentStatus: '',
+  });
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     let active = true;
+    setProjects(null);
+    setError(null);
     api
-      .listProjects({ limit: 50 })
-      .then((result) => active && setProjects(result.items))
+      .listProjects({
+        limit: 50,
+        ...(filters.query ? { q: filters.query } : {}),
+        ...(filters.status ? { status: filters.status as ProjectStatus } : {}),
+        ...(filters.recruitmentStatus
+          ? {
+              recruitmentStatus: filters.recruitmentStatus as RecruitmentStatus,
+            }
+          : {}),
+      })
+      .then((result) => {
+        if (!active) return;
+        setProjects(result.items);
+        setNextCursor(result.page.nextCursor);
+      })
       .catch((reason: unknown) => {
         if (reason instanceof ApiClientError && reason.status === 401)
           void onUnauthorized();
@@ -187,7 +219,39 @@ function ProjectList({
     return () => {
       active = false;
     };
-  }, [api, onUnauthorized]);
+  }, [api, filters, onUnauthorized]);
+
+  function applyFilters(event: FormEvent) {
+    event.preventDefault();
+    setFilters({ query: query.trim(), status, recruitmentStatus });
+  }
+
+  async function loadMore() {
+    if (nextCursor === null) return;
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const result = await api.listProjects({
+        limit: 50,
+        cursor: nextCursor,
+        ...(filters.query ? { q: filters.query } : {}),
+        ...(filters.status ? { status: filters.status as ProjectStatus } : {}),
+        ...(filters.recruitmentStatus
+          ? {
+              recruitmentStatus: filters.recruitmentStatus as RecruitmentStatus,
+            }
+          : {}),
+      });
+      setProjects((current) => [...(current ?? []), ...result.items]);
+      setNextCursor(result.page.nextCursor);
+    } catch (reason) {
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
+      else setError(reason);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <section aria-labelledby="projects-heading" className="panel">
@@ -198,6 +262,53 @@ function ProjectList({
         </div>
         {projects && <span className="count">{projects.length}件</span>}
       </div>
+      <form className="project-filters" onSubmit={applyFilters}>
+        <label>
+          案件検索
+          <input
+            type="search"
+            value={query}
+            maxLength={100}
+            placeholder="管理番号・案件名"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <label>
+          案件状態
+          <select
+            value={status}
+            onChange={(event) =>
+              setStatus(event.target.value as ProjectStatus | '')
+            }
+          >
+            <option value="">すべて</option>
+            {Object.entries(projectStatusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          募集状態
+          <select
+            value={recruitmentStatus}
+            onChange={(event) =>
+              setRecruitmentStatus(event.target.value as RecruitmentStatus | '')
+            }
+          >
+            <option value="">すべて</option>
+            {Object.entries(recruitmentStatusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="primary-button" type="submit">
+          検索
+        </button>
+      </form>
       {error ? <ErrorNotice error={error} /> : null}
       {projects === null && error === null ? (
         <p role="status">案件を読み込んでいます…</p>
@@ -241,6 +352,17 @@ function ProjectList({
               ))}
             </tbody>
           </table>
+        </div>
+      ) : null}
+      {projects && nextCursor ? (
+        <div className="pagination-actions">
+          <button
+            className="secondary-button"
+            disabled={loadingMore}
+            onClick={() => void loadMore()}
+          >
+            {loadingMore ? '読み込んでいます…' : 'さらに表示'}
+          </button>
         </div>
       ) : null}
     </section>

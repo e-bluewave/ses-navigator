@@ -4,6 +4,12 @@ import { ApiError } from '../../shared/errors.js';
 import type { ProjectRepository } from './project-repository.js';
 
 const statuses = new Set(['draft', 'open', 'on_hold', 'closed', 'cancelled']);
+const recruitmentStatuses = new Set([
+  'recruiting',
+  'paused',
+  'filled',
+  'ended',
+]);
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -25,19 +31,37 @@ export function registerProjectRoutes(
       )
         throw invalid('status is invalid');
       if (
-        query.managementNo !== undefined &&
-        typeof query.managementNo !== 'string'
+        query.q !== undefined &&
+        (typeof query.q !== 'string' ||
+          query.q.trim().length < 1 ||
+          query.q.length > 100)
       )
-        throw invalid('managementNo is invalid');
+        throw invalid('q must be between 1 and 100 characters');
+      if (
+        query.recruitmentStatus !== undefined &&
+        (typeof query.recruitmentStatus !== 'string' ||
+          !recruitmentStatuses.has(query.recruitmentStatus))
+      )
+        throw invalid('recruitmentStatus is invalid');
+      const cursor = parseCursor(query.cursor);
       await requireProjectRead(repository, request.user.accessToken);
-      const items = await repository.list(request.user.accessToken, {
+      const result = await repository.list(request.user.accessToken, {
         limit,
+        ...(cursor === undefined ? {} : { cursor }),
+        ...(typeof query.q === 'string' ? { query: query.q.trim() } : {}),
         ...(typeof query.status === 'string' ? { status: query.status } : {}),
-        ...(typeof query.managementNo === 'string'
-          ? { managementNo: query.managementNo }
+        ...(typeof query.recruitmentStatus === 'string'
+          ? { recruitmentStatus: query.recruitmentStatus }
           : {}),
       });
-      return { items, page: { limit, nextCursor: null } };
+      return {
+        items: result.items,
+        page: {
+          limit,
+          nextCursor:
+            result.nextCursor === null ? null : encodeCursor(result.nextCursor),
+        },
+      };
     },
   );
 
@@ -66,4 +90,31 @@ async function requireProjectRead(
 
 function invalid(message: string): ApiError {
   return new ApiError(400, 'invalid_request', message);
+}
+
+function encodeCursor(cursor: { updatedAt: string; id: string }): string {
+  return Buffer.from(JSON.stringify(cursor)).toString('base64url');
+}
+
+function parseCursor(
+  value: unknown,
+): { updatedAt: string; id: string } | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.length > 500)
+    throw invalid('cursor is invalid');
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(value, 'base64url').toString('utf8'),
+    ) as Record<string, unknown>;
+    if (
+      typeof parsed.updatedAt !== 'string' ||
+      Number.isNaN(Date.parse(parsed.updatedAt)) ||
+      typeof parsed.id !== 'string' ||
+      !uuidPattern.test(parsed.id)
+    )
+      throw new Error('invalid cursor');
+    return { updatedAt: parsed.updatedAt, id: parsed.id };
+  } catch {
+    throw invalid('cursor is invalid');
+  }
 }
