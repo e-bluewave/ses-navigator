@@ -39,9 +39,18 @@ export interface CompanyInput {
   status: string;
 }
 
+export interface CompanyAuditEvent {
+  id: string;
+  occurredAt: string;
+  actorUserId: string | null;
+  action: string;
+  requestId: string | null;
+}
+
 export interface CompanyRepository {
   canRead(accessToken: string): Promise<boolean>;
   canManage(accessToken: string): Promise<boolean>;
+  canReadAudit(accessToken: string): Promise<boolean>;
   list(
     accessToken: string,
     query: CompanyListQuery,
@@ -57,6 +66,14 @@ export interface CompanyRepository {
     rowVersion: number,
     input: CompanyInput,
   ): Promise<Company | null>;
+  softDelete(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    reason: string,
+    requestId: string,
+  ): Promise<boolean>;
+  listAudit(accessToken: string, id: string): Promise<CompanyAuditEvent[]>;
 }
 
 type CompanyRow = {
@@ -76,6 +93,14 @@ type CompanyRow = {
   row_version: number;
 };
 
+type AuditRow = {
+  id: string;
+  occurred_at: string;
+  actor_user_id: string | null;
+  action: string;
+  request_id: string | null;
+};
+
 const select =
   'id,management_no,legal_name,display_name,corporate_number,postal_code,prefecture,city,address_line,website_url,representative_name,status,updated_at,row_version';
 
@@ -92,6 +117,14 @@ export class SupabaseCompanyRepository implements CompanyRepository {
     const response = await this.request(token, '/rpc/has_permission', {
       method: 'POST',
       body: JSON.stringify({ required_permission: 'company.manage' }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async canReadAudit(token: string): Promise<boolean> {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'audit.read' }),
     });
     return (await response.json()) === true;
   }
@@ -185,6 +218,46 @@ export class SupabaseCompanyRepository implements CompanyRepository {
     );
     const rows = (await response.json()) as CompanyRow[];
     return rows[0] ? toCompany(rows[0]) : null;
+  }
+
+  async softDelete(
+    token: string,
+    id: string,
+    rowVersion: number,
+    reason: string,
+    requestId: string,
+  ) {
+    const response = await this.request(token, '/rpc/soft_delete_company', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_company_id: id,
+        p_row_version: rowVersion,
+        p_delete_reason: reason,
+        p_request_id: requestId,
+      }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async listAudit(token: string, id: string): Promise<CompanyAuditEvent[]> {
+    const params = new URLSearchParams({
+      select: 'id,occurred_at,actor_user_id,action,request_id',
+      resource_type: 'eq.company',
+      resource_id: `eq.${id}`,
+      order: 'occurred_at.desc',
+      limit: '50',
+    });
+    const response = await this.request(
+      token,
+      `/audit_event_summaries?${params.toString()}`,
+    );
+    return ((await response.json()) as AuditRow[]).map((row) => ({
+      id: row.id,
+      occurredAt: row.occurred_at,
+      actorUserId: row.actor_user_id,
+      action: row.action,
+      requestId: row.request_id,
+    }));
   }
 
   private async request(token: string, path: string, init: RequestInit = {}) {

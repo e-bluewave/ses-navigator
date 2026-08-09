@@ -9,6 +9,7 @@ import type {
   Company,
   CompanyInput,
   CompanyList,
+  CompanyAuditList,
   ListCompaniesQuery,
 } from './generated.js';
 
@@ -32,6 +33,8 @@ export interface ProjectsApi {
     rowVersion: number,
     input: CompanyInput,
   ): Promise<Company>;
+  deleteCompany(id: string, rowVersion: number, reason: string): Promise<void>;
+  listCompanyAudit(id: string): Promise<CompanyAuditList>;
 }
 
 export class ApiClientError extends Error {
@@ -165,6 +168,19 @@ export function createProjectsApi(options: {
         'PUT',
         input,
         rowVersion,
+      );
+    },
+    deleteCompany(id, rowVersion, reason) {
+      return send<void>(
+        `/companies/${encodeURIComponent(id)}`,
+        'DELETE',
+        { reason },
+        rowVersion,
+      );
+    },
+    listCompanyAudit(id) {
+      return get<CompanyAuditList>(
+        `/companies/${encodeURIComponent(id)}/audit`,
       );
     },
   };

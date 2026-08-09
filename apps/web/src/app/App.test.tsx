@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectsApi } from '../api/client.js';
@@ -87,6 +93,8 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     getCompany: vi.fn(() => Promise.reject(new Error('not configured'))),
     createCompany: vi.fn(() => Promise.resolve(company)),
     updateCompany: vi.fn(() => Promise.resolve(company)),
+    deleteCompany: vi.fn(() => Promise.resolve()),
+    listCompanyAudit: vi.fn(() => Promise.resolve({ items: [] })),
     ...overrides,
   };
 }
@@ -161,6 +169,28 @@ describe('App', () => {
       company.id,
       company.rowVersion,
       expect.objectContaining({ legalName: '青波株式会社' }),
+    );
+  });
+  it('soft-deletes a company with a required reason', async () => {
+    window.history.replaceState({}, '', `/companies/${company.id}`);
+    const deleteCompany = vi.fn(() => Promise.resolve());
+    render(
+      <App
+        auth={auth()}
+        api={api({ getCompany: () => Promise.resolve(company), deleteCompany })}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '削除' }));
+    fireEvent.change(screen.getByLabelText('削除理由'), {
+      target: { value: '重複登録のため' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '論理削除する' }));
+    await waitFor(() =>
+      expect(deleteCompany).toHaveBeenCalledWith(
+        company.id,
+        company.rowVersion,
+        '重複登録のため',
+      ),
     );
   });
   it('renders projects returned by the generated client', async () => {

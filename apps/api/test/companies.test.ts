@@ -34,10 +34,13 @@ function repository(
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
     canManage: vi.fn(() => Promise.resolve(true)),
+    canReadAudit: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [company], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(company)),
     create: vi.fn(() => Promise.resolve(company)),
     update: vi.fn(() => Promise.resolve(company)),
+    softDelete: vi.fn(() => Promise.resolve(true)),
+    listAudit: vi.fn(() => Promise.resolve([])),
     ...overrides,
   };
 }
@@ -215,5 +218,56 @@ describe('company write API', () => {
       payload: { ...body, websiteUrl: 'javascript:alert(1)' },
     });
     expect(invalidUrl.statusCode).toBe(400);
+  });
+
+  it('soft-deletes with a reason and exposes audit to audit.read', async () => {
+    const softDelete = vi.fn(() => Promise.resolve(true));
+    const response = await app(repository({ softDelete })).inject({
+      method: 'DELETE',
+      url: `/api/v1/companies/${company.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: { reason: '重複登録のため' },
+    });
+    expect(response.statusCode).toBe(204);
+    expect(softDelete).toHaveBeenCalledWith(
+      'valid',
+      company.id,
+      1,
+      '重複登録のため',
+      expect.any(String),
+    );
+    const audit = await app().inject({
+      method: 'GET',
+      url: `/api/v1/companies/${company.id}/audit`,
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(audit.statusCode).toBe(200);
+  });
+
+  it('rejects invalid deletion and audit access', async () => {
+    const invalid = await app().inject({
+      method: 'DELETE',
+      url: `/api/v1/companies/${company.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: { reason: ' ' },
+    });
+    expect(invalid.statusCode).toBe(400);
+    const conflict = await app(
+      repository({ softDelete: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'DELETE',
+      url: `/api/v1/companies/${company.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: { reason: '重複' },
+    });
+    expect(conflict.statusCode).toBe(409);
+    const forbidden = await app(
+      repository({ canReadAudit: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'GET',
+      url: `/api/v1/companies/${company.id}/audit`,
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(forbidden.statusCode).toBe(403);
   });
 });

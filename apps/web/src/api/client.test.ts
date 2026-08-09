@@ -66,6 +66,37 @@ describe('generated projects API client', () => {
       { headers: { authorization: 'Bearer access-token' } },
     );
   });
+  it('soft-deletes a company and reads its audit trail', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [] }), { status: 200 }),
+      );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    await api.deleteCompany(
+      '22222222-2222-4222-8222-222222222222',
+      2,
+      '重複登録のため',
+    );
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/companies/22222222-2222-4222-8222-222222222222',
+      {
+        method: 'DELETE',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer access-token',
+          'if-match': '"2"',
+        },
+        body: JSON.stringify({ reason: '重複登録のため' }),
+      },
+    );
+    await api.listCompanyAudit('22222222-2222-4222-8222-222222222222');
+  });
   it('sends bearer authentication and typed query parameters', async () => {
     const request = vi.fn(() =>
       Promise.resolve(
