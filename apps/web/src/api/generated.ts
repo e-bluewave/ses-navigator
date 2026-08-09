@@ -5,6 +5,7 @@ export type ProjectStatus =
   'draft' | 'open' | 'on_hold' | 'closed' | 'cancelled';
 export type RecruitmentStatus = 'recruiting' | 'paused' | 'filled' | 'ended';
 export type CompanyStatus = 'prospect' | 'active' | 'inactive' | 'blocked';
+export type ContactStatus = 'active' | 'inactive' | 'left_company' | 'unknown';
 
 export interface AuthContext {
   requiresMfa: boolean;
@@ -61,6 +62,34 @@ export interface CompanyInput {
 export interface ListCompaniesQuery {
   q?: string;
   status?: CompanyStatus;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface CompanyContact {
+  id: string;
+  companyId: string;
+  managementNo: string;
+  familyName: string;
+  givenName: string | null;
+  departmentName: string | null;
+  positionTitle: string | null;
+  email: string | null;
+  phone: string | null;
+  mobilePhone: string | null;
+  isPrimary: boolean;
+  status: ContactStatus;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface CompanyContactList {
+  items: CompanyContact[];
+  page: { limit: number; nextCursor: string | null };
+}
+export interface ListCompanyContactsQuery {
+  companyId?: string;
+  q?: string;
+  status?: ContactStatus;
   cursor?: string;
   limit?: number;
 }

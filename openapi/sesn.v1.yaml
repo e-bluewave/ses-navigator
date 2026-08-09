@@ -146,6 +146,56 @@ paths:
               schema: { $ref: '#/components/schemas/CompanyAuditList' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /contacts:
+    get:
+      operationId: listCompanyContacts
+      parameters:
+        - { name: companyId, in: query, schema: { type: string, format: uuid } }
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, minLength: 1, maxLength: 100 },
+          }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/ContactStatus' },
+          }
+        - { name: cursor, in: query, schema: { type: string } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Company contact list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyContactList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /contacts/{id}:
+    get:
+      operationId: getCompanyContact
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Company contact detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyContact' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /auth/context:
     get:
       operationId: getAuthContext
@@ -310,6 +360,57 @@ components:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
     CompanyStatus: { type: string, enum: [prospect, active, inactive, blocked] }
+    ContactStatus:
+      { type: string, enum: [active, inactive, left_company, unknown] }
+    CompanyContact:
+      type: object
+      required:
+        [
+          id,
+          companyId,
+          managementNo,
+          familyName,
+          givenName,
+          departmentName,
+          positionTitle,
+          email,
+          phone,
+          mobilePhone,
+          isPrimary,
+          status,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        managementNo: { type: string }
+        familyName: { type: string }
+        givenName: { type: [string, 'null'] }
+        departmentName: { type: [string, 'null'] }
+        positionTitle: { type: [string, 'null'] }
+        email: { type: [string, 'null'], format: email }
+        phone: { type: [string, 'null'] }
+        mobilePhone: { type: [string, 'null'] }
+        isPrimary: { type: boolean }
+        status: { $ref: '#/components/schemas/ContactStatus' }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    CompanyContactList:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/CompanyContact' },
+          }
+        page:
+          type: object
+          required: [limit, nextCursor]
+          properties:
+            limit: { type: integer }
+            nextCursor: { type: ['string', 'null'] }
     Company:
       type: object
       required:

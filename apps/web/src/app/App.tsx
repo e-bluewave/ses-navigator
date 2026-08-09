@@ -7,6 +7,8 @@ import type {
   Company,
   CompanyStatus,
   CompanyInput,
+  CompanyContact,
+  ContactStatus,
   Project,
   ProjectStatus,
   RecruitmentStatus,
@@ -41,9 +43,15 @@ type Route =
   | { page: 'companies' }
   | { page: 'company-detail'; id: string }
   | { page: 'company-new' }
-  | { page: 'company-edit'; id: string };
+  | { page: 'company-edit'; id: string }
+  | { page: 'contacts' }
+  | { page: 'contact-detail'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/contacts') return { page: 'contacts' };
+  const contact = window.location.pathname.match(/^\/contacts\/([^/]+)$/);
+  if (contact)
+    return { page: 'contact-detail', id: decodeURIComponent(contact[1]!) };
   if (window.location.pathname === '/companies') return { page: 'companies' };
   if (window.location.pathname === '/companies/new')
     return { page: 'company-new' };
@@ -188,6 +196,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         >
           会社
         </button>
+        <button
+          className="secondary-button"
+          onClick={() => navigate('/contacts')}
+        >
+          担当者
+        </button>
       </nav>
       {route.page === 'list' ? (
         <ProjectList
@@ -202,6 +216,19 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           onOpen={(id) => navigate(`/companies/${id}`)}
           onUnauthorized={signOut}
           onCreate={() => navigate('/companies/new')}
+        />
+      ) : route.page === 'contacts' ? (
+        <ContactList
+          api={api}
+          onOpen={(id) => navigate(`/contacts/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'contact-detail' ? (
+        <ContactDetail
+          api={api}
+          id={route.id}
+          onBack={() => navigate('/contacts')}
+          onUnauthorized={signOut}
         />
       ) : route.page === 'company-detail' ? (
         <CompanyDetail
@@ -247,6 +274,217 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         />
       )}
     </main>
+  );
+}
+
+const contactStatusLabels: Record<ContactStatus, string> = {
+  active: '在籍',
+  inactive: '休止',
+  left_company: '退職',
+  unknown: '不明',
+};
+function ContactList({
+  api,
+  onOpen,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<CompanyContact[] | null>(null);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState<ContactStatus | ''>('');
+  const [filters, setFilters] = useState({
+    q: '',
+    status: '' as ContactStatus | '',
+  });
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setItems(null);
+    setError(false);
+    api
+      .listCompanyContacts({
+        limit: 50,
+        ...(filters.q ? { q: filters.q } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+      })
+      .then((r) => {
+        if (active) setItems(r.items);
+      })
+      .catch((reason) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else if (active) setError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, filters, onUnauthorized]);
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <div>
+          <p className="section-kicker">CONTACTS</p>
+          <h2>担当者一覧</h2>
+        </div>
+        {items && <span className="count">{items.length}件</span>}
+      </div>
+      <form
+        className="project-filters"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setFilters({ q: q.trim(), status });
+        }}
+      >
+        <label>
+          担当者検索
+          <input
+            type="search"
+            maxLength={100}
+            value={q}
+            placeholder="管理番号・氏名・メール"
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </label>
+        <label>
+          状態
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as ContactStatus | '')}
+          >
+            <option value="">すべて</option>
+            {Object.entries(contactStatusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="primary-button">検索</button>
+      </form>
+      {error ? (
+        <p role="alert">担当者一覧を読み込めませんでした。</p>
+      ) : items === null ? (
+        <p role="status">担当者を読み込んでいます…</p>
+      ) : items.length === 0 ? (
+        <p>表示できる担当者はありません。</p>
+      ) : (
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>管理番号</th>
+                <th>氏名</th>
+                <th>部署・役職</th>
+                <th>状態</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} onClick={() => onOpen(item.id)}>
+                  <td>
+                    <button className="link-button">{item.managementNo}</button>
+                  </td>
+                  <td>
+                    {item.familyName} {item.givenName}
+                  </td>
+                  <td>
+                    {[item.departmentName, item.positionTitle]
+                      .filter(Boolean)
+                      .join(' / ') || '未登録'}
+                  </td>
+                  <td>{contactStatusLabels[item.status]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+function ContactDetail({
+  api,
+  id,
+  onBack,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  id: string;
+  onBack: () => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [contact, setContact] = useState<CompanyContact | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    api
+      .getCompanyContact(id)
+      .then((r) => {
+        if (active) setContact(r);
+      })
+      .catch((reason) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else if (active) setError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, id, onUnauthorized]);
+  return (
+    <section className="panel">
+      <button className="secondary-button" onClick={onBack}>
+        担当者一覧へ戻る
+      </button>
+      {error ? (
+        <p role="alert">担当者詳細を読み込めませんでした。</p>
+      ) : contact === null ? (
+        <p role="status">担当者を読み込んでいます…</p>
+      ) : (
+        <>
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">{contact.managementNo}</p>
+              <h2>
+                {contact.familyName} {contact.givenName}
+              </h2>
+            </div>
+            <span className="status-badge">
+              {contactStatusLabels[contact.status]}
+            </span>
+          </div>
+          <dl className="detail-grid">
+            <div>
+              <dt>部署</dt>
+              <dd>{contact.departmentName ?? '未登録'}</dd>
+            </div>
+            <div>
+              <dt>役職</dt>
+              <dd>{contact.positionTitle ?? '未登録'}</dd>
+            </div>
+            <div>
+              <dt>メール</dt>
+              <dd>{contact.email ?? '未登録'}</dd>
+            </div>
+            <div>
+              <dt>電話</dt>
+              <dd>{contact.phone ?? '未登録'}</dd>
+            </div>
+            <div>
+              <dt>携帯電話</dt>
+              <dd>{contact.mobilePhone ?? '未登録'}</dd>
+            </div>
+            <div>
+              <dt>主担当</dt>
+              <dd>{contact.isPrimary ? 'はい' : 'いいえ'}</dd>
+            </div>
+          </dl>
+        </>
+      )}
+    </section>
   );
 }
 
