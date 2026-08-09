@@ -27,6 +27,14 @@ export interface ProjectListResult {
   nextCursor: { updatedAt: string; id: string } | null;
 }
 
+export interface ProjectAuditEvent {
+  id: string;
+  occurredAt: string;
+  actorUserId: string | null;
+  action: string;
+  requestId: string | null;
+}
+
 export interface ProjectInput {
   managementNo: string;
   projectName: string;
@@ -40,6 +48,7 @@ export interface ProjectInput {
 export interface ProjectRepository {
   canRead(accessToken: string): Promise<boolean>;
   canManage(accessToken: string): Promise<boolean>;
+  canReadAudit(accessToken: string): Promise<boolean>;
   list(
     accessToken: string,
     query: ProjectListQuery,
@@ -52,6 +61,14 @@ export interface ProjectRepository {
     rowVersion: number,
     input: ProjectInput,
   ): Promise<Project | null>;
+  softDelete(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    reason: string,
+    requestId: string,
+  ): Promise<boolean>;
+  listAudit(accessToken: string, id: string): Promise<ProjectAuditEvent[]>;
 }
 
 type ProjectRow = {
@@ -67,6 +84,14 @@ type ProjectRow = {
   row_version: number;
 };
 
+type AuditRow = {
+  id: string;
+  occurred_at: string;
+  actor_user_id: string | null;
+  action: string;
+  request_id: string | null;
+};
+
 export class SupabaseProjectRepository implements ProjectRepository {
   async canRead(token: string): Promise<boolean> {
     const response = await this.request(token, '/rpc/has_permission', {
@@ -80,6 +105,14 @@ export class SupabaseProjectRepository implements ProjectRepository {
     const response = await this.request(token, '/rpc/has_permission', {
       method: 'POST',
       body: JSON.stringify({ required_permission: 'project.manage' }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async canReadAudit(token: string): Promise<boolean> {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'audit.read' }),
     });
     return (await response.json()) === true;
   }
@@ -184,6 +217,46 @@ export class SupabaseProjectRepository implements ProjectRepository {
     );
     const rows = (await response.json()) as ProjectRow[];
     return rows[0] === undefined ? null : toProject(rows[0]);
+  }
+
+  async softDelete(
+    token: string,
+    id: string,
+    rowVersion: number,
+    reason: string,
+    requestId: string,
+  ): Promise<boolean> {
+    const response = await this.request(token, '/rpc/soft_delete_project', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_project_id: id,
+        p_row_version: rowVersion,
+        p_delete_reason: reason,
+        p_request_id: requestId,
+      }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async listAudit(token: string, id: string): Promise<ProjectAuditEvent[]> {
+    const params = new URLSearchParams({
+      select: 'id,occurred_at,actor_user_id,action,request_id',
+      resource_type: 'eq.project',
+      resource_id: `eq.${id}`,
+      order: 'occurred_at.desc',
+      limit: '50',
+    });
+    const response = await this.request(
+      token,
+      `/audit_event_summaries?${params.toString()}`,
+    );
+    return ((await response.json()) as AuditRow[]).map((row) => ({
+      id: row.id,
+      occurredAt: row.occurred_at,
+      actorUserId: row.actor_user_id,
+      action: row.action,
+      requestId: row.request_id,
+    }));
   }
 
   private async request(

@@ -50,4 +50,31 @@ describe('generated projects API client', () => {
       new ApiClientError(403, 'forbidden', 'Denied', 'req-1'),
     );
   });
+
+  it('sends a soft-delete reason with If-Match and accepts 204', async () => {
+    const request = vi.fn(() =>
+      Promise.resolve(new Response(null, { status: 204 })),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    await api.deleteProject(
+      '11111111-1111-4111-8111-111111111111',
+      2,
+      '重複登録のため',
+    );
+    expect(request).toHaveBeenCalledWith(
+      '/api/v1/projects/11111111-1111-4111-8111-111111111111',
+      {
+        method: 'DELETE',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer access-token',
+          'if-match': '"2"',
+        },
+        body: JSON.stringify({ reason: '重複登録のため' }),
+      },
+    );
+  });
 });

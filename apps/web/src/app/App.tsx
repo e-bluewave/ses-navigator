@@ -171,6 +171,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           onBack={() => navigate('/projects')}
           onUnauthorized={signOut}
           onEdit={() => navigate(`/projects/${route.id}/edit`)}
+          onDeleted={() => navigate('/projects')}
         />
       ) : (
         <ProjectForm
@@ -403,15 +404,24 @@ function ProjectDetail({
   onBack,
   onUnauthorized,
   onEdit,
+  onDeleted,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
   onUnauthorized: () => Promise<void>;
   onEdit: () => void;
+  onDeleted: () => void;
 }) {
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [auditEvents, setAuditEvents] = useState<
+    Awaited<ReturnType<ProjectsApi['listProjectAudit']>>['items'] | null
+  >(null);
+  const [auditError, setAuditError] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -427,6 +437,30 @@ function ProjectDetail({
       active = false;
     };
   }, [api, id, onUnauthorized]);
+
+  async function removeProject(event: FormEvent) {
+    event.preventDefault();
+    if (!project) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.deleteProject(project.id, project.rowVersion, deleteReason);
+      onDeleted();
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function loadAudit() {
+    setAuditError(false);
+    try {
+      setAuditEvents((await api.listProjectAudit(id)).items);
+    } catch {
+      setAuditError(true);
+    }
+  }
 
   return (
     <section aria-labelledby="project-heading" className="panel">
@@ -451,6 +485,18 @@ function ProjectDetail({
             <button className="primary-button" onClick={onEdit}>
               編集
             </button>
+            <button
+              className="secondary-button"
+              onClick={() => void loadAudit()}
+            >
+              監査履歴
+            </button>
+            <button
+              className="danger-button"
+              onClick={() => setShowDelete(true)}
+            >
+              削除
+            </button>
           </div>
           <p className="summary">
             {project.summary ?? '概要は登録されていません。'}
@@ -473,6 +519,63 @@ function ProjectDetail({
               value={formatDateTime(project.updatedAt)}
             />
           </dl>
+          {showDelete ? (
+            <form
+              className="delete-panel"
+              onSubmit={(event) => void removeProject(event)}
+            >
+              <h3>案件を削除</h3>
+              <p>
+                一覧から非表示になります。削除理由と操作履歴は監査ログへ保存されます。
+              </p>
+              <label>
+                削除理由
+                <textarea
+                  required
+                  maxLength={500}
+                  value={deleteReason}
+                  onChange={(event) => setDeleteReason(event.target.value)}
+                />
+              </label>
+              <div className="account-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setShowDelete(false)}
+                >
+                  キャンセル
+                </button>
+                <button
+                  className="danger-button"
+                  disabled={deleting || deleteReason.trim() === ''}
+                >
+                  {deleting ? '削除中…' : '論理削除する'}
+                </button>
+              </div>
+            </form>
+          ) : null}
+          {auditError ? (
+            <p className="error" role="alert">
+              監査履歴を表示する権限がないか、取得に失敗しました。
+            </p>
+          ) : null}
+          {auditEvents ? (
+            <section className="audit-panel" aria-labelledby="audit-heading">
+              <h3 id="audit-heading">監査履歴</h3>
+              {auditEvents.length === 0 ? (
+                <p>監査履歴はありません。</p>
+              ) : (
+                <ul>
+                  {auditEvents.map((event) => (
+                    <li key={event.id}>
+                      <strong>{event.action}</strong>
+                      <span>{formatDateTime(event.occurredAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : null}
         </>
       ) : null}
     </section>
