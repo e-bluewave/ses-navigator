@@ -12,9 +12,11 @@
     "client:check": "node scripts/generate-api-client.mjs --check",
     "contract:check": "node scripts/check-openapi.mjs",
     "dev": "pnpm -r --parallel dev",
-    "format": "prettier --write \"apps/**/*.{ts,tsx,json,html,css}\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",
-    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,html,css}\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,json,html,css}\" \"scripts/**/*.mjs\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,html,css}\" \"scripts/**/*.mjs\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",
     "lint": "eslint .",
+    "smoke:auth-project": "node scripts/auth-project-smoke.mjs",
+    "smoke:auth-project:check": "node --test scripts/auth-project-smoke.test.mjs",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   },
