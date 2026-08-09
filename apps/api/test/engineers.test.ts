@@ -64,6 +64,10 @@ function repository(
     saveAffiliation: vi.fn(() => Promise.resolve(null)),
     listPreferences: vi.fn(() => Promise.resolve([])),
     savePreference: vi.fn(() => Promise.resolve(null)),
+    listSkills: vi.fn(() => Promise.resolve([])),
+    saveSkill: vi.fn(() => Promise.resolve(null)),
+    listQualifications: vi.fn(() => Promise.resolve([])),
+    saveQualification: vi.fn(() => Promise.resolve(null)),
     ...overrides,
   };
 }
@@ -82,6 +86,89 @@ function app(engineers = repository()) {
 }
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((value) => value.close()));
+});
+
+describe('engineer skill and qualification API', () => {
+  it('lists skills and saves a skill with optimistic locking', async () => {
+    const listSkills = vi.fn(() =>
+      Promise.resolve([
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          engineerId: engineer.id,
+          skillId: '33333333-3333-4333-8333-333333333333',
+          skillName: 'TypeScript',
+          experienceMonths: 36,
+          proficiencyLevel: 4,
+          lastUsedOn: null,
+          evidenceType: 'resume',
+          evidenceNote: null,
+          verificationStatus: 'reviewed',
+          isPrimary: true,
+          updatedAt: engineer.updatedAt,
+          rowVersion: 1,
+        },
+      ]),
+    );
+    const a = app(
+      repository({
+        listSkills,
+        saveSkill: vi.fn(async () => (await listSkills())[0]!),
+      }),
+    );
+    expect(
+      (
+        await a.inject({
+          method: 'GET',
+          url: `/api/v1/engineers/${engineer.id}/skills`,
+          headers: { authorization: 'Bearer valid' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    const response = await a.inject({
+      method: 'PUT',
+      url: `/api/v1/engineers/${engineer.id}/skills/new`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"0"' },
+      payload: {
+        skillId: '33333333-3333-4333-8333-333333333333',
+        experienceMonths: 36,
+        proficiencyLevel: 4,
+        lastUsedOn: null,
+        evidenceType: 'resume',
+        evidenceNote: null,
+        verificationStatus: 'reviewed',
+        isPrimary: true,
+      },
+    });
+    expect(response.statusCode).toBe(200);
+  });
+  it('lists qualifications and validates expiration order', async () => {
+    const a = app(
+      repository({ listQualifications: vi.fn(() => Promise.resolve([])) }),
+    );
+    expect(
+      (
+        await a.inject({
+          method: 'GET',
+          url: `/api/v1/engineers/${engineer.id}/qualifications`,
+          headers: { authorization: 'Bearer valid' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    const response = await a.inject({
+      method: 'PUT',
+      url: `/api/v1/engineers/${engineer.id}/qualifications/new`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"0"' },
+      payload: {
+        name: 'AWS Certified',
+        issuer: 'AWS',
+        credentialId: null,
+        acquiredOn: '2026-08-01',
+        expiresOn: '2025-08-01',
+        notes: null,
+      },
+    });
+    expect(response.statusCode).toBe(400);
+  });
 });
 
 describe('engineer write API', () => {

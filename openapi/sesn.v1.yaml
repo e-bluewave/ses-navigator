@@ -634,6 +634,141 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /engineers/{id}/skills:
+    get:
+      operationId: listEngineerSkills
+      parameters:
+        [
+          {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      responses:
+        '200':
+          {
+            description: Engineer skills,
+            content:
+              {
+                application/json:
+                  {
+                    schema: { $ref: '#/components/schemas/EngineerSkillList' },
+                  },
+              },
+          }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /engineers/{id}/skills/{itemId}:
+    put:
+      operationId: saveEngineerSkill
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/EngineerSkillInput' } },
+            },
+        }
+      responses:
+        '200':
+          {
+            description: Engineer skill saved,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: '#/components/schemas/EngineerSkill' } },
+              },
+          }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /engineers/{id}/qualifications:
+    get:
+      operationId: listEngineerQualifications
+      parameters:
+        [
+          {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      responses:
+        '200':
+          {
+            description: Engineer qualifications,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        $ref: '#/components/schemas/EngineerQualificationList',
+                      },
+                  },
+              },
+          }
+  /engineers/{id}/qualifications/{itemId}:
+    put:
+      operationId: saveEngineerQualification
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: '#/components/schemas/EngineerQualificationInput' },
+                },
+            },
+        }
+      responses:
+        '200':
+          {
+            description: Engineer qualification saved,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      { $ref: '#/components/schemas/EngineerQualification' },
+                  },
+              },
+          }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /auth/context:
     get:
       operationId: getAuthContext
@@ -1025,6 +1160,118 @@ components:
             type: array,
             items: { $ref: '#/components/schemas/EngineerPreference' },
           }
+    EngineerSkill:
+      type: object
+      required:
+        [
+          id,
+          engineerId,
+          skillId,
+          skillName,
+          experienceMonths,
+          proficiencyLevel,
+          lastUsedOn,
+          evidenceType,
+          evidenceNote,
+          verificationStatus,
+          isPrimary,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        skillId: { type: string, format: uuid }
+        skillName: { type: string }
+        experienceMonths: { type: [integer, 'null'], minimum: 0 }
+        proficiencyLevel: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        lastUsedOn: { type: [string, 'null'], format: date }
+        evidenceType: { type: [string, 'null'] }
+        evidenceNote: { type: [string, 'null'] }
+        verificationStatus: { type: string }
+        isPrimary: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    EngineerSkillInput:
+      type: object
+      required:
+        [
+          skillId,
+          experienceMonths,
+          proficiencyLevel,
+          lastUsedOn,
+          evidenceType,
+          evidenceNote,
+          verificationStatus,
+          isPrimary,
+        ]
+      properties:
+        skillId: { type: string, format: uuid }
+        experienceMonths: { type: [integer, 'null'], minimum: 0 }
+        proficiencyLevel: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        lastUsedOn: { type: [string, 'null'], format: date }
+        evidenceType: { type: [string, 'null'] }
+        evidenceNote: { type: [string, 'null'] }
+        verificationStatus: { type: string }
+        isPrimary: { type: boolean }
+    EngineerSkillList:
+      type: object
+      required: [items]
+      properties:
+        {
+          items:
+            {
+              type: array,
+              items: { $ref: '#/components/schemas/EngineerSkill' },
+            },
+        }
+    EngineerQualification:
+      type: object
+      required:
+        [
+          id,
+          engineerId,
+          name,
+          issuer,
+          credentialId,
+          acquiredOn,
+          expiresOn,
+          notes,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        issuer: { type: [string, 'null'] }
+        credentialId: { type: [string, 'null'] }
+        acquiredOn: { type: [string, 'null'], format: date }
+        expiresOn: { type: [string, 'null'], format: date }
+        notes: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    EngineerQualificationInput:
+      type: object
+      required: [name, issuer, credentialId, acquiredOn, expiresOn, notes]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        issuer: { type: [string, 'null'] }
+        credentialId: { type: [string, 'null'] }
+        acquiredOn: { type: [string, 'null'], format: date }
+        expiresOn: { type: [string, 'null'], format: date }
+        notes: { type: [string, 'null'] }
+    EngineerQualificationList:
+      type: object
+      required: [items]
+      properties:
+        {
+          items:
+            {
+              type: array,
+              items: { $ref: '#/components/schemas/EngineerQualification' },
+            },
+        }
     CompanyStatus: { type: string, enum: [prospect, active, inactive, blocked] }
     ContactStatus:
       { type: string, enum: [active, inactive, left_company, unknown] }

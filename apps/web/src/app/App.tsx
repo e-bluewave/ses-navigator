@@ -24,6 +24,10 @@ import type {
   EngineerAffiliationInput,
   EngineerPreference,
   EngineerPreferenceInput,
+  EngineerSkill,
+  EngineerSkillInput,
+  EngineerQualification,
+  EngineerQualificationInput,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -538,6 +542,11 @@ function EngineerDetail({
     null,
   );
   const [preferenceError, setPreferenceError] = useState(false);
+  const [skills, setSkills] = useState<EngineerSkill[] | null>(null);
+  const [qualifications, setQualifications] = useState<
+    EngineerQualification[] | null
+  >(null);
+  const [capabilityError, setCapabilityError] = useState(false);
   useEffect(() => {
     let active = true;
     api
@@ -602,6 +611,19 @@ function EngineerDetail({
       setPreferences((await api.listEngineerPreferences(id)).items);
     } catch {
       setPreferenceError(true);
+    }
+  }
+  async function loadCapabilities() {
+    setCapabilityError(false);
+    try {
+      const [s, q] = await Promise.all([
+        api.listEngineerSkills(id),
+        api.listEngineerQualifications(id),
+      ]);
+      setSkills(s.items);
+      setQualifications(q.items);
+    } catch {
+      setCapabilityError(true);
     }
   }
   return (
@@ -673,6 +695,12 @@ function EngineerDetail({
               希望条件
             </button>
             <button
+              className="secondary-button"
+              onClick={() => void loadCapabilities()}
+            >
+              スキル・資格
+            </button>
+            <button
               className="danger-button"
               onClick={() => setShowDelete(true)}
             >
@@ -734,6 +762,11 @@ function EngineerDetail({
               希望条件の取得に失敗しました。
             </p>
           ) : null}
+          {capabilityError ? (
+            <p className="error" role="alert">
+              スキル・資格の取得に失敗しました。
+            </p>
+          ) : null}
           {showPrivate ? (
             <EngineerPrivateForm
               api={api}
@@ -756,6 +789,15 @@ function EngineerDetail({
               engineerId={id}
               items={preferences}
               onSaved={() => void loadPreferences()}
+            />
+          ) : null}
+          {skills && qualifications ? (
+            <EngineerCapabilityPanel
+              api={api}
+              engineerId={id}
+              skills={skills}
+              qualifications={qualifications}
+              onSaved={() => void loadCapabilities()}
             />
           ) : null}
           {auditEvents ? (
@@ -1797,6 +1839,223 @@ function CompanyDetail({
           ) : null}
         </>
       )}
+    </section>
+  );
+}
+
+function EngineerCapabilityPanel({
+  api,
+  engineerId,
+  skills,
+  qualifications,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  engineerId: string;
+  skills: EngineerSkill[];
+  qualifications: EngineerQualification[];
+  onSaved: () => void;
+}) {
+  const emptySkill: EngineerSkillInput = {
+    skillId: '',
+    experienceMonths: null,
+    proficiencyLevel: null,
+    lastUsedOn: null,
+    evidenceType: null,
+    evidenceNote: null,
+    verificationStatus: 'unverified',
+    isPrimary: false,
+  };
+  const emptyQualification: EngineerQualificationInput = {
+    name: '',
+    issuer: null,
+    credentialId: null,
+    acquiredOn: null,
+    expiresOn: null,
+    notes: null,
+  };
+  const [skill, setSkill] = useState(emptySkill);
+  const [qualification, setQualification] = useState(emptyQualification);
+  const [error, setError] = useState<unknown>(null);
+  const [saving, setSaving] = useState(false);
+  async function saveSkill(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.saveEngineerSkill(engineerId, null, 0, skill);
+      setSkill(emptySkill);
+      onSaved();
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function saveQualification(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.saveEngineerQualification(engineerId, null, 0, qualification);
+      setQualification(emptyQualification);
+      onSaved();
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <section
+      className="audit-panel"
+      aria-labelledby="engineer-capabilities-heading"
+    >
+      <h3 id="engineer-capabilities-heading">スキル・資格</h3>
+      {error ? <ErrorNotice error={error} /> : null}
+      <h4>スキル</h4>
+      {skills.length ? (
+        <ul>
+          {skills.map((x) => (
+            <li key={x.id}>
+              <strong>{x.skillName}</strong>
+              <span>
+                {x.experienceMonths === null
+                  ? '経験期間未登録'
+                  : `${x.experienceMonths}か月`}
+                ／レベル{x.proficiencyLevel ?? '未登録'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>スキルは未登録です。</p>
+      )}
+      <form className="detail-form" onSubmit={(e) => void saveSkill(e)}>
+        <label>
+          スキルID
+          <input
+            required
+            value={skill.skillId}
+            onChange={(e) =>
+              setSkill((v) => ({ ...v, skillId: e.target.value }))
+            }
+          />
+        </label>
+        <label>
+          経験月数
+          <input
+            type="number"
+            min="0"
+            value={skill.experienceMonths ?? ''}
+            onChange={(e) =>
+              setSkill((v) => ({
+                ...v,
+                experienceMonths:
+                  e.target.value === '' ? null : Number(e.target.value),
+              }))
+            }
+          />
+        </label>
+        <label>
+          習熟度
+          <input
+            type="number"
+            min="1"
+            max="5"
+            value={skill.proficiencyLevel ?? ''}
+            onChange={(e) =>
+              setSkill((v) => ({
+                ...v,
+                proficiencyLevel:
+                  e.target.value === '' ? null : Number(e.target.value),
+              }))
+            }
+          />
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={skill.isPrimary}
+            onChange={(e) =>
+              setSkill((v) => ({ ...v, isPrimary: e.target.checked }))
+            }
+          />
+          主要スキル
+        </label>
+        <button className="primary-button" disabled={saving}>
+          スキルを追加
+        </button>
+      </form>
+      <h4>資格</h4>
+      {qualifications.length ? (
+        <ul>
+          {qualifications.map((x) => (
+            <li key={x.id}>
+              <strong>{x.name}</strong>
+              <span>
+                {x.issuer ?? '発行元未登録'}／取得日{x.acquiredOn ?? '未登録'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>資格は未登録です。</p>
+      )}
+      <form className="detail-form" onSubmit={(e) => void saveQualification(e)}>
+        <label>
+          資格名
+          <input
+            required
+            maxLength={200}
+            value={qualification.name}
+            onChange={(e) =>
+              setQualification((v) => ({ ...v, name: e.target.value }))
+            }
+          />
+        </label>
+        <label>
+          発行元
+          <input
+            value={qualification.issuer ?? ''}
+            onChange={(e) =>
+              setQualification((v) => ({
+                ...v,
+                issuer: e.target.value || null,
+              }))
+            }
+          />
+        </label>
+        <label>
+          取得日
+          <input
+            type="date"
+            value={qualification.acquiredOn ?? ''}
+            onChange={(e) =>
+              setQualification((v) => ({
+                ...v,
+                acquiredOn: e.target.value || null,
+              }))
+            }
+          />
+        </label>
+        <label>
+          有効期限
+          <input
+            type="date"
+            value={qualification.expiresOn ?? ''}
+            onChange={(e) =>
+              setQualification((v) => ({
+                ...v,
+                expiresOn: e.target.value || null,
+              }))
+            }
+          />
+        </label>
+        <button className="primary-button" disabled={saving}>
+          資格を追加
+        </button>
+      </form>
     </section>
   );
 }

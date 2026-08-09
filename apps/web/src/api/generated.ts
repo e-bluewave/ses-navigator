@@ -123,6 +123,47 @@ export type EngineerPreferenceInput = Omit<
 export interface EngineerPreferenceList {
   items: EngineerPreference[];
 }
+export interface EngineerSkill {
+  id: string;
+  engineerId: string;
+  skillId: string;
+  skillName: string;
+  experienceMonths: number | null;
+  proficiencyLevel: number | null;
+  lastUsedOn: string | null;
+  evidenceType: string | null;
+  evidenceNote: string | null;
+  verificationStatus: string;
+  isPrimary: boolean;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerSkillInput = Omit<
+  EngineerSkill,
+  'id' | 'engineerId' | 'skillName' | 'updatedAt' | 'rowVersion'
+>;
+export interface EngineerSkillList {
+  items: EngineerSkill[];
+}
+export interface EngineerQualification {
+  id: string;
+  engineerId: string;
+  name: string;
+  issuer: string | null;
+  credentialId: string | null;
+  acquiredOn: string | null;
+  expiresOn: string | null;
+  notes: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerQualificationInput = Omit<
+  EngineerQualification,
+  'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
+>;
+export interface EngineerQualificationList {
+  items: EngineerQualification[];
+}
 export interface ListEngineersQuery {
   q?: string;
   status?: EngineerStatus;

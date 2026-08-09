@@ -29,6 +29,12 @@ import type {
   EngineerPreference,
   EngineerPreferenceInput,
   EngineerPreferenceList,
+  EngineerSkill,
+  EngineerSkillInput,
+  EngineerSkillList,
+  EngineerQualification,
+  EngineerQualificationInput,
+  EngineerQualificationList,
 } from './generated.js';
 
 export interface ProjectsApi {
@@ -99,6 +105,20 @@ export interface ProjectsApi {
     rowVersion: number,
     input: EngineerPreferenceInput,
   ): Promise<EngineerPreference>;
+  listEngineerSkills(id: string): Promise<EngineerSkillList>;
+  saveEngineerSkill(
+    id: string,
+    itemId: string | null,
+    rowVersion: number,
+    input: EngineerSkillInput,
+  ): Promise<EngineerSkill>;
+  listEngineerQualifications(id: string): Promise<EngineerQualificationList>;
+  saveEngineerQualification(
+    id: string,
+    itemId: string | null,
+    rowVersion: number,
+    input: EngineerQualificationInput,
+  ): Promise<EngineerQualification>;
 }
 
 export class ApiClientError extends Error {
@@ -356,6 +376,32 @@ export function createProjectsApi(options: {
     saveEngineerPreference(id, preferenceId, rowVersion, input) {
       return send<EngineerPreference>(
         `/engineers/${encodeURIComponent(id)}/preferences/${preferenceId ? encodeURIComponent(preferenceId) : 'new'}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    listEngineerSkills(id) {
+      return get<EngineerSkillList>(
+        `/engineers/${encodeURIComponent(id)}/skills`,
+      );
+    },
+    saveEngineerSkill(id, itemId, rowVersion, input) {
+      return send<EngineerSkill>(
+        `/engineers/${encodeURIComponent(id)}/skills/${itemId ? encodeURIComponent(itemId) : 'new'}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    listEngineerQualifications(id) {
+      return get<EngineerQualificationList>(
+        `/engineers/${encodeURIComponent(id)}/qualifications`,
+      );
+    },
+    saveEngineerQualification(id, itemId, rowVersion, input) {
+      return send<EngineerQualification>(
+        `/engineers/${encodeURIComponent(id)}/qualifications/${itemId ? encodeURIComponent(itemId) : 'new'}`,
         'PUT',
         input,
         rowVersion,

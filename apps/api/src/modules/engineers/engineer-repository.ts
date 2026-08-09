@@ -101,6 +101,41 @@ export type EngineerPreferenceInput = Omit<
   EngineerPreference,
   'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
 >;
+export interface EngineerSkill {
+  id: string;
+  engineerId: string;
+  skillId: string;
+  skillName: string;
+  experienceMonths: number | null;
+  proficiencyLevel: number | null;
+  lastUsedOn: string | null;
+  evidenceType: string | null;
+  evidenceNote: string | null;
+  verificationStatus: string;
+  isPrimary: boolean;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerSkillInput = Omit<
+  EngineerSkill,
+  'id' | 'engineerId' | 'skillName' | 'updatedAt' | 'rowVersion'
+>;
+export interface EngineerQualification {
+  id: string;
+  engineerId: string;
+  name: string;
+  issuer: string | null;
+  credentialId: string | null;
+  acquiredOn: string | null;
+  expiresOn: string | null;
+  notes: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerQualificationInput = Omit<
+  EngineerQualification,
+  'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
+>;
 
 export interface EngineerRepository {
   canRead(token: string): Promise<boolean>;
@@ -169,6 +204,27 @@ export interface EngineerRepository {
     input: EngineerPreferenceInput,
     requestId: string,
   ): Promise<EngineerPreference | null>;
+  listSkills(token: string, engineerId: string): Promise<EngineerSkill[]>;
+  saveSkill(
+    token: string,
+    engineerId: string,
+    id: string | null,
+    rowVersion: number,
+    input: EngineerSkillInput,
+    requestId: string,
+  ): Promise<EngineerSkill | null>;
+  listQualifications(
+    token: string,
+    engineerId: string,
+  ): Promise<EngineerQualification[]>;
+  saveQualification(
+    token: string,
+    engineerId: string,
+    id: string | null,
+    rowVersion: number,
+    input: EngineerQualificationInput,
+    requestId: string,
+  ): Promise<EngineerQualification | null>;
 }
 
 type Row = {
@@ -519,6 +575,94 @@ export class SupabaseEngineerRepository implements EngineerRepository {
       ? mapPreference(row, input.locations, input.contractTypes)
       : null;
   }
+  async listSkills(token: string, engineerId: string) {
+    const rows = (await (
+      await this.request(
+        token,
+        `/engineer_skills?select=id,engineer_id,skill_id,experience_months,proficiency_level,last_used_on,evidence_type,evidence_note,verification_status,is_primary,updated_at,row_version,skills(name)&engineer_id=eq.${engineerId}&order=is_primary.desc,updated_at.desc`,
+      )
+    ).json()) as SkillRow[];
+    return rows.map(mapSkill);
+  }
+  async saveSkill(
+    token: string,
+    engineerId: string,
+    id: string | null,
+    rowVersion: number,
+    input: EngineerSkillInput,
+    requestId: string,
+  ) {
+    const row = (await (
+      await this.request(token, '/rpc/save_engineer_skill', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_engineer_id: engineerId,
+          p_engineer_skill_id: id,
+          p_row_version: rowVersion,
+          p_skill: {
+            skill_id: input.skillId,
+            experience_months: input.experienceMonths,
+            proficiency_level: input.proficiencyLevel,
+            last_used_on: input.lastUsedOn,
+            evidence_type: input.evidenceType,
+            evidence_note: input.evidenceNote,
+            verification_status: input.verificationStatus,
+            is_primary: input.isPrimary,
+          },
+          p_request_id: requestId,
+        }),
+      })
+    ).json()) as SkillRow | null;
+    if (!row) return null;
+    const names = (await (
+      await this.request(
+        token,
+        `/skills?select=name&id=eq.${input.skillId}&limit=1`,
+      )
+    ).json()) as { name: string }[];
+    return mapSkill({
+      ...row,
+      skills: { name: names[0]?.name ?? input.skillId },
+    });
+  }
+  async listQualifications(token: string, engineerId: string) {
+    const rows = (await (
+      await this.request(
+        token,
+        `/engineer_qualifications?select=id,engineer_id,name,issuer,credential_id,acquired_on,expires_on,notes,updated_at,row_version&engineer_id=eq.${engineerId}&order=acquired_on.desc.nullslast,name.asc`,
+      )
+    ).json()) as QualificationRow[];
+    return rows.map(mapQualification);
+  }
+  async saveQualification(
+    token: string,
+    engineerId: string,
+    id: string | null,
+    rowVersion: number,
+    input: EngineerQualificationInput,
+    requestId: string,
+  ) {
+    const row = (await (
+      await this.request(token, '/rpc/save_engineer_qualification', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_engineer_id: engineerId,
+          p_qualification_id: id,
+          p_row_version: rowVersion,
+          p_qualification: {
+            name: input.name,
+            issuer: input.issuer,
+            credential_id: input.credentialId,
+            acquired_on: input.acquiredOn,
+            expires_on: input.expiresOn,
+            notes: input.notes,
+          },
+          p_request_id: requestId,
+        }),
+      })
+    ).json()) as QualificationRow | null;
+    return row ? mapQualification(row) : null;
+  }
   private async request(token: string, path: string, init: RequestInit = {}) {
     const response = await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
@@ -537,6 +681,60 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     return response;
   }
 }
+type SkillRow = {
+  id: string;
+  engineer_id: string;
+  skill_id: string;
+  experience_months: number | null;
+  proficiency_level: number | null;
+  last_used_on: string | null;
+  evidence_type: string | null;
+  evidence_note: string | null;
+  verification_status: string;
+  is_primary: boolean;
+  updated_at: string;
+  row_version: number;
+  skills?: { name: string } | null;
+};
+const mapSkill = (r: SkillRow): EngineerSkill => ({
+  id: r.id,
+  engineerId: r.engineer_id,
+  skillId: r.skill_id,
+  skillName: r.skills?.name ?? r.skill_id,
+  experienceMonths: r.experience_months,
+  proficiencyLevel: r.proficiency_level,
+  lastUsedOn: r.last_used_on,
+  evidenceType: r.evidence_type,
+  evidenceNote: r.evidence_note,
+  verificationStatus: r.verification_status,
+  isPrimary: r.is_primary,
+  updatedAt: r.updated_at,
+  rowVersion: r.row_version,
+});
+type QualificationRow = {
+  id: string;
+  engineer_id: string;
+  name: string;
+  issuer: string | null;
+  credential_id: string | null;
+  acquired_on: string | null;
+  expires_on: string | null;
+  notes: string | null;
+  updated_at: string;
+  row_version: number;
+};
+const mapQualification = (r: QualificationRow): EngineerQualification => ({
+  id: r.id,
+  engineerId: r.engineer_id,
+  name: r.name,
+  issuer: r.issuer,
+  credentialId: r.credential_id,
+  acquiredOn: r.acquired_on,
+  expiresOn: r.expires_on,
+  notes: r.notes,
+  updatedAt: r.updated_at,
+  rowVersion: r.row_version,
+});
 type AffiliationRow = {
   id: string;
   engineer_id: string;
