@@ -1,11 +1,13 @@
 import type {
   ApiErrorBody,
+  AuthContext,
   ListProjectsQuery,
   Project,
   ProjectList,
 } from './generated.js';
 
 export interface ProjectsApi {
+  getAuthContext(): Promise<AuthContext>;
   listProjects(query?: ListProjectsQuery): Promise<ProjectList>;
   getProject(id: string): Promise<Project>;
 }
@@ -49,6 +51,9 @@ export function createProjectsApi(options: {
   }
 
   return {
+    getAuthContext() {
+      return get<AuthContext>('/auth/context');
+    },
     listProjects(query = {}) {
       const params = new URLSearchParams();
       if (query.managementNo) params.set('managementNo', query.managementNo);

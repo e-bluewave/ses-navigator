@@ -5,6 +5,10 @@ export type ProjectStatus =
   'draft' | 'open' | 'on_hold' | 'closed' | 'cancelled';
 export type RecruitmentStatus = 'recruiting' | 'paused' | 'filled' | 'ended';
 
+export interface AuthContext {
+  requiresMfa: boolean;
+}
+
 export interface Project {
   id: string;
   managementNo: string;

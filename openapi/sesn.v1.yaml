@@ -7,6 +7,16 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /auth/context:
+    get:
+      operationId: getAuthContext
+      responses:
+        '200':
+          description: Authentication and MFA policy context
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthContext' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /projects:
     get:
       operationId: listProjects
@@ -53,6 +63,11 @@ components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
+    AuthContext:
+      type: object
+      required: [requiresMfa]
+      properties:
+        requiresMfa: { type: boolean }
     ProjectStatus:
       { type: string, enum: [draft, open, on_hold, closed, cancelled] }
     Project:

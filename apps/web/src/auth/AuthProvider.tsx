@@ -8,7 +8,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
-import type { AuthService, AuthSession } from './auth-client.js';
+import type { AuthService, AuthSession, MfaEnrollment } from './auth-client.js';
 
 type AuthState = {
   loading: boolean;
@@ -16,6 +16,8 @@ type AuthState = {
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  enrollMfa: () => Promise<MfaEnrollment>;
+  verifyMfa: (factorId: string, code: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -78,10 +80,23 @@ export function AuthProvider({
     await auth.signOut();
     setSession(null);
   }, [auth]);
+  const enrollMfa = useCallback(() => auth.enrollMfa(), [auth]);
+  const verifyMfa = useCallback(
+    async (factorId: string, code: string) => {
+      setError(null);
+      try {
+        setSession(await auth.verifyMfa(factorId, code));
+      } catch {
+        setError('確認コードを確認してください。');
+        throw new Error('mfa verification failed');
+      }
+    },
+    [auth],
+  );
 
   const value = useMemo(
-    () => ({ loading, session, error, signIn, signOut }),
-    [loading, session, error, signIn, signOut],
+    () => ({ loading, session, error, signIn, signOut, enrollMfa, verifyMfa }),
+    [loading, session, error, signIn, signOut, enrollMfa, verifyMfa],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
