@@ -21,8 +21,11 @@ function repository(
 ): EngineerRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
+    canManage: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [engineer], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(engineer)),
+    create: vi.fn(() => Promise.resolve(engineer)),
+    update: vi.fn(() => Promise.resolve({ ...engineer, rowVersion: 2 })),
     ...overrides,
   };
 }
@@ -41,6 +44,64 @@ function app(engineers = repository()) {
 }
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((value) => value.close()));
+});
+
+describe('engineer write API', () => {
+  const input = {
+    managementNo: 'EN-000001',
+    familyName: '青波',
+    givenName: '太郎',
+    displayName: '青波 太郎',
+    status: 'active',
+    availabilityStatus: 'available',
+    availableFrom: '2026-09-01',
+    nearestStation: '東京',
+    summary: 'TypeScript',
+  };
+  it('creates and updates public engineer master data', async () => {
+    const created = await app().inject({
+      method: 'POST',
+      url: '/api/v1/engineers',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(created.statusCode).toBe(201);
+    const updated = await app().inject({
+      method: 'PUT',
+      url: `/api/v1/engineers/${engineer.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: input,
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.headers.etag).toBe('"2"');
+  });
+  it('enforces manage permission and optimistic locking', async () => {
+    const denied = await app(
+      repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: '/api/v1/engineers',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(denied.statusCode).toBe(403);
+    const missing = await app().inject({
+      method: 'PUT',
+      url: `/api/v1/engineers/${engineer.id}`,
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(missing.statusCode).toBe(428);
+    const conflict = await app(
+      repository({ update: vi.fn(() => Promise.resolve(null)) }),
+    ).inject({
+      method: 'PUT',
+      url: `/api/v1/engineers/${engineer.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: input,
+    });
+    expect(conflict.statusCode).toBe(409);
+  });
 });
 
 describe('engineer read API', () => {

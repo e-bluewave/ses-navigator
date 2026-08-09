@@ -289,6 +289,22 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /engineers:
+    post:
+      operationId: createEngineer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EngineerInput' }
+      responses:
+        '201':
+          description: Engineer created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Engineer' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     get:
       operationId: listEngineers
       parameters:
@@ -323,6 +339,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /engineers/{id}:
+    put:
+      operationId: updateEngineer
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EngineerInput' }
+      responses:
+        '200':
+          description: Engineer updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Engineer' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     get:
       operationId: getEngineer
       parameters:
@@ -548,6 +595,30 @@ components:
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Engineer' } }
         page: { $ref: '#/components/schemas/Page' }
+    EngineerInput:
+      type: object
+      required:
+        [
+          managementNo,
+          familyName,
+          givenName,
+          displayName,
+          status,
+          availabilityStatus,
+          availableFrom,
+          nearestStation,
+          summary,
+        ]
+      properties:
+        managementNo: { type: string, minLength: 1, maxLength: 32 }
+        familyName: { type: string, minLength: 1, maxLength: 100 }
+        givenName: { type: string, minLength: 1, maxLength: 100 }
+        displayName: { type: [string, 'null'], maxLength: 200 }
+        status: { $ref: '#/components/schemas/EngineerStatus' }
+        availabilityStatus: { $ref: '#/components/schemas/AvailabilityStatus' }
+        availableFrom: { type: [string, 'null'], format: date }
+        nearestStation: { type: [string, 'null'], maxLength: 200 }
+        summary: { type: [string, 'null'], maxLength: 2000 }
     CompanyStatus: { type: string, enum: [prospect, active, inactive, blocked] }
     ContactStatus:
       { type: string, enum: [active, inactive, left_company, unknown] }

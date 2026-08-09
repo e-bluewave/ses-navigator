@@ -68,7 +68,7 @@
 - Migration 121で`private.redact_sensitive_jsonb(jsonb)`のvolatilityを`stable`へ修正
 - Migration 122で58実テーブルへ`row_version`と自動加算Triggerを追加
 - Supabase DB Lint：`No schema errors found`
-- Local／Remote Migration 001〜122完全一致
+- Local／Remote Migration 001〜124完全一致
 - pnpm workspace、React + Vite、Fastify、品質チェック、CIの基盤
 - 案件一覧・案件詳細のOpenAPI契約、認証・認可境界、参照API
 - OpenAPI連動の型付きAPIクライアントと生成差分CIチェック
@@ -89,6 +89,7 @@
 - 会社担当者の登録・編集、権限制御、楽観ロック
 - 会社担当者の論理削除、削除理由、監査ログの原子的記録、監査履歴導線
 - 技術者の一覧・詳細参照、検索・状態／稼働状態絞り込み
+- 技術者の登録・編集、権限制御、楽観ロック
 
 ## 現在作業中
 
@@ -108,7 +109,7 @@
 | AI設計         | 100% |
 | 認証設計       | 100% |
 | DDL・Migration | 100% |
-| 実装           |  19% |
+| 実装           |  20% |
 
 # 今回の主要決定
 
@@ -168,12 +169,17 @@ docs/
 # 次にやること
 
 1. 検証環境の値を設定し、Auth・案件参照の実環境スモークテストを実行する
-2. Migration 125をリモートDBへ適用する
-3. 技術者の登録・編集フローを実装する
+2. Migration 125・126をリモートDBへ適用する
+3. 技術者の論理削除・監査導線を実装する
 
 # 更新履歴
 
 ## 2026-08-09
+
+- PR #31を`Main`へマージし、技術者の一覧・詳細参照を完了
+- 技術者の登録・編集API、OpenAPI契約、型付きクライアント、画面を実装
+- `engineer.manage`、RLS、`If-Match`による楽観ロックを適用
+- Migration 126で案件・会社・担当者・技術者のレビュー済みルート書込権限を明示付与
 
 - PR #30を`Main`へマージし、会社担当者の論理削除・監査導線を完了
 - 技術者の一覧・詳細API、OpenAPI契約、型付きクライアント、画面を実装

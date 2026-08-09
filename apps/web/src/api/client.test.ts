@@ -34,6 +34,44 @@ describe('generated projects API client', () => {
       headers: { authorization: 'Bearer access-token' },
     });
   });
+  it('sends engineer create and versioned update requests', async () => {
+    const request = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ id: 'engineer-1' }), { status: 200 }),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    const input = {
+      managementNo: 'EN-001',
+      familyName: '青波',
+      givenName: '太郎',
+      displayName: null,
+      status: 'active' as const,
+      availabilityStatus: 'available' as const,
+      availableFrom: null,
+      nearestStation: null,
+      summary: null,
+    };
+    await api.createEngineer(input);
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/engineers',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    await api.updateEngineer('engineer-1', 3, input);
+    expect(request).toHaveBeenLastCalledWith('/api/v1/engineers/engineer-1', {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer access-token',
+        'if-match': '"3"',
+      },
+      body: JSON.stringify(input),
+    });
+  });
   it('sends contact create and versioned update requests', async () => {
     const request = vi.fn(() =>
       Promise.resolve(

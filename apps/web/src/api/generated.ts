@@ -33,6 +33,17 @@ export interface EngineerList {
   items: Engineer[];
   page: { limit: number; nextCursor: string | null };
 }
+export interface EngineerInput {
+  managementNo: string;
+  familyName: string;
+  givenName: string;
+  displayName: string | null;
+  status: EngineerStatus;
+  availabilityStatus: AvailabilityStatus;
+  availableFrom: string | null;
+  nearestStation: string | null;
+  summary: string | null;
+}
 export interface ListEngineersQuery {
   q?: string;
   status?: EngineerStatus;

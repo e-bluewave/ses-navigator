@@ -15,6 +15,7 @@ import type {
   RecruitmentStatus,
   ProjectInput,
   Engineer,
+  EngineerInput,
   EngineerStatus,
   AvailabilityStatus,
 } from '../api/generated.js';
@@ -51,10 +52,19 @@ type Route =
   | { page: 'contacts' }
   | { page: 'contact-detail'; id: string }
   | { page: 'engineers' }
-  | { page: 'engineer-detail'; id: string };
+  | { page: 'engineer-detail'; id: string }
+  | { page: 'engineer-new' }
+  | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
   if (window.location.pathname === '/engineers') return { page: 'engineers' };
+  if (window.location.pathname === '/engineers/new')
+    return { page: 'engineer-new' };
+  const engineerEdit = window.location.pathname.match(
+    /^\/engineers\/([^/]+)\/edit$/,
+  );
+  if (engineerEdit)
+    return { page: 'engineer-edit', id: decodeURIComponent(engineerEdit[1]!) };
   const engineer = window.location.pathname.match(/^\/engineers\/([^/]+)$/);
   if (engineer)
     return { page: 'engineer-detail', id: decodeURIComponent(engineer[1]!) };
@@ -244,6 +254,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           api={api}
           onOpen={(id) => navigate(`/engineers/${id}`)}
           onUnauthorized={signOut}
+          onCreate={() => navigate('/engineers/new')}
         />
       ) : route.page === 'engineer-detail' ? (
         <EngineerDetail
@@ -251,6 +262,20 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           id={route.id}
           onBack={() => navigate('/engineers')}
           onUnauthorized={signOut}
+          onEdit={() => navigate(`/engineers/${route.id}/edit`)}
+        />
+      ) : route.page === 'engineer-new' || route.page === 'engineer-edit' ? (
+        <EngineerForm
+          api={api}
+          {...(route.page === 'engineer-edit' ? { id: route.id } : {})}
+          onCancel={() =>
+            navigate(
+              route.page === 'engineer-edit'
+                ? `/engineers/${route.id}`
+                : '/engineers',
+            )
+          }
+          onSaved={(id) => navigate(`/engineers/${id}`)}
         />
       ) : route.page === 'contact-detail' ? (
         <ContactDetail
@@ -324,10 +349,12 @@ function EngineerList({
   api,
   onOpen,
   onUnauthorized,
+  onCreate,
 }: {
   api: ProjectsApi;
   onOpen: (id: string) => void;
   onUnauthorized: () => Promise<void>;
+  onCreate: () => void;
 }) {
   const [items, setItems] = useState<Engineer[] | null>(null);
   const [q, setQ] = useState('');
@@ -373,7 +400,12 @@ function EngineerList({
           <p className="section-kicker">ENGINEERS</p>
           <h2>技術者一覧</h2>
         </div>
-        {items && <span className="count">{items.length}件</span>}
+        <div className="account-actions">
+          {items && <span className="count">{items.length}件</span>}
+          <button className="primary-button" onClick={onCreate}>
+            技術者を登録
+          </button>
+        </div>
       </div>
       <form
         className="project-filters"
@@ -468,11 +500,13 @@ function EngineerDetail({
   id,
   onBack,
   onUnauthorized,
+  onEdit,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
   onUnauthorized: () => Promise<void>;
+  onEdit: () => void;
 }) {
   const [engineer, setEngineer] = useState<Engineer | null>(null);
   const [error, setError] = useState(false);
@@ -533,8 +567,189 @@ function EngineerDetail({
               <dd>{engineer.summary ?? '未登録'}</dd>
             </div>
           </dl>
+          <button className="primary-button" onClick={onEdit}>
+            編集
+          </button>
         </>
       )}
+    </section>
+  );
+}
+
+function EngineerForm({
+  api,
+  id,
+  onCancel,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  id?: string;
+  onCancel: () => void;
+  onSaved: (id: string) => void;
+}) {
+  const [input, setInput] = useState<EngineerInput>({
+    managementNo: '',
+    familyName: '',
+    givenName: '',
+    displayName: null,
+    status: 'candidate',
+    availabilityStatus: 'unknown',
+    availableFrom: null,
+    nearestStation: null,
+    summary: null,
+  });
+  const [rowVersion, setRowVersion] = useState<number | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!id) return;
+    void api
+      .getEngineer(id)
+      .then((e) => {
+        setInput({
+          managementNo: e.managementNo,
+          familyName: e.familyName,
+          givenName: e.givenName,
+          displayName: e.displayName,
+          status: e.status,
+          availabilityStatus: e.availabilityStatus,
+          availableFrom: e.availableFrom,
+          nearestStation: e.nearestStation,
+          summary: e.summary,
+        });
+        setRowVersion(e.rowVersion);
+      })
+      .catch(setError);
+  }, [api, id]);
+  const set = (name: keyof EngineerInput, value: string) =>
+    setInput((current) => ({
+      ...current,
+      [name]:
+        value === '' &&
+        ![
+          'managementNo',
+          'familyName',
+          'givenName',
+          'status',
+          'availabilityStatus',
+        ].includes(name)
+          ? null
+          : value,
+    }));
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = id
+        ? await api.updateEngineer(id, rowVersion!, input)
+        : await api.createEngineer(input);
+      onSaved(saved.id);
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <section className="panel">
+      <h2>{id ? '技術者編集' : '技術者登録'}</h2>
+      {error ? <ErrorNotice error={error} subject="技術者" /> : null}
+      <form className="project-form" onSubmit={(e) => void submit(e)}>
+        <label>
+          管理番号
+          <input
+            required
+            maxLength={32}
+            value={input.managementNo}
+            onChange={(e) => set('managementNo', e.target.value)}
+          />
+        </label>
+        <label>
+          姓
+          <input
+            required
+            maxLength={100}
+            value={input.familyName}
+            onChange={(e) => set('familyName', e.target.value)}
+          />
+        </label>
+        <label>
+          名
+          <input
+            required
+            maxLength={100}
+            value={input.givenName}
+            onChange={(e) => set('givenName', e.target.value)}
+          />
+        </label>
+        <label>
+          表示名
+          <input
+            maxLength={200}
+            value={input.displayName ?? ''}
+            onChange={(e) => set('displayName', e.target.value)}
+          />
+        </label>
+        <label>
+          状態
+          <select
+            value={input.status}
+            onChange={(e) => set('status', e.target.value)}
+          >
+            {Object.entries(engineerStatusLabels).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          稼働状態
+          <select
+            value={input.availabilityStatus}
+            onChange={(e) => set('availabilityStatus', e.target.value)}
+          >
+            {Object.entries(availabilityLabels).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          提案可能日
+          <input
+            type="date"
+            value={input.availableFrom ?? ''}
+            onChange={(e) => set('availableFrom', e.target.value)}
+          />
+        </label>
+        <label>
+          最寄駅
+          <input
+            maxLength={200}
+            value={input.nearestStation ?? ''}
+            onChange={(e) => set('nearestStation', e.target.value)}
+          />
+        </label>
+        <label>
+          概要
+          <textarea
+            maxLength={2000}
+            value={input.summary ?? ''}
+            onChange={(e) => set('summary', e.target.value)}
+          />
+        </label>
+        <div className="account-actions">
+          <button type="button" className="secondary-button" onClick={onCancel}>
+            キャンセル
+          </button>
+          <button className="primary-button" disabled={saving}>
+            {saving ? '保存中…' : '保存'}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }
