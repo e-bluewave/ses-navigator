@@ -1,0 +1,167 @@
+import { requiredEnv } from '../../plugins/authentication.js';
+import { ApiError } from '../../shared/errors.js';
+
+export interface Company {
+  id: string;
+  managementNo: string;
+  legalName: string;
+  displayName: string | null;
+  corporateNumber: string | null;
+  postalCode: string | null;
+  prefecture: string | null;
+  city: string | null;
+  addressLine: string | null;
+  websiteUrl: string | null;
+  representativeName: string | null;
+  status: string;
+  updatedAt: string;
+  rowVersion: number;
+}
+
+export interface CompanyListQuery {
+  limit: number;
+  cursor?: { updatedAt: string; id: string };
+  query?: string;
+  status?: string;
+}
+
+export interface CompanyRepository {
+  canRead(accessToken: string): Promise<boolean>;
+  list(
+    accessToken: string,
+    query: CompanyListQuery,
+  ): Promise<{
+    items: Company[];
+    nextCursor: { updatedAt: string; id: string } | null;
+  }>;
+  findById(accessToken: string, id: string): Promise<Company | null>;
+}
+
+type CompanyRow = {
+  id: string;
+  management_no: string;
+  legal_name: string;
+  display_name: string | null;
+  corporate_number: string | null;
+  postal_code: string | null;
+  prefecture: string | null;
+  city: string | null;
+  address_line: string | null;
+  website_url: string | null;
+  representative_name: string | null;
+  status: string;
+  updated_at: string;
+  row_version: number;
+};
+
+const select =
+  'id,management_no,legal_name,display_name,corporate_number,postal_code,prefecture,city,address_line,website_url,representative_name,status,updated_at,row_version';
+
+export class SupabaseCompanyRepository implements CompanyRepository {
+  async canRead(token: string): Promise<boolean> {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'company.read' }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async list(token: string, query: CompanyListQuery) {
+    const params = new URLSearchParams({
+      select,
+      deleted_at: 'is.null',
+      order: 'updated_at.desc,id.desc',
+      limit: String(query.limit + 1),
+    });
+    const filters: string[] = [];
+    if (query.query !== undefined) {
+      const pattern = `"*${escapeFilterValue(query.query)}*"`;
+      filters.push(
+        `or(management_no.ilike.${pattern},legal_name.ilike.${pattern},display_name.ilike.${pattern})`,
+      );
+    }
+    if (query.status !== undefined) params.set('status', `eq.${query.status}`);
+    if (query.cursor !== undefined)
+      filters.push(
+        `or(updated_at.lt.${query.cursor.updatedAt},and(updated_at.eq.${query.cursor.updatedAt},id.lt.${query.cursor.id}))`,
+      );
+    if (filters.length > 0) params.set('and', `(${filters.join(',')})`);
+    const response = await this.request(
+      token,
+      `/companies?${params.toString()}`,
+    );
+    const rows = (await response.json()) as CompanyRow[];
+    const visible = rows.slice(0, query.limit);
+    const last = visible.at(-1);
+    return {
+      items: visible.map(toCompany),
+      nextCursor:
+        rows.length > query.limit && last
+          ? { updatedAt: last.updated_at, id: last.id }
+          : null,
+    };
+  }
+
+  async findById(token: string, id: string): Promise<Company | null> {
+    const params = new URLSearchParams({
+      select,
+      id: `eq.${id}`,
+      deleted_at: 'is.null',
+      limit: '1',
+    });
+    const response = await this.request(
+      token,
+      `/companies?${params.toString()}`,
+    );
+    const rows = (await response.json()) as CompanyRow[];
+    return rows[0] ? toCompany(rows[0]) : null;
+  }
+
+  private async request(token: string, path: string, init: RequestInit = {}) {
+    const response = await fetch(
+      `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
+      {
+        ...init,
+        headers: {
+          apikey: requiredEnv('SUPABASE_ANON_KEY'),
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          ...init.headers,
+        },
+      },
+    );
+    if (!response.ok)
+      throw new ApiError(
+        502,
+        'data_api_error',
+        'The data service could not complete the request',
+      );
+    return response;
+  }
+}
+
+function escapeFilterValue(value: string) {
+  return value
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('*', '\\*');
+}
+
+function toCompany(row: CompanyRow): Company {
+  return {
+    id: row.id,
+    managementNo: row.management_no,
+    legalName: row.legal_name,
+    displayName: row.display_name,
+    corporateNumber: row.corporate_number,
+    postalCode: row.postal_code,
+    prefecture: row.prefecture,
+    city: row.city,
+    addressLine: row.address_line,
+    websiteUrl: row.website_url,
+    representativeName: row.representative_name,
+    status: row.status,
+    updatedAt: row.updated_at,
+    rowVersion: row.row_version,
+  };
+}

@@ -3,6 +3,30 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('sends typed company list parameters and reads a detail', async () => {
+    const request = vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ items: [], page: { limit: 20, nextCursor: null } }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    await api.listCompanies({
+      q: '青波',
+      status: 'active',
+      cursor: 'next',
+      limit: 20,
+    });
+    expect(request).toHaveBeenLastCalledWith(
+      '/api/v1/companies?q=%E9%9D%92%E6%B3%A2&status=active&cursor=next&limit=20',
+      { headers: { authorization: 'Bearer access-token' } },
+    );
+  });
   it('sends bearer authentication and typed query parameters', async () => {
     const request = vi.fn(() =>
       Promise.resolve(

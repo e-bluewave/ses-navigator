@@ -4,6 +4,8 @@ import type { FormEvent } from 'react';
 import { ApiClientError, createProjectsApi } from '../api/client.js';
 import type { ProjectsApi } from '../api/client.js';
 import type {
+  Company,
+  CompanyStatus,
   Project,
   ProjectStatus,
   RecruitmentStatus,
@@ -34,9 +36,15 @@ type Route =
   | { page: 'list' }
   | { page: 'detail'; id: string }
   | { page: 'new' }
-  | { page: 'edit'; id: string };
+  | { page: 'edit'; id: string }
+  | { page: 'companies' }
+  | { page: 'company-detail'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/companies') return { page: 'companies' };
+  const company = window.location.pathname.match(/^\/companies\/([^/]+)$/);
+  if (company)
+    return { page: 'company-detail', id: decodeURIComponent(company[1]!) };
   if (window.location.pathname === '/projects/new') return { page: 'new' };
   const edit = window.location.pathname.match(/^\/projects\/([^/]+)\/edit$/);
   if (edit) return { page: 'edit', id: decodeURIComponent(edit[1]!) };
@@ -157,12 +165,39 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           </button>
         </div>
       </header>
+      <nav className="module-navigation" aria-label="主要機能">
+        <button
+          className="secondary-button"
+          onClick={() => navigate('/projects')}
+        >
+          案件
+        </button>
+        <button
+          className="secondary-button"
+          onClick={() => navigate('/companies')}
+        >
+          会社
+        </button>
+      </nav>
       {route.page === 'list' ? (
         <ProjectList
           api={api}
           onOpen={(id) => navigate(`/projects/${id}`)}
           onUnauthorized={signOut}
           onCreate={() => navigate('/projects/new')}
+        />
+      ) : route.page === 'companies' ? (
+        <CompanyList
+          api={api}
+          onOpen={(id) => navigate(`/companies/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'company-detail' ? (
+        <CompanyDetail
+          api={api}
+          id={route.id}
+          onBack={() => navigate('/companies')}
+          onUnauthorized={signOut}
         />
       ) : route.page === 'detail' ? (
         <ProjectDetail
@@ -186,6 +221,230 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         />
       )}
     </main>
+  );
+}
+
+const companyStatusLabels: Record<CompanyStatus, string> = {
+  prospect: '見込み',
+  active: '取引中',
+  inactive: '休眠',
+  blocked: '取引停止',
+};
+
+function CompanyList({
+  api,
+  onOpen,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [companies, setCompanies] = useState<Company[] | null>(null);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<CompanyStatus | ''>('');
+  const [filters, setFilters] = useState<{
+    query: string;
+    status: CompanyStatus | '';
+  }>({ query: '', status: '' });
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => {
+    let active = true;
+    setCompanies(null);
+    setError(null);
+    api
+      .listCompanies({
+        limit: 50,
+        ...(filters.query ? { q: filters.query } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+      })
+      .then((result) => {
+        if (active) setCompanies(result.items);
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else if (active) setError(reason);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, filters, onUnauthorized]);
+  return (
+    <section className="panel" aria-labelledby="companies-heading">
+      <div className="section-heading">
+        <div>
+          <p className="section-kicker">COMPANIES</p>
+          <h2 id="companies-heading">会社一覧</h2>
+        </div>
+        {companies && <span className="count">{companies.length}件</span>}
+      </div>
+      <form
+        className="project-filters"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setFilters({ query: query.trim(), status });
+        }}
+      >
+        <label>
+          会社検索
+          <input
+            type="search"
+            value={query}
+            maxLength={100}
+            placeholder="管理番号・会社名"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <label>
+          会社状態
+          <select
+            value={status}
+            onChange={(event) =>
+              setStatus(event.target.value as CompanyStatus | '')
+            }
+          >
+            <option value="">すべて</option>
+            {Object.entries(companyStatusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="primary-button" type="submit">
+          検索
+        </button>
+      </form>
+      {error ? (
+        <p role="alert">会社一覧を読み込めませんでした。</p>
+      ) : companies === null ? (
+        <p role="status">会社を読み込んでいます…</p>
+      ) : companies.length === 0 ? (
+        <p>表示できる会社はありません。</p>
+      ) : (
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>管理番号</th>
+                <th>会社名</th>
+                <th>状態</th>
+              </tr>
+            </thead>
+            <tbody>
+              {companies.map((company) => (
+                <tr key={company.id} onClick={() => onOpen(company.id)}>
+                  <td>
+                    <button className="link-button">
+                      {company.managementNo}
+                    </button>
+                  </td>
+                  <td>{company.displayName ?? company.legalName}</td>
+                  <td>{companyStatusLabels[company.status]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CompanyDetail({
+  api,
+  id,
+  onBack,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  id: string;
+  onBack: () => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [company, setCompany] = useState<Company | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => {
+    let active = true;
+    api
+      .getCompany(id)
+      .then((value) => {
+        if (active) setCompany(value);
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else if (active) setError(reason);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, id, onUnauthorized]);
+  return (
+    <section className="panel" aria-labelledby="company-heading">
+      <button className="secondary-button" onClick={onBack}>
+        会社一覧へ戻る
+      </button>
+      {error ? (
+        <p role="alert">会社詳細を読み込めませんでした。</p>
+      ) : company === null ? (
+        <p role="status">会社を読み込んでいます…</p>
+      ) : (
+        <>
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">{company.managementNo}</p>
+              <h2 id="company-heading">
+                {company.displayName ?? company.legalName}
+              </h2>
+            </div>
+            <span className="status-badge">
+              {companyStatusLabels[company.status]}
+            </span>
+          </div>
+          <dl className="detail-grid">
+            <div>
+              <dt>正式名称</dt>
+              <dd>{company.legalName}</dd>
+            </div>
+            <div>
+              <dt>法人番号</dt>
+              <dd>{company.corporateNumber ?? '未登録'}</dd>
+            </div>
+            <div>
+              <dt>代表者</dt>
+              <dd>{company.representativeName ?? '未登録'}</dd>
+            </div>
+            <div>
+              <dt>所在地</dt>
+              <dd>
+                {[
+                  company.postalCode,
+                  company.prefecture,
+                  company.city,
+                  company.addressLine,
+                ]
+                  .filter(Boolean)
+                  .join(' ') || '未登録'}
+              </dd>
+            </div>
+            <div>
+              <dt>Webサイト</dt>
+              <dd>
+                {company.websiteUrl ? (
+                  <a href={company.websiteUrl} target="_blank" rel="noreferrer">
+                    {company.websiteUrl}
+                  </a>
+                ) : (
+                  '未登録'
+                )}
+              </dd>
+            </div>
+          </dl>
+        </>
+      )}
+    </section>
   );
 }
 

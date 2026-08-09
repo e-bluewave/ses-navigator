@@ -4,9 +4,39 @@
 export type ProjectStatus =
   'draft' | 'open' | 'on_hold' | 'closed' | 'cancelled';
 export type RecruitmentStatus = 'recruiting' | 'paused' | 'filled' | 'ended';
+export type CompanyStatus = 'prospect' | 'active' | 'inactive' | 'blocked';
 
 export interface AuthContext {
   requiresMfa: boolean;
+}
+
+export interface Company {
+  id: string;
+  managementNo: string;
+  legalName: string;
+  displayName: string | null;
+  corporateNumber: string | null;
+  postalCode: string | null;
+  prefecture: string | null;
+  city: string | null;
+  addressLine: string | null;
+  websiteUrl: string | null;
+  representativeName: string | null;
+  status: CompanyStatus;
+  updatedAt: string;
+  rowVersion: number;
+}
+
+export interface CompanyList {
+  items: Company[];
+  page: { limit: number; nextCursor: string | null };
+}
+
+export interface ListCompaniesQuery {
+  q?: string;
+  status?: CompanyStatus;
+  cursor?: string;
+  limit?: number;
 }
 
 export interface Project {

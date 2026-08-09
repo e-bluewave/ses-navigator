@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectsApi } from '../api/client.js';
-import type { Project } from '../api/generated.js';
+import type { Company, Project } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
 
@@ -17,6 +17,23 @@ const project: Project = {
   plannedEndOn: null,
   updatedAt: '2026-08-08T12:00:00Z',
   rowVersion: 2,
+};
+
+const company: Company = {
+  id: '22222222-2222-4222-8222-222222222222',
+  managementNo: 'CO-000001',
+  legalName: '青波株式会社',
+  displayName: '青波',
+  corporateNumber: '1234567890123',
+  postalCode: '100-0001',
+  prefecture: '東京都',
+  city: '千代田区',
+  addressLine: '千代田1-1',
+  websiteUrl: 'https://example.com',
+  representativeName: '青波 太郎',
+  status: 'active',
+  updatedAt: '2026-08-09T00:00:00Z',
+  rowVersion: 1,
 };
 
 const session: AuthSession = {
@@ -64,6 +81,10 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     updateProject: vi.fn(() => Promise.resolve(project)),
     deleteProject: vi.fn(() => Promise.resolve()),
     listProjectAudit: vi.fn(() => Promise.resolve({ items: [] })),
+    listCompanies: vi.fn(() =>
+      Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
+    ),
+    getCompany: vi.fn(() => Promise.reject(new Error('not configured'))),
     ...overrides,
   };
 }
@@ -72,6 +93,32 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('navigates to the company list and detail', async () => {
+    const getCompany = vi.fn(() => Promise.resolve(company));
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          listCompanies: () =>
+            Promise.resolve({
+              items: [company],
+              page: { limit: 50, nextCursor: null },
+            }),
+          getCompany,
+        })}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '会社' }));
+    expect(
+      await screen.findByRole('heading', { name: '会社一覧' }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'CO-000001' }));
+    expect(
+      await screen.findByRole('heading', { name: '青波' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('青波株式会社')).toBeInTheDocument();
+    expect(getCompany).toHaveBeenCalledWith(company.id);
+  });
   it('renders projects returned by the generated client', async () => {
     render(<App auth={auth()} api={api()} />);
     expect(
