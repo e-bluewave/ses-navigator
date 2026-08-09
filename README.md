@@ -43,7 +43,8 @@ SES営業における案件・技術者・BP情報を一元管理し、AIを活�
 - DB設計・DDL／Migration 001〜122完了
 - SupabaseリモートDB適用、Migration一致、DB Lint確認済み
 - `row_version`適用分類とフロントエンド・API初期構成を確定
-- 案件参照スライスのTypeScriptモノレポ・Web・API基盤を実装中
+- 案件参照スライスのWeb・API、Supabase Authログイン・セッション管理を実装済み
+- Authから案件参照までの実環境結合スモークテストを実行可能
 
 詳細は PROJECT_STATUS.md を参照してください。
 
