@@ -22,10 +22,23 @@ function repository(
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
     canManage: vi.fn(() => Promise.resolve(true)),
+    canReadAudit: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [engineer], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(engineer)),
     create: vi.fn(() => Promise.resolve(engineer)),
     update: vi.fn(() => Promise.resolve({ ...engineer, rowVersion: 2 })),
+    softDelete: vi.fn(() => Promise.resolve(true)),
+    listAudit: vi.fn(() =>
+      Promise.resolve([
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          occurredAt: '2026-08-09T01:00:00Z',
+          actorUserId: 'user-1',
+          action: 'engineer.soft_deleted',
+          requestId: 'request-1',
+        },
+      ]),
+    ),
     ...overrides,
   };
 }
@@ -101,6 +114,59 @@ describe('engineer write API', () => {
       payload: input,
     });
     expect(conflict.statusCode).toBe(409);
+  });
+  it('soft-deletes with a reason and exposes authorized audit summaries', async () => {
+    const softDelete = vi.fn(() => Promise.resolve(true));
+    const engineers = repository({ softDelete });
+    const deleted = await app(engineers).inject({
+      method: 'DELETE',
+      url: `/api/v1/engineers/${engineer.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: { reason: '重複登録のため' },
+    });
+    expect(deleted.statusCode).toBe(204);
+    expect(softDelete).toHaveBeenCalledWith(
+      'valid',
+      engineer.id,
+      1,
+      '重複登録のため',
+      expect.any(String),
+    );
+    const audit = await app(engineers).inject({
+      method: 'GET',
+      url: `/api/v1/engineers/${engineer.id}/audit`,
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json<{ items: { action: string }[] }>().items[0]?.action).toBe(
+      'engineer.soft_deleted',
+    );
+  });
+  it('validates deletion and enforces audit.read', async () => {
+    const invalid = await app().inject({
+      method: 'DELETE',
+      url: `/api/v1/engineers/${engineer.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: { reason: '' },
+    });
+    expect(invalid.statusCode).toBe(400);
+    const conflict = await app(
+      repository({ softDelete: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'DELETE',
+      url: `/api/v1/engineers/${engineer.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: { reason: '退職' },
+    });
+    expect(conflict.statusCode).toBe(409);
+    const auditDenied = await app(
+      repository({ canReadAudit: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'GET',
+      url: `/api/v1/engineers/${engineer.id}/audit`,
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(auditDenied.statusCode).toBe(403);
   });
 });
 

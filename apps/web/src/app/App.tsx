@@ -263,6 +263,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           onBack={() => navigate('/engineers')}
           onUnauthorized={signOut}
           onEdit={() => navigate(`/engineers/${route.id}/edit`)}
+          onDeleted={() => navigate('/engineers')}
         />
       ) : route.page === 'engineer-new' || route.page === 'engineer-edit' ? (
         <EngineerForm
@@ -501,15 +502,24 @@ function EngineerDetail({
   onBack,
   onUnauthorized,
   onEdit,
+  onDeleted,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
   onUnauthorized: () => Promise<void>;
   onEdit: () => void;
+  onDeleted: () => void;
 }) {
   const [engineer, setEngineer] = useState<Engineer | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [auditEvents, setAuditEvents] = useState<
+    Awaited<ReturnType<ProjectsApi['listEngineerAudit']>>['items'] | null
+  >(null);
+  const [auditError, setAuditError] = useState(false);
   useEffect(() => {
     let active = true;
     api
@@ -520,22 +530,43 @@ function EngineerDetail({
       .catch((reason) => {
         if (reason instanceof ApiClientError && reason.status === 401)
           void onUnauthorized();
-        else if (active) setError(true);
+        else if (active) setError(reason);
       });
     return () => {
       active = false;
     };
   }, [api, id, onUnauthorized]);
+  async function removeEngineer(event: FormEvent) {
+    event.preventDefault();
+    if (!engineer) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.deleteEngineer(engineer.id, engineer.rowVersion, deleteReason);
+      onDeleted();
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setDeleting(false);
+    }
+  }
+  async function loadAudit() {
+    setAuditError(false);
+    try {
+      setAuditEvents((await api.listEngineerAudit(id)).items);
+    } catch {
+      setAuditError(true);
+    }
+  }
   return (
     <section className="panel">
       <button className="secondary-button" onClick={onBack}>
         技術者一覧へ戻る
       </button>
-      {error ? (
-        <p role="alert">技術者詳細を読み込めませんでした。</p>
-      ) : engineer === null ? (
+      {error ? <ErrorNotice error={error} /> : null}
+      {engineer === null && error === null ? (
         <p role="status">技術者を読み込んでいます…</p>
-      ) : (
+      ) : engineer ? (
         <>
           <div className="section-heading">
             <div>
@@ -567,11 +598,85 @@ function EngineerDetail({
               <dd>{engineer.summary ?? '未登録'}</dd>
             </div>
           </dl>
-          <button className="primary-button" onClick={onEdit}>
-            編集
-          </button>
+          <div className="account-actions">
+            <button className="primary-button" onClick={onEdit}>
+              編集
+            </button>
+            <button
+              className="secondary-button"
+              onClick={() => void loadAudit()}
+            >
+              監査履歴
+            </button>
+            <button
+              className="danger-button"
+              onClick={() => setShowDelete(true)}
+            >
+              削除
+            </button>
+          </div>
+          {showDelete ? (
+            <form
+              className="delete-panel"
+              onSubmit={(event) => void removeEngineer(event)}
+            >
+              <h3>技術者を削除</h3>
+              <p>
+                一覧から非表示になります。削除理由と操作履歴は監査ログへ保存されます。
+              </p>
+              <label>
+                削除理由
+                <textarea
+                  required
+                  maxLength={500}
+                  value={deleteReason}
+                  onChange={(event) => setDeleteReason(event.target.value)}
+                />
+              </label>
+              <div className="account-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setShowDelete(false)}
+                >
+                  キャンセル
+                </button>
+                <button
+                  className="danger-button"
+                  disabled={deleting || deleteReason.trim() === ''}
+                >
+                  {deleting ? '削除中…' : '論理削除する'}
+                </button>
+              </div>
+            </form>
+          ) : null}
+          {auditError ? (
+            <p className="error" role="alert">
+              監査履歴を表示する権限がないか、取得に失敗しました。
+            </p>
+          ) : null}
+          {auditEvents ? (
+            <section
+              className="audit-panel"
+              aria-labelledby="engineer-audit-heading"
+            >
+              <h3 id="engineer-audit-heading">監査履歴</h3>
+              {auditEvents.length === 0 ? (
+                <p>監査履歴はありません。</p>
+              ) : (
+                <ul>
+                  {auditEvents.map((event) => (
+                    <li key={event.id}>
+                      <strong>{event.action}</strong>
+                      <span>{formatDateTime(event.occurredAt)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : null}
         </>
-      )}
+      ) : null}
     </section>
   );
 }

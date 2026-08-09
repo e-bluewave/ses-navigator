@@ -19,6 +19,7 @@ import type {
   Engineer,
   EngineerInput,
   EngineerList,
+  EngineerAuditList,
   ListEngineersQuery,
 } from './generated.js';
 
@@ -68,6 +69,8 @@ export interface ProjectsApi {
     rowVersion: number,
     input: EngineerInput,
   ): Promise<Engineer>;
+  deleteEngineer(id: string, rowVersion: number, reason: string): Promise<void>;
+  listEngineerAudit(id: string): Promise<EngineerAuditList>;
 }
 
 export class ApiClientError extends Error {
@@ -276,6 +279,19 @@ export function createProjectsApi(options: {
         'PUT',
         input,
         rowVersion,
+      );
+    },
+    deleteEngineer(id, rowVersion, reason) {
+      return send<void>(
+        `/engineers/${encodeURIComponent(id)}`,
+        'DELETE',
+        { reason },
+        rowVersion,
+      );
+    },
+    listEngineerAudit(id) {
+      return get<EngineerAuditList>(
+        `/engineers/${encodeURIComponent(id)}/audit`,
       );
     },
   };

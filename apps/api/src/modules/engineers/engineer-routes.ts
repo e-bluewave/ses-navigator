@@ -65,6 +65,48 @@ export function registerEngineerRoutes(
       return reply.header('etag', `"${engineer.rowVersion}"`).send(engineer);
     },
   );
+  app.delete(
+    '/api/v1/engineers/:id',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuid.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const reason = parseDeleteReason(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const deleted = await repository.softDelete(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        reason,
+        request.id,
+      );
+      if (!deleted)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Engineer was changed or is unavailable; reload and try again',
+        );
+      return reply.code(204).send();
+    },
+  );
+  app.get(
+    '/api/v1/engineers/:id/audit',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      if (!uuid.test(id)) throw invalid('id must be a UUID');
+      if (!(await repository.canReadAudit(request.user.accessToken)))
+        throw new ApiError(
+          403,
+          'forbidden',
+          'audit.read permission is required',
+        );
+      return {
+        items: await repository.listAudit(request.user.accessToken, id),
+      };
+    },
+  );
   app.get(
     '/api/v1/engineers',
     { preHandler: (request) => app.authenticate(request) },
@@ -192,6 +234,18 @@ function parseIfMatch(value: string | undefined) {
   if (!match)
     throw new ApiError(428, 'precondition_required', 'If-Match is required');
   return Number(match[1]);
+}
+function parseDeleteReason(value: unknown) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const reason = (value as Record<string, unknown>).reason;
+  if (
+    typeof reason !== 'string' ||
+    reason.trim().length < 1 ||
+    reason.length > 500
+  )
+    throw invalid('reason must be between 1 and 500 characters');
+  return reason.trim();
 }
 async function requireRead(repository: EngineerRepository, token: string) {
   if (!(await repository.canRead(token)))
