@@ -58,6 +58,25 @@ export type EngineerPrivateInput = Omit<
   EngineerPrivateDetail,
   'engineerId' | 'updatedAt' | 'rowVersion'
 >;
+export type EngineerAffiliationType =
+  'employee' | 'freelance' | 'partner_employee' | 'subcontractor' | 'other';
+export interface EngineerAffiliation {
+  id: string;
+  engineerId: string;
+  companyId: string;
+  affiliationType: EngineerAffiliationType;
+  contractType: string | null;
+  startDate: string;
+  endDate: string | null;
+  isPrimary: boolean;
+  notes: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerAffiliationInput = Omit<
+  EngineerAffiliation,
+  'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
+>;
 
 export interface EngineerRepository {
   canRead(token: string): Promise<boolean>;
@@ -102,6 +121,18 @@ export interface EngineerRepository {
     input: EngineerPrivateInput,
     requestId: string,
   ): Promise<EngineerPrivateDetail | null>;
+  listAffiliations(
+    token: string,
+    engineerId: string,
+  ): Promise<EngineerAffiliation[]>;
+  saveAffiliation(
+    token: string,
+    engineerId: string,
+    affiliationId: string | null,
+    rowVersion: number,
+    input: EngineerAffiliationInput,
+    requestId: string,
+  ): Promise<EngineerAffiliation | null>;
 }
 
 type Row = {
@@ -329,6 +360,52 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     const row = (await response.json()) as PrivateRow | null;
     return row ? mapPrivate(row) : null;
   }
+  async listAffiliations(token: string, engineerId: string) {
+    const params = new URLSearchParams({
+      select:
+        'id,engineer_id,company_id,affiliation_type,contract_type,start_date,end_date,is_primary,notes,updated_at,row_version',
+      engineer_id: `eq.${engineerId}`,
+      order: 'start_date.desc,id.desc',
+    });
+    return (
+      (await (
+        await this.request(token, `/engineer_affiliations?${params.toString()}`)
+      ).json()) as AffiliationRow[]
+    ).map(mapAffiliation);
+  }
+  async saveAffiliation(
+    token: string,
+    engineerId: string,
+    affiliationId: string | null,
+    rowVersion: number,
+    input: EngineerAffiliationInput,
+    requestId: string,
+  ) {
+    const response = await this.request(
+      token,
+      '/rpc/save_engineer_affiliation',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          p_engineer_id: engineerId,
+          p_affiliation_id: affiliationId,
+          p_row_version: rowVersion,
+          p_affiliation: {
+            company_id: input.companyId,
+            affiliation_type: input.affiliationType,
+            contract_type: input.contractType,
+            start_date: input.startDate,
+            end_date: input.endDate,
+            is_primary: input.isPrimary,
+            notes: input.notes,
+          },
+          p_request_id: requestId,
+        }),
+      },
+    );
+    const row = (await response.json()) as AffiliationRow | null;
+    return row ? mapAffiliation(row) : null;
+  }
   private async request(token: string, path: string, init: RequestInit = {}) {
     const response = await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
@@ -347,6 +424,32 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     return response;
   }
 }
+type AffiliationRow = {
+  id: string;
+  engineer_id: string;
+  company_id: string;
+  affiliation_type: EngineerAffiliationType;
+  contract_type: string | null;
+  start_date: string;
+  end_date: string | null;
+  is_primary: boolean;
+  notes: string | null;
+  updated_at: string;
+  row_version: number;
+};
+const mapAffiliation = (row: AffiliationRow): EngineerAffiliation => ({
+  id: row.id,
+  engineerId: row.engineer_id,
+  companyId: row.company_id,
+  affiliationType: row.affiliation_type,
+  contractType: row.contract_type,
+  startDate: row.start_date,
+  endDate: row.end_date,
+  isPrimary: row.is_primary,
+  notes: row.notes,
+  updatedAt: row.updated_at,
+  rowVersion: row.row_version,
+});
 
 type PrivateRow = {
   engineer_id: string;

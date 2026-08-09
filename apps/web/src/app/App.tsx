@@ -20,6 +20,8 @@ import type {
   AvailabilityStatus,
   EngineerPrivateDetail,
   EngineerPrivateInput,
+  EngineerAffiliation,
+  EngineerAffiliationInput,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -526,6 +528,10 @@ function EngineerDetail({
     useState<EngineerPrivateDetail | null>(null);
   const [showPrivate, setShowPrivate] = useState(false);
   const [privateError, setPrivateError] = useState(false);
+  const [affiliations, setAffiliations] = useState<
+    EngineerAffiliation[] | null
+  >(null);
+  const [affiliationError, setAffiliationError] = useState(false);
   useEffect(() => {
     let active = true;
     api
@@ -574,6 +580,14 @@ function EngineerDetail({
         setPrivateDetail(null);
         setShowPrivate(true);
       } else setPrivateError(true);
+    }
+  }
+  async function loadAffiliations() {
+    setAffiliationError(false);
+    try {
+      setAffiliations((await api.listEngineerAffiliations(id)).items);
+    } catch {
+      setAffiliationError(true);
     }
   }
   return (
@@ -633,6 +647,12 @@ function EngineerDetail({
               機密個人情報
             </button>
             <button
+              className="secondary-button"
+              onClick={() => void loadAffiliations()}
+            >
+              所属・契約履歴
+            </button>
+            <button
               className="danger-button"
               onClick={() => setShowDelete(true)}
             >
@@ -684,12 +704,25 @@ function EngineerDetail({
               機密個人情報を表示する権限がないか、取得に失敗しました。
             </p>
           ) : null}
+          {affiliationError ? (
+            <p className="error" role="alert">
+              所属・契約履歴の取得に失敗しました。
+            </p>
+          ) : null}
           {showPrivate ? (
             <EngineerPrivateForm
               api={api}
               engineerId={id}
               detail={privateDetail}
               onSaved={setPrivateDetail}
+            />
+          ) : null}
+          {affiliations ? (
+            <EngineerAffiliationPanel
+              api={api}
+              engineerId={id}
+              items={affiliations}
+              onSaved={() => void loadAffiliations()}
             />
           ) : null}
           {auditEvents ? (
@@ -1731,6 +1764,177 @@ function CompanyDetail({
           ) : null}
         </>
       )}
+    </section>
+  );
+}
+
+function EngineerAffiliationPanel({
+  api,
+  engineerId,
+  items,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  engineerId: string;
+  items: EngineerAffiliation[];
+  onSaved: () => void;
+}) {
+  const empty: EngineerAffiliationInput = {
+    companyId: '',
+    affiliationType: 'employee',
+    contractType: null,
+    startDate: '',
+    endDate: null,
+    isPrimary: false,
+    notes: null,
+  };
+  const [editing, setEditing] = useState<EngineerAffiliation | null>(null);
+  const [input, setInput] = useState<EngineerAffiliationInput>(empty);
+  const [error, setError] = useState<unknown>(null);
+  const [saving, setSaving] = useState(false);
+  const edit = (item: EngineerAffiliation | null) => {
+    setEditing(item);
+    setInput(
+      item
+        ? {
+            companyId: item.companyId,
+            affiliationType: item.affiliationType,
+            contractType: item.contractType,
+            startDate: item.startDate,
+            endDate: item.endDate,
+            isPrimary: item.isPrimary,
+            notes: item.notes,
+          }
+        : empty,
+    );
+  };
+  const set = (name: keyof EngineerAffiliationInput, value: string | boolean) =>
+    setInput((v) => ({
+      ...v,
+      [name]: typeof value === 'string' && value === '' ? null : value,
+    }));
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.saveEngineerAffiliation(
+        engineerId,
+        editing?.id ?? null,
+        editing?.rowVersion ?? 0,
+        input,
+      );
+      edit(null);
+      onSaved();
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <section
+      className="audit-panel"
+      aria-labelledby="engineer-affiliation-heading"
+    >
+      <div className="section-heading">
+        <h3 id="engineer-affiliation-heading">所属・契約履歴</h3>
+        <button className="secondary-button" onClick={() => edit(null)}>
+          履歴を追加
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <p>所属・契約履歴はありません。</p>
+      ) : (
+        <ul>
+          {items.map((item) => (
+            <li key={item.id}>
+              <strong>
+                {item.startDate}〜{item.endDate ?? '現在'} /{' '}
+                {item.affiliationType}
+              </strong>
+              <span>
+                会社ID: {item.companyId}
+                {item.contractType ? ` / ${item.contractType}` : ''}
+                {item.isPrimary ? ' / 主所属' : ''}
+              </span>
+              <button className="secondary-button" onClick={() => edit(item)}>
+                編集
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error ? <ErrorNotice error={error} subject="所属・契約履歴" /> : null}
+      <form className="project-form" onSubmit={(e) => void submit(e)}>
+        <label>
+          会社ID
+          <input
+            required
+            pattern="[0-9a-fA-F-]{36}"
+            value={input.companyId}
+            onChange={(e) => set('companyId', e.target.value)}
+          />
+        </label>
+        <label>
+          所属形態
+          <select
+            value={input.affiliationType}
+            onChange={(e) => set('affiliationType', e.target.value)}
+          >
+            <option value="employee">社員</option>
+            <option value="freelance">フリーランス</option>
+            <option value="partner_employee">BP社員</option>
+            <option value="subcontractor">再委託</option>
+            <option value="other">その他</option>
+          </select>
+        </label>
+        <label>
+          契約形態
+          <input
+            maxLength={100}
+            value={input.contractType ?? ''}
+            onChange={(e) => set('contractType', e.target.value)}
+          />
+        </label>
+        <label>
+          開始日
+          <input
+            required
+            type="date"
+            value={input.startDate}
+            onChange={(e) => set('startDate', e.target.value)}
+          />
+        </label>
+        <label>
+          終了日
+          <input
+            type="date"
+            min={input.startDate}
+            value={input.endDate ?? ''}
+            onChange={(e) => set('endDate', e.target.value)}
+          />
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={input.isPrimary}
+            onChange={(e) => set('isPrimary', e.target.checked)}
+          />
+          主所属
+        </label>
+        <label>
+          備考
+          <textarea
+            maxLength={2000}
+            value={input.notes ?? ''}
+            onChange={(e) => set('notes', e.target.value)}
+          />
+        </label>
+        <button className="primary-button" disabled={saving}>
+          {saving ? '保存中…' : editing ? '履歴を更新' : '履歴を追加'}
+        </button>
+      </form>
     </section>
   );
 }

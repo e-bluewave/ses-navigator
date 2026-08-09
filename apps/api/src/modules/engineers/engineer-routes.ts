@@ -6,6 +6,7 @@ import type {
   EngineerStatus,
   EngineerInput,
   EngineerPrivateInput,
+  EngineerAffiliationInput,
 } from './engineer-repository.js';
 
 const uuid =
@@ -29,6 +30,54 @@ export function registerEngineerRoutes(
   app: FastifyInstance,
   repository: EngineerRepository,
 ) {
+  app.get(
+    '/api/v1/engineers/:id/affiliations',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      if (!uuid.test(id)) throw invalid('id must be a UUID');
+      await requireRead(repository, request.user.accessToken);
+      return {
+        items: await repository.listAffiliations(request.user.accessToken, id),
+      };
+    },
+  );
+  app.put(
+    '/api/v1/engineers/:id/affiliations/:affiliationId',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id, affiliationId } = request.params as {
+        id: string;
+        affiliationId: string;
+      };
+      if (
+        !uuid.test(id) ||
+        (affiliationId !== 'new' && !uuid.test(affiliationId))
+      )
+        throw invalid('id is invalid');
+      const rowVersion =
+        affiliationId === 'new'
+          ? parsePrivateIfMatch(request.headers['if-match'])
+          : parseIfMatch(request.headers['if-match']);
+      const input = parseAffiliationInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const saved = await repository.saveAffiliation(
+        request.user.accessToken,
+        id,
+        affiliationId === 'new' ? null : affiliationId,
+        rowVersion,
+        input,
+        request.id,
+      );
+      if (!saved)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Affiliation was changed; reload and try again',
+        );
+      return reply.header('etag', `"${saved.rowVersion}"`).send(saved);
+    },
+  );
   app.get(
     '/api/v1/engineers/:id/private',
     { preHandler: (request) => app.authenticate(request) },
@@ -233,6 +282,52 @@ export function registerEngineerRoutes(
       return engineer;
     },
   );
+}
+function parseAffiliationInput(value: unknown): EngineerAffiliationInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const b = value as Record<string, unknown>;
+  const types = new Set([
+    'employee',
+    'freelance',
+    'partner_employee',
+    'subcontractor',
+    'other',
+  ]);
+  if (
+    typeof b.companyId !== 'string' ||
+    !uuid.test(b.companyId) ||
+    typeof b.affiliationType !== 'string' ||
+    !types.has(b.affiliationType) ||
+    typeof b.startDate !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(b.startDate) ||
+    typeof b.isPrimary !== 'boolean'
+  )
+    throw invalid('affiliation is invalid');
+  const nullable = (name: string, max: number) =>
+    b[name] === null || b[name] === undefined || b[name] === ''
+      ? null
+      : typeof b[name] === 'string' && b[name].length <= max
+        ? b[name].trim()
+        : (() => {
+            throw invalid(`${name} is invalid`);
+          })();
+  const endDate = nullable('endDate', 10);
+  if (
+    endDate &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || endDate < b.startDate)
+  )
+    throw invalid('endDate is invalid');
+  return {
+    companyId: b.companyId,
+    affiliationType:
+      b.affiliationType as EngineerAffiliationInput['affiliationType'],
+    contractType: nullable('contractType', 100),
+    startDate: b.startDate,
+    endDate,
+    isPrimary: b.isPrimary,
+    notes: nullable('notes', 2000),
+  };
 }
 function parsePrivateIfMatch(value: string | undefined) {
   const match = value?.match(/^(?:W\/)?"(0|[1-9]\d*)"$/);

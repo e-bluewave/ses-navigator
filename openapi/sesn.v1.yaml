@@ -496,6 +496,76 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /engineers/{id}/affiliations:
+    get:
+      operationId: listEngineerAffiliations
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Engineer affiliation history
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: '#/components/schemas/EngineerAffiliationList' },
+                },
+            }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /engineers/{id}/affiliations/{affiliationId}:
+    put:
+      operationId: saveEngineerAffiliation
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: affiliationId,
+            in: path,
+            required: true,
+            schema: { type: string },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  { $ref: '#/components/schemas/EngineerAffiliationInput' },
+              },
+          }
+      responses:
+        '200':
+          description: Engineer affiliation created or updated
+          content:
+            {
+              application/json:
+                {
+                  schema: { $ref: '#/components/schemas/EngineerAffiliation' },
+                },
+            }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /auth/context:
     get:
       operationId: getAuthContext
@@ -790,6 +860,51 @@ components:
             engineerId: { type: string, format: uuid }
             updatedAt: { type: string, format: date-time }
             rowVersion: { type: integer, minimum: 1 }
+    EngineerAffiliationType:
+      {
+        type: string,
+        enum: [employee, freelance, partner_employee, subcontractor, other],
+      }
+    EngineerAffiliationInput:
+      type: object
+      required:
+        [
+          companyId,
+          affiliationType,
+          contractType,
+          startDate,
+          endDate,
+          isPrimary,
+          notes,
+        ]
+      properties:
+        companyId: { type: string, format: uuid }
+        affiliationType:
+          { $ref: '#/components/schemas/EngineerAffiliationType' }
+        contractType: { type: [string, 'null'], maxLength: 100 }
+        startDate: { type: string, format: date }
+        endDate: { type: [string, 'null'], format: date }
+        isPrimary: { type: boolean }
+        notes: { type: [string, 'null'], maxLength: 2000 }
+    EngineerAffiliation:
+      allOf:
+        - { $ref: '#/components/schemas/EngineerAffiliationInput' }
+        - type: object
+          required: [id, engineerId, updatedAt, rowVersion]
+          properties:
+            id: { type: string, format: uuid }
+            engineerId: { type: string, format: uuid }
+            updatedAt: { type: string, format: date-time }
+            rowVersion: { type: integer, minimum: 1 }
+    EngineerAffiliationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/EngineerAffiliation' },
+          }
     CompanyStatus: { type: string, enum: [prospect, active, inactive, blocked] }
     ContactStatus:
       { type: string, enum: [active, inactive, left_company, unknown] }
