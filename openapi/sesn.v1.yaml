@@ -7,6 +7,53 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /companies:
+    get:
+      operationId: listCompanies
+      parameters:
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, minLength: 1, maxLength: 100 },
+          }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/CompanyStatus' },
+          }
+        - { name: cursor, in: query, schema: { type: string } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Company list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /companies/{id}:
+    get:
+      operationId: getCompany
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Company detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /auth/context:
     get:
       operationId: getAuthContext
@@ -72,8 +119,18 @@ paths:
     delete:
       operationId: deleteProject
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: If-Match, in: header, required: true, schema: { type: string } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
       requestBody:
         required: true
         content:
@@ -142,7 +199,12 @@ paths:
     get:
       operationId: listProjectAudit
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       responses:
         '200':
           description: Project audit event summaries
@@ -155,6 +217,52 @@ components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
+    CompanyStatus: { type: string, enum: [prospect, active, inactive, blocked] }
+    Company:
+      type: object
+      required:
+        [
+          id,
+          managementNo,
+          legalName,
+          displayName,
+          corporateNumber,
+          postalCode,
+          prefecture,
+          city,
+          addressLine,
+          websiteUrl,
+          representativeName,
+          status,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        managementNo: { type: string }
+        legalName: { type: string }
+        displayName: { type: [string, 'null'] }
+        corporateNumber: { type: [string, 'null'] }
+        postalCode: { type: [string, 'null'] }
+        prefecture: { type: [string, 'null'] }
+        city: { type: [string, 'null'] }
+        addressLine: { type: [string, 'null'] }
+        websiteUrl: { type: [string, 'null'], format: uri }
+        representativeName: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/CompanyStatus' }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    CompanyList:
+      type: object
+      required: [items, page]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Company' } }
+        page:
+          type: object
+          required: [limit, nextCursor]
+          properties:
+            limit: { type: integer }
+            nextCursor: { type: ['string', 'null'] }
     AuthContext:
       type: object
       required: [requiresMfa]
@@ -219,7 +327,11 @@ components:
       type: object
       required: [items]
       properties:
-        items: { type: array, items: { $ref: '#/components/schemas/ProjectAuditEvent' } }
+        items:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/ProjectAuditEvent' },
+          }
     ProjectList:
       type: object
       required: [items, page]

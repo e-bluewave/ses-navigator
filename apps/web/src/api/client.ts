@@ -6,6 +6,9 @@ import type {
   ProjectInput,
   ProjectList,
   ProjectAuditList,
+  Company,
+  CompanyList,
+  ListCompaniesQuery,
 } from './generated.js';
 
 export interface ProjectsApi {
@@ -20,6 +23,8 @@ export interface ProjectsApi {
   ): Promise<Project>;
   deleteProject(id: string, rowVersion: number, reason: string): Promise<void>;
   listProjectAudit(id: string): Promise<ProjectAuditList>;
+  listCompanies(query?: ListCompaniesQuery): Promise<CompanyList>;
+  getCompany(id: string): Promise<Company>;
 }
 
 export class ApiClientError extends Error {
@@ -131,6 +136,18 @@ export function createProjectsApi(options: {
     },
     listProjectAudit(id) {
       return get<ProjectAuditList>(`/projects/${encodeURIComponent(id)}/audit`);
+    },
+    listCompanies(query = {}) {
+      const params = new URLSearchParams();
+      if (query.q) params.set('q', query.q);
+      if (query.status) params.set('status', query.status);
+      if (query.cursor) params.set('cursor', query.cursor);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return get<CompanyList>(`/companies${suffix}`);
+    },
+    getCompany(id) {
+      return get<Company>(`/companies/${encodeURIComponent(id)}`);
     },
   };
 }

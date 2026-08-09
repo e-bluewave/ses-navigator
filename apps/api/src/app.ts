@@ -11,11 +11,15 @@ import { SupabaseProjectRepository } from './modules/projects/project-repository
 import { registerProjectRoutes } from './modules/projects/project-routes.js';
 import type { AuthenticationService } from './plugins/authentication.js';
 import type { ProjectRepository } from './modules/projects/project-repository.js';
+import { SupabaseCompanyRepository } from './modules/companies/company-repository.js';
+import type { CompanyRepository } from './modules/companies/company-repository.js';
+import { registerCompanyRoutes } from './modules/companies/company-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
   projects?: ProjectRepository;
   authContext?: AuthContextRepository;
+  companies?: CompanyRepository;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -46,6 +50,10 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerProjectRoutes(
     app,
     dependencies.projects ?? new SupabaseProjectRepository(),
+  );
+  registerCompanyRoutes(
+    app,
+    dependencies.companies ?? new SupabaseCompanyRepository(),
   );
 
   return app;
