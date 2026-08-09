@@ -23,6 +23,8 @@ const sessionBody = {
   user: { id: 'user-1', email: 'user@example.com' },
 };
 
+const jwt = (aal: string) => `e30.${btoa(JSON.stringify({ aal }))}.signature`;
+
 describe('Supabase Auth service', () => {
   it('signs in and restores the stored session', async () => {
     const storage = memoryStorage();
@@ -47,6 +49,56 @@ describe('Supabase Auth service', () => {
     expect(init?.method).toBe('POST');
     expect(init?.headers).toMatchObject({ apikey: 'publishable-key' });
     await expect(auth.getSession()).resolves.toEqual(session);
+  });
+
+  it('enrolls and verifies a TOTP factor', async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ ...sessionBody, access_token: jwt('aal1') }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'factor-1',
+            totp: { qr_code: 'data:image/svg+xml,mfa', secret: 'SECRET' },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'challenge-1' }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ...sessionBody,
+            access_token: jwt('aal2'),
+            user: {
+              ...sessionBody.user,
+              factors: [{ id: 'factor-1', status: 'verified' }],
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    const auth = createSupabaseAuthService({
+      url: 'https://example.supabase.co',
+      publishableKey: 'key',
+      fetch: request,
+      storage: memoryStorage(),
+    });
+    await auth.signIn('user@example.com', 'password');
+    await expect(auth.enrollMfa()).resolves.toMatchObject({
+      factorId: 'factor-1',
+      secret: 'SECRET',
+    });
+    await expect(auth.verifyMfa('factor-1', '123456')).resolves.toMatchObject({
+      assuranceLevel: 'aal2',
+    });
   });
 
   it('refreshes an expiring session and rotates the refresh token', async () => {

@@ -5,6 +5,7 @@ import type { ProjectsApi } from '../api/client.js';
 import type { Project, ProjectStatus } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
+import { MfaPage } from '../auth/MfaPage.js';
 import type { AuthService } from '../auth/auth-client.js';
 
 const projectStatusLabels: Record<ProjectStatus, string> = {
@@ -48,6 +49,18 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
     [providedApi, session?.accessToken],
   );
   const [route, setRoute] = useState<Route>(currentRoute);
+  const [requiresMfa, setRequiresMfa] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (session === null) {
+      setRequiresMfa(null);
+      return;
+    }
+    void api
+      .getAuthContext()
+      .then((context) => setRequiresMfa(context.requiresMfa))
+      .catch(() => setRequiresMfa(true));
+  }, [api, session]);
 
   useEffect(() => {
     const handlePopState = () => setRoute(currentRoute());
@@ -67,6 +80,13 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       </main>
     );
   if (session === null) return <LoginPage />;
+  if (requiresMfa === null)
+    return (
+      <main className="auth-loading" role="status">
+        権限を確認しています…
+      </main>
+    );
+  if (requiresMfa && session.assuranceLevel !== 'aal2') return <MfaPage />;
 
   return (
     <main className="app-shell">

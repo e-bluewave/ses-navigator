@@ -24,6 +24,8 @@ const session: AuthSession = {
   refreshToken: 'refresh-token',
   expiresAt: 9_999_999_999,
   user: { id: 'user-1', email: 'user@example.com' },
+  assuranceLevel: 'aal1',
+  factors: [],
 };
 
 function auth(current: AuthSession | null = session): AuthService {
@@ -31,12 +33,23 @@ function auth(current: AuthSession | null = session): AuthService {
     getSession: vi.fn(() => Promise.resolve(current)),
     signIn: vi.fn(() => Promise.resolve(session)),
     signOut: vi.fn(() => Promise.resolve()),
+    enrollMfa: vi.fn(() =>
+      Promise.resolve({
+        factorId: 'factor-1',
+        qrCode: 'data:image/svg+xml,mfa',
+        secret: 'SECRET',
+      }),
+    ),
+    verifyMfa: vi.fn(() =>
+      Promise.resolve({ ...session, assuranceLevel: 'aal2' as const }),
+    ),
     onSessionChange: vi.fn(() => () => undefined),
   };
 }
 
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
+    getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
     listProjects: vi.fn(() =>
       Promise.resolve({
         items: [project],
@@ -122,5 +135,20 @@ describe('App', () => {
     render(<App auth={authentication} api={api()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'ログアウト' }));
     expect(authentication.signOut).toHaveBeenCalledOnce();
+  });
+
+  it('blocks an administrator at AAL1 and shows the MFA flow', async () => {
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getAuthContext: () => Promise.resolve({ requiresMfa: true }),
+        })}
+      />,
+    );
+    expect(
+      await screen.findByRole('heading', { name: '多要素認証' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('案件一覧')).not.toBeInTheDocument();
   });
 });
