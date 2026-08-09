@@ -16,6 +16,21 @@ const engineer = {
   updatedAt: '2026-08-09T00:00:00Z',
   rowVersion: 1,
 };
+const privateDetail = {
+  engineerId: engineer.id,
+  birthDate: '1990-01-01',
+  gender: 'undisclosed' as const,
+  personalEmail: 'engineer@example.com',
+  phone: '090-0000-0000',
+  postalCode: '100-0001',
+  prefecture: '東京都',
+  city: '千代田区',
+  addressLine: null,
+  emergencyContact: null,
+  notes: null,
+  updatedAt: '2026-08-09T00:00:00Z',
+  rowVersion: 1,
+};
 function repository(
   overrides: Partial<EngineerRepository> = {},
 ): EngineerRepository {
@@ -23,6 +38,8 @@ function repository(
     canRead: vi.fn(() => Promise.resolve(true)),
     canManage: vi.fn(() => Promise.resolve(true)),
     canReadAudit: vi.fn(() => Promise.resolve(true)),
+    canReadPrivate: vi.fn(() => Promise.resolve(true)),
+    canManagePrivate: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [engineer], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(engineer)),
     create: vi.fn(() => Promise.resolve(engineer)),
@@ -38,6 +55,10 @@ function repository(
           requestId: 'request-1',
         },
       ]),
+    ),
+    findPrivate: vi.fn(() => Promise.resolve(privateDetail)),
+    savePrivate: vi.fn(() =>
+      Promise.resolve({ ...privateDetail, rowVersion: 2 }),
     ),
     ...overrides,
   };
@@ -167,6 +188,74 @@ describe('engineer write API', () => {
       headers: { authorization: 'Bearer valid' },
     });
     expect(auditDenied.statusCode).toBe(403);
+  });
+});
+
+describe('engineer private detail API', () => {
+  const input = {
+    birthDate: '1990-01-01',
+    gender: 'undisclosed',
+    personalEmail: 'engineer@example.com',
+    phone: null,
+    postalCode: null,
+    prefecture: '東京都',
+    city: null,
+    addressLine: null,
+    emergencyContact: null,
+    notes: null,
+  };
+  it('reads and version-updates private data behind dedicated permissions', async () => {
+    const detail = await app().inject({
+      method: 'GET',
+      url: `/api/v1/engineers/${engineer.id}/private`,
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.headers.etag).toBe('"1"');
+    expect(detail.json()).not.toHaveProperty('createdBy');
+    const updated = await app().inject({
+      method: 'PUT',
+      url: `/api/v1/engineers/${engineer.id}/private`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+      payload: input,
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.headers.etag).toBe('"2"');
+  });
+  it('enforces private permissions, validation, and optimistic locking', async () => {
+    expect(
+      (
+        await app(
+          repository({ canReadPrivate: vi.fn(() => Promise.resolve(false)) }),
+        ).inject({
+          method: 'GET',
+          url: `/api/v1/engineers/${engineer.id}/private`,
+          headers: { authorization: 'Bearer valid' },
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect(
+      (
+        await app().inject({
+          method: 'PUT',
+          url: `/api/v1/engineers/${engineer.id}/private`,
+          headers: { authorization: 'Bearer valid' },
+          payload: input,
+        })
+      ).statusCode,
+    ).toBe(428);
+    expect(
+      (
+        await app(
+          repository({ savePrivate: vi.fn(() => Promise.resolve(null)) }),
+        ).inject({
+          method: 'PUT',
+          url: `/api/v1/engineers/${engineer.id}/private`,
+          headers: { authorization: 'Bearer valid', 'if-match': '"1"' },
+          payload: input,
+        })
+      ).statusCode,
+    ).toBe(409);
   });
 });
 

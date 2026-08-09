@@ -5,6 +5,7 @@ import type {
   EngineerRepository,
   EngineerStatus,
   EngineerInput,
+  EngineerPrivateInput,
 } from './engineer-repository.js';
 
 const uuid =
@@ -28,6 +29,60 @@ export function registerEngineerRoutes(
   app: FastifyInstance,
   repository: EngineerRepository,
 ) {
+  app.get(
+    '/api/v1/engineers/:id/private',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuid.test(id)) throw invalid('id must be a UUID');
+      if (!(await repository.canReadPrivate(request.user.accessToken)))
+        throw new ApiError(
+          403,
+          'forbidden',
+          'engineer.private.read permission is required',
+        );
+      const detail = await repository.findPrivate(request.user.accessToken, id);
+      if (!detail)
+        return reply.code(404).send({
+          error: {
+            code: 'not_found',
+            message: 'Engineer private detail was not found',
+            requestId: request.id,
+          },
+        });
+      return reply.header('etag', `"${detail.rowVersion}"`).send(detail);
+    },
+  );
+  app.put(
+    '/api/v1/engineers/:id/private',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuid.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parsePrivateIfMatch(request.headers['if-match']);
+      const input = parsePrivateInput(request.body);
+      if (!(await repository.canManagePrivate(request.user.accessToken)))
+        throw new ApiError(
+          403,
+          'forbidden',
+          'engineer.private.manage permission is required',
+        );
+      const detail = await repository.savePrivate(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        input,
+        request.id,
+      );
+      if (!detail)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Private detail was changed; reload and try again',
+        );
+      return reply.header('etag', `"${detail.rowVersion}"`).send(detail);
+    },
+  );
   app.post(
     '/api/v1/engineers',
     { preHandler: (request) => app.authenticate(request) },
@@ -178,6 +233,49 @@ export function registerEngineerRoutes(
       return engineer;
     },
   );
+}
+function parsePrivateIfMatch(value: string | undefined) {
+  const match = value?.match(/^(?:W\/)?"(0|[1-9]\d*)"$/);
+  if (!match)
+    throw new ApiError(428, 'precondition_required', 'If-Match is required');
+  return Number(match[1]);
+}
+function parsePrivateInput(value: unknown): EngineerPrivateInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const body = value as Record<string, unknown>;
+  const nullable = (name: string, max: number) => {
+    const v = body[name];
+    if (v === null || v === undefined || v === '') return null;
+    if (typeof v !== 'string' || v.length > max)
+      throw invalid(`${name} is invalid`);
+    return v.trim();
+  };
+  const birthDate = nullable('birthDate', 10);
+  if (
+    birthDate &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
+      Number.isNaN(Date.parse(`${birthDate}T00:00:00Z`)))
+  )
+    throw invalid('birthDate is invalid');
+  const gender = nullable('gender', 11);
+  if (gender && !['male', 'female', 'other', 'undisclosed'].includes(gender))
+    throw invalid('gender is invalid');
+  const personalEmail = nullable('personalEmail', 320);
+  if (personalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalEmail))
+    throw invalid('personalEmail is invalid');
+  return {
+    birthDate,
+    gender: gender as EngineerPrivateInput['gender'],
+    personalEmail,
+    phone: nullable('phone', 50),
+    postalCode: nullable('postalCode', 8),
+    prefecture: nullable('prefecture', 100),
+    city: nullable('city', 200),
+    addressLine: nullable('addressLine', 500),
+    emergencyContact: nullable('emergencyContact', 500),
+    notes: nullable('notes', 2000),
+  };
 }
 async function requireManage(repository: EngineerRepository, token: string) {
   if (!(await repository.canManage(token)))

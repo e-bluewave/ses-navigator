@@ -99,6 +99,51 @@ describe('generated projects API client', () => {
       { headers: { authorization: 'Bearer access-token' } },
     );
   });
+  it('reads and version-updates engineer private details', async () => {
+    const request = vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ engineerId: 'engineer-1', rowVersion: 2 }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    await api.getEngineerPrivate('engineer-1');
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/engineers/engineer-1/private',
+      { headers: { authorization: 'Bearer access-token' } },
+    );
+    const input = {
+      birthDate: null,
+      gender: null,
+      personalEmail: 'engineer@example.com',
+      phone: null,
+      postalCode: null,
+      prefecture: null,
+      city: null,
+      addressLine: null,
+      emergencyContact: null,
+      notes: null,
+    };
+    await api.updateEngineerPrivate('engineer-1', 1, input);
+    expect(request).toHaveBeenLastCalledWith(
+      '/api/v1/engineers/engineer-1/private',
+      {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer access-token',
+          'if-match': '"1"',
+        },
+        body: JSON.stringify(input),
+      },
+    );
+  });
   it('sends contact create and versioned update requests', async () => {
     const request = vi.fn(() =>
       Promise.resolve(

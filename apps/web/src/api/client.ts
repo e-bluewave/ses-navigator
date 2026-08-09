@@ -21,6 +21,8 @@ import type {
   EngineerList,
   EngineerAuditList,
   ListEngineersQuery,
+  EngineerPrivateDetail,
+  EngineerPrivateInput,
 } from './generated.js';
 
 export interface ProjectsApi {
@@ -71,6 +73,12 @@ export interface ProjectsApi {
   ): Promise<Engineer>;
   deleteEngineer(id: string, rowVersion: number, reason: string): Promise<void>;
   listEngineerAudit(id: string): Promise<EngineerAuditList>;
+  getEngineerPrivate(id: string): Promise<EngineerPrivateDetail>;
+  updateEngineerPrivate(
+    id: string,
+    rowVersion: number,
+    input: EngineerPrivateInput,
+  ): Promise<EngineerPrivateDetail>;
 }
 
 export class ApiClientError extends Error {
@@ -292,6 +300,19 @@ export function createProjectsApi(options: {
     listEngineerAudit(id) {
       return get<EngineerAuditList>(
         `/engineers/${encodeURIComponent(id)}/audit`,
+      );
+    },
+    getEngineerPrivate(id) {
+      return get<EngineerPrivateDetail>(
+        `/engineers/${encodeURIComponent(id)}/private`,
+      );
+    },
+    updateEngineerPrivate(id, rowVersion, input) {
+      return send<EngineerPrivateDetail>(
+        `/engineers/${encodeURIComponent(id)}/private`,
+        'PUT',
+        input,
+        rowVersion,
       );
     },
   };

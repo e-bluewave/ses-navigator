@@ -38,11 +38,33 @@ export interface EngineerAuditEvent {
   action: string;
   requestId: string | null;
 }
+export type EngineerGender = 'male' | 'female' | 'other' | 'undisclosed';
+export interface EngineerPrivateDetail {
+  engineerId: string;
+  birthDate: string | null;
+  gender: EngineerGender | null;
+  personalEmail: string | null;
+  phone: string | null;
+  postalCode: string | null;
+  prefecture: string | null;
+  city: string | null;
+  addressLine: string | null;
+  emergencyContact: string | null;
+  notes: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerPrivateInput = Omit<
+  EngineerPrivateDetail,
+  'engineerId' | 'updatedAt' | 'rowVersion'
+>;
 
 export interface EngineerRepository {
   canRead(token: string): Promise<boolean>;
   canManage(token: string): Promise<boolean>;
   canReadAudit(token: string): Promise<boolean>;
+  canReadPrivate(token: string): Promise<boolean>;
+  canManagePrivate(token: string): Promise<boolean>;
   list(
     token: string,
     query: {
@@ -72,6 +94,14 @@ export interface EngineerRepository {
     requestId: string,
   ): Promise<boolean>;
   listAudit(token: string, id: string): Promise<EngineerAuditEvent[]>;
+  findPrivate(token: string, id: string): Promise<EngineerPrivateDetail | null>;
+  savePrivate(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: EngineerPrivateInput,
+    requestId: string,
+  ): Promise<EngineerPrivateDetail | null>;
 }
 
 type Row = {
@@ -117,6 +147,19 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     const response = await this.request(token, '/rpc/has_permission', {
       method: 'POST',
       body: JSON.stringify({ required_permission: 'audit.read' }),
+    });
+    return (await response.json()) === true;
+  }
+  async canReadPrivate(token: string) {
+    return this.hasPermission(token, 'engineer.private.read');
+  }
+  async canManagePrivate(token: string) {
+    return this.hasPermission(token, 'engineer.private.manage');
+  }
+  private async hasPermission(token: string, requiredPermission: string) {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: requiredPermission }),
     });
     return (await response.json()) === true;
   }
@@ -254,6 +297,38 @@ export class SupabaseEngineerRepository implements EngineerRepository {
       requestId: row.request_id,
     }));
   }
+  async findPrivate(token: string, id: string) {
+    const response = await this.request(
+      token,
+      '/rpc/get_engineer_private_detail',
+      { method: 'POST', body: JSON.stringify({ p_engineer_id: id }) },
+    );
+    const row = (await response.json()) as PrivateRow | null;
+    return row ? mapPrivate(row) : null;
+  }
+  async savePrivate(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: EngineerPrivateInput,
+    requestId: string,
+  ) {
+    const response = await this.request(
+      token,
+      '/rpc/upsert_engineer_private_detail',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          p_engineer_id: id,
+          p_row_version: rowVersion,
+          p_detail: toPrivateRow(input),
+          p_request_id: requestId,
+        }),
+      },
+    );
+    const row = (await response.json()) as PrivateRow | null;
+    return row ? mapPrivate(row) : null;
+  }
   private async request(token: string, path: string, init: RequestInit = {}) {
     const response = await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
@@ -271,6 +346,53 @@ export class SupabaseEngineerRepository implements EngineerRepository {
       throw new Error(`Supabase Data API failed with ${response.status}`);
     return response;
   }
+}
+
+type PrivateRow = {
+  engineer_id: string;
+  birth_date: string | null;
+  gender: EngineerGender | null;
+  personal_email: string | null;
+  phone: string | null;
+  postal_code: string | null;
+  prefecture: string | null;
+  city: string | null;
+  address_line: string | null;
+  emergency_contact: string | null;
+  notes: string | null;
+  updated_at: string;
+  row_version: number;
+};
+function mapPrivate(r: PrivateRow): EngineerPrivateDetail {
+  return {
+    engineerId: r.engineer_id,
+    birthDate: r.birth_date,
+    gender: r.gender,
+    personalEmail: r.personal_email,
+    phone: r.phone,
+    postalCode: r.postal_code,
+    prefecture: r.prefecture,
+    city: r.city,
+    addressLine: r.address_line,
+    emergencyContact: r.emergency_contact,
+    notes: r.notes,
+    updatedAt: r.updated_at,
+    rowVersion: r.row_version,
+  };
+}
+function toPrivateRow(i: EngineerPrivateInput) {
+  return {
+    birth_date: i.birthDate,
+    gender: i.gender,
+    personal_email: i.personalEmail,
+    phone: i.phone,
+    postal_code: i.postalCode,
+    prefecture: i.prefecture,
+    city: i.city,
+    address_line: i.addressLine,
+    emergency_contact: i.emergencyContact,
+    notes: i.notes,
+  };
 }
 
 function toWriteRow(input: EngineerInput, tenantId?: string) {

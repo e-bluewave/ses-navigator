@@ -18,6 +18,8 @@ import type {
   EngineerInput,
   EngineerStatus,
   AvailabilityStatus,
+  EngineerPrivateDetail,
+  EngineerPrivateInput,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -520,6 +522,10 @@ function EngineerDetail({
     Awaited<ReturnType<ProjectsApi['listEngineerAudit']>>['items'] | null
   >(null);
   const [auditError, setAuditError] = useState(false);
+  const [privateDetail, setPrivateDetail] =
+    useState<EngineerPrivateDetail | null>(null);
+  const [showPrivate, setShowPrivate] = useState(false);
+  const [privateError, setPrivateError] = useState(false);
   useEffect(() => {
     let active = true;
     api
@@ -556,6 +562,18 @@ function EngineerDetail({
       setAuditEvents((await api.listEngineerAudit(id)).items);
     } catch {
       setAuditError(true);
+    }
+  }
+  async function loadPrivate() {
+    setPrivateError(false);
+    try {
+      setPrivateDetail(await api.getEngineerPrivate(id));
+      setShowPrivate(true);
+    } catch (reason) {
+      if (reason instanceof ApiClientError && reason.status === 404) {
+        setPrivateDetail(null);
+        setShowPrivate(true);
+      } else setPrivateError(true);
     }
   }
   return (
@@ -609,6 +627,12 @@ function EngineerDetail({
               監査履歴
             </button>
             <button
+              className="secondary-button"
+              onClick={() => void loadPrivate()}
+            >
+              機密個人情報
+            </button>
+            <button
               className="danger-button"
               onClick={() => setShowDelete(true)}
             >
@@ -654,6 +678,19 @@ function EngineerDetail({
             <p className="error" role="alert">
               監査履歴を表示する権限がないか、取得に失敗しました。
             </p>
+          ) : null}
+          {privateError ? (
+            <p className="error" role="alert">
+              機密個人情報を表示する権限がないか、取得に失敗しました。
+            </p>
+          ) : null}
+          {showPrivate ? (
+            <EngineerPrivateForm
+              api={api}
+              engineerId={id}
+              detail={privateDetail}
+              onSaved={setPrivateDetail}
+            />
           ) : null}
           {auditEvents ? (
             <section
@@ -1694,6 +1731,185 @@ function CompanyDetail({
           ) : null}
         </>
       )}
+    </section>
+  );
+}
+
+function EngineerPrivateForm({
+  api,
+  engineerId,
+  detail,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  engineerId: string;
+  detail: EngineerPrivateDetail | null;
+  onSaved: (detail: EngineerPrivateDetail) => void;
+}) {
+  const empty: EngineerPrivateInput = {
+    birthDate: null,
+    gender: null,
+    personalEmail: null,
+    phone: null,
+    postalCode: null,
+    prefecture: null,
+    city: null,
+    addressLine: null,
+    emergencyContact: null,
+    notes: null,
+  };
+  const [input, setInput] = useState<EngineerPrivateInput>(
+    detail
+      ? {
+          birthDate: detail.birthDate,
+          gender: detail.gender,
+          personalEmail: detail.personalEmail,
+          phone: detail.phone,
+          postalCode: detail.postalCode,
+          prefecture: detail.prefecture,
+          city: detail.city,
+          addressLine: detail.addressLine,
+          emergencyContact: detail.emergencyContact,
+          notes: detail.notes,
+        }
+      : empty,
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => {
+    if (detail)
+      setInput({
+        birthDate: detail.birthDate,
+        gender: detail.gender,
+        personalEmail: detail.personalEmail,
+        phone: detail.phone,
+        postalCode: detail.postalCode,
+        prefecture: detail.prefecture,
+        city: detail.city,
+        addressLine: detail.addressLine,
+        emergencyContact: detail.emergencyContact,
+        notes: detail.notes,
+      });
+  }, [detail]);
+  const set = (name: keyof EngineerPrivateInput, value: string) =>
+    setInput((current) => ({
+      ...current,
+      [name]: value === '' ? null : value,
+    }));
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      onSaved(
+        await api.updateEngineerPrivate(
+          engineerId,
+          detail?.rowVersion ?? 0,
+          input,
+        ),
+      );
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <section className="audit-panel" aria-labelledby="engineer-private-heading">
+      <h3 id="engineer-private-heading">機密個人情報</h3>
+      <p>専用権限を持つ担当者だけが参照・編集できます。</p>
+      {error ? <ErrorNotice error={error} subject="機密個人情報" /> : null}
+      <form className="project-form" onSubmit={(event) => void submit(event)}>
+        <label>
+          生年月日
+          <input
+            type="date"
+            value={input.birthDate ?? ''}
+            onChange={(e) => set('birthDate', e.target.value)}
+          />
+        </label>
+        <label>
+          性別
+          <select
+            value={input.gender ?? ''}
+            onChange={(e) => set('gender', e.target.value)}
+          >
+            <option value="">未登録</option>
+            <option value="male">男性</option>
+            <option value="female">女性</option>
+            <option value="other">その他</option>
+            <option value="undisclosed">非開示</option>
+          </select>
+        </label>
+        <label>
+          個人メール
+          <input
+            type="email"
+            maxLength={320}
+            value={input.personalEmail ?? ''}
+            onChange={(e) => set('personalEmail', e.target.value)}
+          />
+        </label>
+        <label>
+          電話
+          <input
+            maxLength={50}
+            value={input.phone ?? ''}
+            onChange={(e) => set('phone', e.target.value)}
+          />
+        </label>
+        <label>
+          郵便番号
+          <input
+            maxLength={8}
+            value={input.postalCode ?? ''}
+            onChange={(e) => set('postalCode', e.target.value)}
+          />
+        </label>
+        <label>
+          都道府県
+          <input
+            maxLength={100}
+            value={input.prefecture ?? ''}
+            onChange={(e) => set('prefecture', e.target.value)}
+          />
+        </label>
+        <label>
+          市区町村
+          <input
+            maxLength={200}
+            value={input.city ?? ''}
+            onChange={(e) => set('city', e.target.value)}
+          />
+        </label>
+        <label>
+          住所
+          <input
+            maxLength={500}
+            value={input.addressLine ?? ''}
+            onChange={(e) => set('addressLine', e.target.value)}
+          />
+        </label>
+        <label>
+          緊急連絡先
+          <textarea
+            maxLength={500}
+            value={input.emergencyContact ?? ''}
+            onChange={(e) => set('emergencyContact', e.target.value)}
+          />
+        </label>
+        <label>
+          機密メモ
+          <textarea
+            maxLength={2000}
+            value={input.notes ?? ''}
+            onChange={(e) => set('notes', e.target.value)}
+          />
+        </label>
+        <button className="primary-button" disabled={saving}>
+          {saving ? '保存中…' : '機密個人情報を保存'}
+        </button>
+      </form>
     </section>
   );
 }
