@@ -1,4 +1,5 @@
 import { requiredEnv } from '../../plugins/authentication.js';
+import { ApiError } from '../../shared/errors.js';
 
 export type EngineerStatus =
   'candidate' | 'active' | 'inactive' | 'retired' | 'blocked';
@@ -19,9 +20,21 @@ export interface Engineer {
   updatedAt: string;
   rowVersion: number;
 }
+export interface EngineerInput {
+  managementNo: string;
+  familyName: string;
+  givenName: string;
+  displayName: string | null;
+  status: EngineerStatus;
+  availabilityStatus: AvailabilityStatus;
+  availableFrom: string | null;
+  nearestStation: string | null;
+  summary: string | null;
+}
 
 export interface EngineerRepository {
   canRead(token: string): Promise<boolean>;
+  canManage(token: string): Promise<boolean>;
   list(
     token: string,
     query: {
@@ -36,6 +49,13 @@ export interface EngineerRepository {
     nextCursor: { updatedAt: string; id: string } | null;
   }>;
   findById(token: string, id: string): Promise<Engineer | null>;
+  create(token: string, input: EngineerInput): Promise<Engineer>;
+  update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: EngineerInput,
+  ): Promise<Engineer | null>;
 }
 
 type Row = {
@@ -60,6 +80,13 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     const response = await this.request(token, '/rpc/has_permission', {
       method: 'POST',
       body: JSON.stringify({ required_permission: 'engineer.read' }),
+    });
+    return (await response.json()) === true;
+  }
+  async canManage(token: string) {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'engineer.manage' }),
     });
     return (await response.json()) === true;
   }
@@ -121,6 +148,44 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     )[0];
     return row ? map(row) : null;
   }
+  async create(token: string, input: EngineerInput) {
+    const tenantResponse = await this.request(token, '/rpc/current_tenant_id', {
+      method: 'POST',
+      body: '{}',
+    });
+    const tenantId = (await tenantResponse.json()) as string | null;
+    if (!tenantId)
+      throw new ApiError(403, 'forbidden', 'An active tenant is required');
+    const response = await this.request(token, '/engineers', {
+      method: 'POST',
+      headers: { prefer: 'return=representation' },
+      body: JSON.stringify(toWriteRow(input, tenantId)),
+    });
+    return map(((await response.json()) as Row[])[0]!);
+  }
+  async update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: EngineerInput,
+  ) {
+    const params = new URLSearchParams({
+      id: `eq.${id}`,
+      row_version: `eq.${rowVersion}`,
+      deleted_at: 'is.null',
+    });
+    const response = await this.request(
+      token,
+      `/engineers?${params.toString()}`,
+      {
+        method: 'PATCH',
+        headers: { prefer: 'return=representation' },
+        body: JSON.stringify(toWriteRow(input)),
+      },
+    );
+    const row = ((await response.json()) as Row[])[0];
+    return row ? map(row) : null;
+  }
   private async request(token: string, path: string, init: RequestInit = {}) {
     const response = await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
@@ -138,6 +203,23 @@ export class SupabaseEngineerRepository implements EngineerRepository {
       throw new Error(`Supabase Data API failed with ${response.status}`);
     return response;
   }
+}
+
+function toWriteRow(input: EngineerInput, tenantId?: string) {
+  const name = `${input.familyName} ${input.givenName}`;
+  return {
+    ...(tenantId ? { tenant_id: tenantId } : {}),
+    management_no: input.managementNo,
+    family_name: input.familyName,
+    given_name: input.givenName,
+    display_name: input.displayName,
+    name_normalized: name.normalize('NFKC').toLowerCase(),
+    status: input.status,
+    availability_status: input.availabilityStatus,
+    available_from: input.availableFrom,
+    nearest_station: input.nearestStation,
+    summary: input.summary,
+  };
 }
 
 function map(row: Row): Engineer {

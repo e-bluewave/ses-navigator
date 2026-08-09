@@ -26,6 +26,8 @@ const requiredContractFragments = [
   'operationId: listCompanyContactAudit',
   'operationId: listEngineers',
   'operationId: getEngineer',
+  'operationId: createEngineer',
+  'operationId: updateEngineer',
   'enum: [draft, open, on_hold, closed, cancelled]',
   'enum: [recruiting, paused, filled, ended]',
   'required: [items, page]',
@@ -73,6 +75,17 @@ export interface Engineer {
 export interface EngineerList {
   items: Engineer[];
   page: { limit: number; nextCursor: string | null };
+}
+export interface EngineerInput {
+  managementNo: string;
+  familyName: string;
+  givenName: string;
+  displayName: string | null;
+  status: EngineerStatus;
+  availabilityStatus: AvailabilityStatus;
+  availableFrom: string | null;
+  nearestStation: string | null;
+  summary: string | null;
 }
 export interface ListEngineersQuery {
   q?: string;

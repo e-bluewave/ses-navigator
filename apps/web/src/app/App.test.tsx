@@ -146,6 +146,8 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
     getEngineer: vi.fn(() => Promise.reject(new Error('not configured'))),
+    createEngineer: vi.fn(() => Promise.resolve(engineer)),
+    updateEngineer: vi.fn(() => Promise.resolve(engineer)),
     ...overrides,
   };
 }
@@ -171,6 +173,38 @@ describe('App', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: 'EN-000001' }));
     expect(await screen.findByText('TypeScriptエンジニア')).toBeInTheDocument();
+  });
+  it('creates an engineer from the engineer list', async () => {
+    const createEngineer = vi.fn(() => Promise.resolve(engineer));
+    window.history.replaceState({}, '', '/engineers');
+    render(<App auth={auth()} api={api({ createEngineer })} />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: '技術者を登録' }),
+    );
+    expect(
+      await screen.findByRole('heading', { name: '技術者登録' }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('管理番号'), {
+      target: { value: 'EN-000001' },
+    });
+    fireEvent.change(screen.getByLabelText('姓'), {
+      target: { value: '青波' },
+    });
+    fireEvent.change(screen.getByLabelText('名'), {
+      target: { value: '太郎' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() =>
+      expect(createEngineer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          managementNo: 'EN-000001',
+          familyName: '青波',
+          givenName: '太郎',
+          status: 'candidate',
+          availabilityStatus: 'unknown',
+        }),
+      ),
+    );
   });
   it('navigates to the company list and detail', async () => {
     const getCompany = vi.fn(() => Promise.resolve(company));
