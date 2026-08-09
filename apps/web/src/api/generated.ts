@@ -44,6 +44,16 @@ export interface EngineerInput {
   nearestStation: string | null;
   summary: string | null;
 }
+export interface EngineerAuditEvent {
+  id: string;
+  occurredAt: string;
+  actorUserId: string | null;
+  action: string;
+  requestId: string | null;
+}
+export interface EngineerAuditList {
+  items: EngineerAuditEvent[];
+}
 export interface ListEngineersQuery {
   q?: string;
   status?: EngineerStatus;

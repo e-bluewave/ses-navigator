@@ -31,10 +31,18 @@ export interface EngineerInput {
   nearestStation: string | null;
   summary: string | null;
 }
+export interface EngineerAuditEvent {
+  id: string;
+  occurredAt: string;
+  actorUserId: string | null;
+  action: string;
+  requestId: string | null;
+}
 
 export interface EngineerRepository {
   canRead(token: string): Promise<boolean>;
   canManage(token: string): Promise<boolean>;
+  canReadAudit(token: string): Promise<boolean>;
   list(
     token: string,
     query: {
@@ -56,6 +64,14 @@ export interface EngineerRepository {
     rowVersion: number,
     input: EngineerInput,
   ): Promise<Engineer | null>;
+  softDelete(
+    token: string,
+    id: string,
+    rowVersion: number,
+    reason: string,
+    requestId: string,
+  ): Promise<boolean>;
+  listAudit(token: string, id: string): Promise<EngineerAuditEvent[]>;
 }
 
 type Row = {
@@ -72,6 +88,13 @@ type Row = {
   updated_at: string;
   row_version: number;
 };
+type AuditRow = {
+  id: string;
+  occurred_at: string;
+  actor_user_id: string | null;
+  action: string;
+  request_id: string | null;
+};
 const select =
   'id,management_no,family_name,given_name,display_name,status,availability_status,available_from,nearest_station,summary,updated_at,row_version';
 
@@ -87,6 +110,13 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     const response = await this.request(token, '/rpc/has_permission', {
       method: 'POST',
       body: JSON.stringify({ required_permission: 'engineer.manage' }),
+    });
+    return (await response.json()) === true;
+  }
+  async canReadAudit(token: string) {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'audit.read' }),
     });
     return (await response.json()) === true;
   }
@@ -185,6 +215,44 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     );
     const row = ((await response.json()) as Row[])[0];
     return row ? map(row) : null;
+  }
+  async softDelete(
+    token: string,
+    id: string,
+    rowVersion: number,
+    reason: string,
+    requestId: string,
+  ) {
+    const response = await this.request(token, '/rpc/soft_delete_engineer', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_engineer_id: id,
+        p_row_version: rowVersion,
+        p_delete_reason: reason,
+        p_request_id: requestId,
+      }),
+    });
+    return (await response.json()) === true;
+  }
+  async listAudit(token: string, id: string): Promise<EngineerAuditEvent[]> {
+    const params = new URLSearchParams({
+      select: 'id,occurred_at,actor_user_id,action,request_id',
+      resource_type: 'eq.engineer',
+      resource_id: `eq.${id}`,
+      order: 'occurred_at.desc',
+      limit: '50',
+    });
+    const response = await this.request(
+      token,
+      `/audit_event_summaries?${params.toString()}`,
+    );
+    return ((await response.json()) as AuditRow[]).map((row) => ({
+      id: row.id,
+      occurredAt: row.occurred_at,
+      actorUserId: row.actor_user_id,
+      action: row.action,
+      requestId: row.request_id,
+    }));
   }
   private async request(token: string, path: string, init: RequestInit = {}) {
     const response = await fetch(

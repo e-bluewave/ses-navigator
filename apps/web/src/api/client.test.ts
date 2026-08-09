@@ -72,6 +72,33 @@ describe('generated projects API client', () => {
       body: JSON.stringify(input),
     });
   });
+  it('soft-deletes an engineer and reads its audit trail', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [] }), { status: 200 }),
+      );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    await api.deleteEngineer('engineer-1', 3, '重複登録のため');
+    expect(request).toHaveBeenNthCalledWith(1, '/api/v1/engineers/engineer-1', {
+      method: 'DELETE',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer access-token',
+        'if-match': '"3"',
+      },
+      body: JSON.stringify({ reason: '重複登録のため' }),
+    });
+    await api.listEngineerAudit('engineer-1');
+    expect(request).toHaveBeenLastCalledWith(
+      '/api/v1/engineers/engineer-1/audit',
+      { headers: { authorization: 'Bearer access-token' } },
+    );
+  });
   it('sends contact create and versioned update requests', async () => {
     const request = vi.fn(() =>
       Promise.resolve(

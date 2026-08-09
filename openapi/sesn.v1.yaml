@@ -339,6 +339,33 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /engineers/{id}:
+    delete:
+      operationId: deleteEngineer
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EngineerDeleteInput' }
+      responses:
+        '204': { description: Engineer soft-deleted and audited }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     put:
       operationId: updateEngineer
       parameters:
@@ -389,6 +416,24 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /engineers/{id}/audit:
+    get:
+      operationId: listEngineerAudit
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Engineer audit event summaries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EngineerAuditList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /auth/context:
     get:
       operationId: getAuthContext
@@ -619,6 +664,27 @@ components:
         availableFrom: { type: [string, 'null'], format: date }
         nearestStation: { type: [string, 'null'], maxLength: 200 }
         summary: { type: [string, 'null'], maxLength: 2000 }
+    EngineerDeleteInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    EngineerAuditEvent:
+      type: object
+      required: [id, occurredAt, actorUserId, action, requestId]
+      properties:
+        id: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        actorUserId: { type: [string, 'null'], format: uuid }
+        action: { type: string }
+        requestId: { type: [string, 'null'] }
+    EngineerAuditList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/EngineerAuditEvent' }
     CompanyStatus: { type: string, enum: [prospect, active, inactive, blocked] }
     ContactStatus:
       { type: string, enum: [active, inactive, left_company, unknown] }

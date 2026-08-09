@@ -148,6 +148,8 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     getEngineer: vi.fn(() => Promise.reject(new Error('not configured'))),
     createEngineer: vi.fn(() => Promise.resolve(engineer)),
     updateEngineer: vi.fn(() => Promise.resolve(engineer)),
+    deleteEngineer: vi.fn(() => Promise.resolve()),
+    listEngineerAudit: vi.fn(() => Promise.resolve({ items: [] })),
     ...overrides,
   };
 }
@@ -203,6 +205,47 @@ describe('App', () => {
           status: 'candidate',
           availabilityStatus: 'unknown',
         }),
+      ),
+    );
+  });
+  it('soft-deletes an engineer and shows its audit trail', async () => {
+    window.history.replaceState({}, '', `/engineers/${engineer.id}`);
+    const deleteEngineer = vi.fn(() => Promise.resolve());
+    const listEngineerAudit = vi.fn(() =>
+      Promise.resolve({
+        items: [
+          {
+            id: '66666666-6666-4666-8666-666666666666',
+            occurredAt: '2026-08-09T07:00:00Z',
+            actorUserId: null,
+            action: 'engineer.updated',
+            requestId: null,
+          },
+        ],
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getEngineer: () => Promise.resolve(engineer),
+          deleteEngineer,
+          listEngineerAudit,
+        })}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '監査履歴' }));
+    expect(await screen.findByText('engineer.updated')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '削除' }));
+    fireEvent.change(screen.getByLabelText('削除理由'), {
+      target: { value: '重複登録のため' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '論理削除する' }));
+    await waitFor(() =>
+      expect(deleteEngineer).toHaveBeenCalledWith(
+        engineer.id,
+        engineer.rowVersion,
+        '重複登録のため',
       ),
     );
   });
