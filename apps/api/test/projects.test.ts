@@ -35,10 +35,13 @@ function repository(
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
     canManage: vi.fn(() => Promise.resolve(true)),
+    canReadAudit: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [project], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(project)),
     create: vi.fn(() => Promise.resolve(project)),
     update: vi.fn(() => Promise.resolve(project)),
+    softDelete: vi.fn(() => Promise.resolve(true)),
+    listAudit: vi.fn(() => Promise.resolve([])),
     ...overrides,
   };
 }
@@ -200,5 +203,69 @@ describe('project write API', () => {
       payload: body,
     });
     expect(conflict.statusCode).toBe(409);
+  });
+
+  it('soft-deletes with a reason and optimistic locking', async () => {
+    const softDelete = vi.fn(() => Promise.resolve(true));
+    const response = await app(repository({ softDelete })).inject({
+      method: 'DELETE',
+      url: `/api/v1/projects/${project.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: { reason: '重複登録のため' },
+    });
+    expect(response.statusCode).toBe(204);
+    expect(softDelete).toHaveBeenCalledWith(
+      'valid',
+      project.id,
+      2,
+      '重複登録のため',
+      expect.any(String),
+    );
+  });
+
+  it('rejects invalid deletion and reports a stale version', async () => {
+    const invalid = await app().inject({
+      method: 'DELETE',
+      url: `/api/v1/projects/${project.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: { reason: '' },
+    });
+    expect(invalid.statusCode).toBe(400);
+    const conflict = await app(
+      repository({ softDelete: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'DELETE',
+      url: `/api/v1/projects/${project.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: { reason: '不要' },
+    });
+    expect(conflict.statusCode).toBe(409);
+  });
+
+  it('returns project audit events only with audit.read', async () => {
+    const denied = await app(
+      repository({ canReadAudit: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'GET',
+      url: `/api/v1/projects/${project.id}/audit`,
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(denied.statusCode).toBe(403);
+    const event = {
+      id: '22222222-2222-4222-8222-222222222222',
+      occurredAt: '2026-08-09T04:00:00Z',
+      actorUserId: '33333333-3333-4333-8333-333333333333',
+      action: 'project.soft_deleted',
+      requestId: 'request-1',
+    };
+    const allowed = await app(
+      repository({ listAudit: vi.fn(() => Promise.resolve([event])) }),
+    ).inject({
+      method: 'GET',
+      url: `/api/v1/projects/${project.id}/audit`,
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(allowed.statusCode).toBe(200);
+    expect(allowed.json()).toEqual({ items: [event] });
   });
 });

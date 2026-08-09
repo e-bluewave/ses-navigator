@@ -56,6 +56,49 @@ export function registerProjectRoutes(
       return reply.header('etag', `"${project.rowVersion}"`).send(project);
     },
   );
+  app.delete(
+    '/api/v1/projects/:id',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const reason = parseDeleteReason(request.body);
+      await requireProjectManage(repository, request.user.accessToken);
+      const deleted = await repository.softDelete(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        reason,
+        request.id,
+      );
+      if (!deleted)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Project was changed or is unavailable; reload and try again',
+        );
+      return reply.code(204).send();
+    },
+  );
+
+  app.get(
+    '/api/v1/projects/:id/audit',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      if (!(await repository.canReadAudit(request.user.accessToken)))
+        throw new ApiError(
+          403,
+          'forbidden',
+          'audit.read permission is required',
+        );
+      return {
+        items: await repository.listAudit(request.user.accessToken, id),
+      };
+    },
+  );
   app.get(
     '/api/v1/projects',
     { preHandler: (request) => app.authenticate(request) },
@@ -169,6 +212,19 @@ function parseDate(value: unknown, name: string): string | null {
   )
     throw invalid(`${name} is invalid`);
   return value;
+}
+
+function parseDeleteReason(value: unknown): string {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const reason = (value as Record<string, unknown>).reason;
+  if (
+    typeof reason !== 'string' ||
+    reason.trim().length < 1 ||
+    reason.length > 500
+  )
+    throw invalid('reason must be between 1 and 500 characters');
+  return reason.trim();
 }
 
 function parseIfMatch(value: string | undefined): number {

@@ -329,6 +329,44 @@ dd {
 .error small {
   font-family: ui-monospace, monospace;
 }
+.danger-button {
+  padding: 0.72rem 1rem;
+  border: 1px solid #a62d38;
+  border-radius: 0.55rem;
+  background: #b63c45;
+  color: white;
+  font-weight: 750;
+  cursor: pointer;
+}
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.delete-panel,
+.audit-panel {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid #dbe4e5;
+  border-radius: 0.8rem;
+  background: #f8fafb;
+}
+.delete-panel label {
+  display: grid;
+  gap: 0.45rem;
+  margin: 1rem 0;
+  font-weight: 700;
+}
+.audit-panel ul {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+.audit-panel li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .empty {
   padding: 3rem 1rem;
   color: #65737b;

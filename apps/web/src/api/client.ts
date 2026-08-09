@@ -5,6 +5,7 @@ import type {
   Project,
   ProjectInput,
   ProjectList,
+  ProjectAuditList,
 } from './generated.js';
 
 export interface ProjectsApi {
@@ -17,6 +18,8 @@ export interface ProjectsApi {
     rowVersion: number,
     input: ProjectInput,
   ): Promise<Project>;
+  deleteProject(id: string, rowVersion: number, reason: string): Promise<void>;
+  listProjectAudit(id: string): Promise<ProjectAuditList>;
 }
 
 export class ApiClientError extends Error {
@@ -59,7 +62,7 @@ export function createProjectsApi(options: {
 
   async function send<T>(
     path: string,
-    method: 'POST' | 'PUT',
+    method: 'POST' | 'PUT' | 'DELETE',
     body: unknown,
     rowVersion?: number,
   ): Promise<T> {
@@ -84,7 +87,9 @@ export function createProjectsApi(options: {
         error?.error.requestId,
       );
     }
-    return response.json() as Promise<T>;
+    return response.status === 204
+      ? (undefined as T)
+      : (response.json() as Promise<T>);
   }
 
   return {
@@ -115,6 +120,17 @@ export function createProjectsApi(options: {
         input,
         rowVersion,
       );
+    },
+    deleteProject(id, rowVersion, reason) {
+      return send<void>(
+        `/projects/${encodeURIComponent(id)}`,
+        'DELETE',
+        { reason },
+        rowVersion,
+      );
+    },
+    listProjectAudit(id) {
+      return get<ProjectAuditList>(`/projects/${encodeURIComponent(id)}/audit`);
     },
   };
 }

@@ -62,6 +62,8 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     getProject: vi.fn(() => Promise.resolve(project)),
     createProject: vi.fn(() => Promise.resolve(project)),
     updateProject: vi.fn(() => Promise.resolve(project)),
+    deleteProject: vi.fn(() => Promise.resolve()),
+    listProjectAudit: vi.fn(() => Promise.resolve({ items: [] })),
     ...overrides,
   };
 }
@@ -96,6 +98,41 @@ describe('App', () => {
       screen.getByText('基幹業務を刷新する案件です。'),
     ).toBeInTheDocument();
     expect(getProject).toHaveBeenCalledWith(project.id);
+  });
+
+  it('soft-deletes a project with a required reason', async () => {
+    window.history.replaceState({}, '', `/projects/${project.id}`);
+    const deleteProject = vi.fn(() => Promise.resolve());
+    render(<App auth={auth()} api={api({ deleteProject })} />);
+    fireEvent.click(await screen.findByRole('button', { name: '削除' }));
+    fireEvent.change(screen.getByLabelText('削除理由'), {
+      target: { value: '重複登録のため' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '論理削除する' }));
+    expect(deleteProject).toHaveBeenCalledWith(project.id, 2, '重複登録のため');
+    expect(
+      await screen.findByRole('heading', { name: '案件一覧' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows project audit history', async () => {
+    window.history.replaceState({}, '', `/projects/${project.id}`);
+    const listProjectAudit = vi.fn(() =>
+      Promise.resolve({
+        items: [
+          {
+            id: '22222222-2222-4222-8222-222222222222',
+            occurredAt: '2026-08-09T04:00:00Z',
+            actorUserId: null,
+            action: 'project.updated',
+            requestId: null,
+          },
+        ],
+      }),
+    );
+    render(<App auth={auth()} api={api({ listProjectAudit })} />);
+    fireEvent.click(await screen.findByRole('button', { name: '監査履歴' }));
+    expect(await screen.findByText('project.updated')).toBeInTheDocument();
   });
 
   it('renders an empty state', async () => {

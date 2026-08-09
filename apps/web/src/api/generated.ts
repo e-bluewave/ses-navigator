@@ -27,6 +27,18 @@ export interface ProjectList {
   page: { limit: number; nextCursor: string | null };
 }
 
+export interface ProjectAuditEvent {
+  id: string;
+  occurredAt: string;
+  actorUserId: string | null;
+  action: string;
+  requestId: string | null;
+}
+
+export interface ProjectAuditList {
+  items: ProjectAuditEvent[];
+}
+
 export interface ProjectInput {
   managementNo: string;
   projectName: string;
