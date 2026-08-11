@@ -12,6 +12,7 @@ import type {
   Company,
   CompanyContact,
   Engineer,
+  Proposal,
   Project,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
@@ -28,6 +29,24 @@ const project: Project = {
   plannedEndOn: null,
   updatedAt: '2026-08-08T12:00:00Z',
   rowVersion: 2,
+};
+
+const proposal: Proposal = {
+  id: '66666666-6666-4666-8666-666666666666',
+  managementNo: 'PR-000001',
+  projectPositionId: '11111111-1111-4111-8111-111111111111',
+  engineerId: '55555555-5555-4555-8555-555555555555',
+  destinationCompanyId: '22222222-2222-4222-8222-222222222222',
+  destinationContactId: null,
+  resumeVersionId: null,
+  requirementVersionId: null,
+  proposedUnitPrice: 800000,
+  currencyCode: 'JPY',
+  status: 'sent',
+  proposedStartDate: '2026-09-01',
+  validityDate: '2026-08-31',
+  updatedAt: '2026-08-11T00:00:00Z',
+  rowVersion: 1,
 };
 
 const company: Company = {
@@ -111,6 +130,10 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    listProposals: vi.fn(() =>
+      Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
+    ),
+    getProposal: vi.fn(() => Promise.reject(new Error('not configured'))),
     listEngineerCareerHistories: vi.fn(() => Promise.resolve({ items: [] })),
     saveEngineerCareerHistory: vi.fn(() =>
       Promise.reject(new Error('not configured')),
@@ -192,6 +215,22 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('lists proposals and opens proposal detail', async () => {
+    window.history.replaceState({}, '', '/proposals');
+    const client = api({
+      listProposals: vi.fn(() =>
+        Promise.resolve({
+          items: [proposal],
+          page: { limit: 50, nextCursor: null },
+        }),
+      ),
+      getProposal: vi.fn(() => Promise.resolve(proposal)),
+    });
+    render(<App auth={auth()} api={client} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'PR-000001' }));
+    expect(await screen.findByText('案件ポジションID')).toBeInTheDocument();
+    expect(screen.getByText('送付済み')).toBeInTheDocument();
+  });
   it('renders the engineer list and opens public detail', async () => {
     window.history.replaceState({}, '', '/engineers');
     render(

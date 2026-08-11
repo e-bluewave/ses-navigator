@@ -7,6 +7,53 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /proposals:
+    get:
+      operationId: listProposals
+      parameters:
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, minLength: 1, maxLength: 100 },
+          }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/ProposalStatus' },
+          }
+        - { name: cursor, in: query, schema: { type: string } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Proposal list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProposalList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /proposals/{id}:
+    get:
+      operationId: getProposal
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Proposal detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Proposal' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /companies:
     post:
       operationId: createCompany
@@ -1779,6 +1826,69 @@ components:
       required: [items, page]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Project' } }
+        page:
+          type: object
+          required: [limit, nextCursor]
+          properties:
+            limit: { type: integer }
+            nextCursor: { type: ['string', 'null'] }
+    ProposalStatus:
+      type: string
+      enum:
+        [
+          draft,
+          pending_approval,
+          approved,
+          sent,
+          interview_requested,
+          interviewing,
+          offered,
+          won,
+          lost,
+          withdrawn,
+          cancelled,
+        ]
+    Proposal:
+      type: object
+      required:
+        [
+          id,
+          managementNo,
+          projectPositionId,
+          engineerId,
+          destinationCompanyId,
+          destinationContactId,
+          resumeVersionId,
+          requirementVersionId,
+          proposedUnitPrice,
+          currencyCode,
+          status,
+          proposedStartDate,
+          validityDate,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        managementNo: { type: string }
+        projectPositionId: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        destinationCompanyId: { type: string, format: uuid }
+        destinationContactId: { type: [string, 'null'], format: uuid }
+        resumeVersionId: { type: [string, 'null'], format: uuid }
+        requirementVersionId: { type: [string, 'null'], format: uuid }
+        proposedUnitPrice: { type: [number, 'null'], minimum: 0 }
+        currencyCode: { type: string, minLength: 3, maxLength: 3 }
+        status: { $ref: '#/components/schemas/ProposalStatus' }
+        proposedStartDate: { type: [string, 'null'], format: date }
+        validityDate: { type: [string, 'null'], format: date }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    ProposalList:
+      type: object
+      required: [items, page]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Proposal' } }
         page:
           type: object
           required: [limit, nextCursor]
