@@ -136,6 +136,59 @@ export type EngineerQualificationInput = Omit<
   EngineerQualification,
   'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
 >;
+export interface EngineerCareerHistory {
+  id: string;
+  engineerId: string;
+  projectName: string;
+  clientName: string | null;
+  roleName: string | null;
+  industry: string | null;
+  overview: string | null;
+  responsibilities: string | null;
+  achievements: string | null;
+  teamSize: number | null;
+  startedOn: string | null;
+  endedOn: string | null;
+  displayOrder: number;
+  sourceResumeVersionId: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type EngineerCareerHistoryInput = Omit<
+  EngineerCareerHistory,
+  'id' | 'engineerId' | 'updatedAt' | 'rowVersion'
+>;
+export interface EngineerResumeVersion {
+  id: string;
+  versionNo: number;
+  fileStoragePath: string | null;
+  originalFileName: string | null;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  fileChecksum: string | null;
+  sourceType: string;
+  createdAt: string;
+}
+export interface EngineerResume {
+  id: string;
+  engineerId: string;
+  title: string;
+  resumeStatus: string;
+  currentVersionId: string | null;
+  updatedAt: string;
+  rowVersion: number;
+  versions: EngineerResumeVersion[];
+}
+export interface EngineerResumeVersionInput {
+  title: string;
+  resumeStatus: string;
+  fileStoragePath: string | null;
+  originalFileName: string | null;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  fileChecksum: string | null;
+  sourceType: string;
+}
 
 export interface EngineerRepository {
   canRead(token: string): Promise<boolean>;
@@ -225,6 +278,27 @@ export interface EngineerRepository {
     input: EngineerQualificationInput,
     requestId: string,
   ): Promise<EngineerQualification | null>;
+  listCareerHistories(
+    token: string,
+    engineerId: string,
+  ): Promise<EngineerCareerHistory[]>;
+  saveCareerHistory(
+    token: string,
+    engineerId: string,
+    id: string | null,
+    rowVersion: number,
+    input: EngineerCareerHistoryInput,
+    requestId: string,
+  ): Promise<EngineerCareerHistory | null>;
+  listResumes(token: string, engineerId: string): Promise<EngineerResume[]>;
+  addResumeVersion(
+    token: string,
+    engineerId: string,
+    resumeId: string | null,
+    rowVersion: number,
+    input: EngineerResumeVersionInput,
+    requestId: string,
+  ): Promise<EngineerResume | null>;
 }
 
 type Row = {
@@ -663,6 +737,99 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     ).json()) as QualificationRow | null;
     return row ? mapQualification(row) : null;
   }
+  async listCareerHistories(token: string, engineerId: string) {
+    const rows = (await (
+      await this.request(
+        token,
+        `/engineer_career_histories?select=id,engineer_id,project_name,client_name,role_name,industry,overview,responsibilities,achievements,team_size,started_on,ended_on,display_order,source_resume_version_id,updated_at,row_version&engineer_id=eq.${engineerId}&deleted_at=is.null&order=display_order.asc,started_on.desc`,
+      )
+    ).json()) as CareerRow[];
+    return rows.map(mapCareer);
+  }
+  async saveCareerHistory(
+    token: string,
+    engineerId: string,
+    id: string | null,
+    rowVersion: number,
+    input: EngineerCareerHistoryInput,
+    requestId: string,
+  ) {
+    const row = (await (
+      await this.request(token, '/rpc/save_engineer_career_history', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_engineer_id: engineerId,
+          p_career_history_id: id,
+          p_row_version: rowVersion,
+          p_history: {
+            project_name: input.projectName,
+            client_name: input.clientName,
+            role_name: input.roleName,
+            industry: input.industry,
+            overview: input.overview,
+            responsibilities: input.responsibilities,
+            achievements: input.achievements,
+            team_size: input.teamSize,
+            started_on: input.startedOn,
+            ended_on: input.endedOn,
+            display_order: input.displayOrder,
+            source_resume_version_id: input.sourceResumeVersionId,
+          },
+          p_request_id: requestId,
+        }),
+      })
+    ).json()) as CareerRow | null;
+    return row ? mapCareer(row) : null;
+  }
+  async listResumes(token: string, engineerId: string) {
+    const resumes = (await (
+      await this.request(
+        token,
+        `/engineer_resumes?select=id,engineer_id,title,resume_status,current_version_id,updated_at,row_version&engineer_id=eq.${engineerId}&deleted_at=is.null&order=updated_at.desc`,
+      )
+    ).json()) as ResumeRow[];
+    const result: EngineerResume[] = [];
+    for (const r of resumes) {
+      const versions = (await (
+        await this.request(
+          token,
+          `/engineer_resume_versions?select=id,version_no,file_storage_path,original_file_name,mime_type,file_size_bytes,file_checksum,source_type,created_at&resume_id=eq.${r.id}&order=version_no.desc`,
+        )
+      ).json()) as ResumeVersionRow[];
+      result.push(mapResume(r, versions));
+    }
+    return result;
+  }
+  async addResumeVersion(
+    token: string,
+    engineerId: string,
+    resumeId: string | null,
+    rowVersion: number,
+    input: EngineerResumeVersionInput,
+    requestId: string,
+  ) {
+    const row = (await (
+      await this.request(token, '/rpc/add_engineer_resume_version', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_engineer_id: engineerId,
+          p_resume_id: resumeId,
+          p_resume_row_version: rowVersion,
+          p_resume: { title: input.title, resume_status: input.resumeStatus },
+          p_version: {
+            file_storage_path: input.fileStoragePath,
+            original_file_name: input.originalFileName,
+            mime_type: input.mimeType,
+            file_size_bytes: input.fileSizeBytes,
+            file_checksum: input.fileChecksum,
+            source_type: input.sourceType,
+          },
+          p_request_id: requestId,
+        }),
+      })
+    ).json()) as (ResumeRow & { version: ResumeVersionRow }) | null;
+    return row ? mapResume(row, [row.version]) : null;
+  }
   private async request(token: string, path: string, init: RequestInit = {}) {
     const response = await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
@@ -681,6 +848,83 @@ export class SupabaseEngineerRepository implements EngineerRepository {
     return response;
   }
 }
+type CareerRow = {
+  id: string;
+  engineer_id: string;
+  project_name: string;
+  client_name: string | null;
+  role_name: string | null;
+  industry: string | null;
+  overview: string | null;
+  responsibilities: string | null;
+  achievements: string | null;
+  team_size: number | null;
+  started_on: string | null;
+  ended_on: string | null;
+  display_order: number;
+  source_resume_version_id: string | null;
+  updated_at: string;
+  row_version: number;
+};
+const mapCareer = (r: CareerRow): EngineerCareerHistory => ({
+  id: r.id,
+  engineerId: r.engineer_id,
+  projectName: r.project_name,
+  clientName: r.client_name,
+  roleName: r.role_name,
+  industry: r.industry,
+  overview: r.overview,
+  responsibilities: r.responsibilities,
+  achievements: r.achievements,
+  teamSize: r.team_size,
+  startedOn: r.started_on,
+  endedOn: r.ended_on,
+  displayOrder: r.display_order,
+  sourceResumeVersionId: r.source_resume_version_id,
+  updatedAt: r.updated_at,
+  rowVersion: r.row_version,
+});
+type ResumeRow = {
+  id: string;
+  engineer_id: string;
+  title: string;
+  resume_status: string;
+  current_version_id: string | null;
+  updated_at: string;
+  row_version: number;
+};
+type ResumeVersionRow = {
+  id: string;
+  version_no: number;
+  file_storage_path: string | null;
+  original_file_name: string | null;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  file_checksum: string | null;
+  source_type: string;
+  created_at: string;
+};
+const mapResumeVersion = (v: ResumeVersionRow): EngineerResumeVersion => ({
+  id: v.id,
+  versionNo: v.version_no,
+  fileStoragePath: v.file_storage_path,
+  originalFileName: v.original_file_name,
+  mimeType: v.mime_type,
+  fileSizeBytes: v.file_size_bytes,
+  fileChecksum: v.file_checksum,
+  sourceType: v.source_type,
+  createdAt: v.created_at,
+});
+const mapResume = (r: ResumeRow, v: ResumeVersionRow[]): EngineerResume => ({
+  id: r.id,
+  engineerId: r.engineer_id,
+  title: r.title,
+  resumeStatus: r.resume_status,
+  currentVersionId: r.current_version_id,
+  updatedAt: r.updated_at,
+  rowVersion: r.row_version,
+  versions: v.map(mapResumeVersion),
+});
 type SkillRow = {
   id: string;
   engineer_id: string;

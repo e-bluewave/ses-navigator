@@ -35,10 +35,30 @@ import type {
   EngineerQualification,
   EngineerQualificationInput,
   EngineerQualificationList,
+  EngineerCareerHistory,
+  EngineerCareerHistoryInput,
+  EngineerCareerHistoryList,
+  EngineerResume,
+  EngineerResumeVersionInput,
+  EngineerResumeList,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
+  listEngineerCareerHistories(id: string): Promise<EngineerCareerHistoryList>;
+  saveEngineerCareerHistory(
+    id: string,
+    itemId: string,
+    rowVersion: number,
+    input: EngineerCareerHistoryInput,
+  ): Promise<EngineerCareerHistory>;
+  listEngineerResumes(id: string): Promise<EngineerResumeList>;
+  addEngineerResumeVersion(
+    id: string,
+    resumeId: string,
+    rowVersion: number,
+    input: EngineerResumeVersionInput,
+  ): Promise<EngineerResume>;
   listProjects(query?: ListProjectsQuery): Promise<ProjectList>;
   getProject(id: string): Promise<Project>;
   createProject(input: ProjectInput): Promise<Project>;
@@ -194,6 +214,32 @@ export function createProjectsApi(options: {
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
+    },
+    listEngineerCareerHistories(id) {
+      return get<EngineerCareerHistoryList>(
+        `/engineers/${encodeURIComponent(id)}/career-histories`,
+      );
+    },
+    saveEngineerCareerHistory(id, itemId, rowVersion, input) {
+      return send<EngineerCareerHistory>(
+        `/engineers/${encodeURIComponent(id)}/career-histories/${encodeURIComponent(itemId)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    listEngineerResumes(id) {
+      return get<EngineerResumeList>(
+        `/engineers/${encodeURIComponent(id)}/resumes`,
+      );
+    },
+    addEngineerResumeVersion(id, resumeId, rowVersion, input) {
+      return send<EngineerResume>(
+        `/engineers/${encodeURIComponent(id)}/resumes/${encodeURIComponent(resumeId)}/versions`,
+        'POST',
+        input,
+        rowVersion,
+      );
     },
     listProjects(query = {}) {
       const params = new URLSearchParams();

@@ -28,6 +28,8 @@ import type {
   EngineerSkillInput,
   EngineerQualification,
   EngineerQualificationInput,
+  EngineerCareerHistory,
+  EngineerResume,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -547,6 +549,11 @@ function EngineerDetail({
     EngineerQualification[] | null
   >(null);
   const [capabilityError, setCapabilityError] = useState(false);
+  const [careerHistories, setCareerHistories] = useState<
+    EngineerCareerHistory[] | null
+  >(null);
+  const [resumes, setResumes] = useState<EngineerResume[] | null>(null);
+  const [careerResumeError, setCareerResumeError] = useState(false);
   useEffect(() => {
     let active = true;
     api
@@ -626,6 +633,19 @@ function EngineerDetail({
       setCapabilityError(true);
     }
   }
+  async function loadCareerResumes() {
+    setCareerResumeError(false);
+    try {
+      const [c, r] = await Promise.all([
+        api.listEngineerCareerHistories(id),
+        api.listEngineerResumes(id),
+      ]);
+      setCareerHistories(c.items);
+      setResumes(r.items);
+    } catch {
+      setCareerResumeError(true);
+    }
+  }
   return (
     <section className="panel">
       <button className="secondary-button" onClick={onBack}>
@@ -701,6 +721,12 @@ function EngineerDetail({
               スキル・資格
             </button>
             <button
+              className="secondary-button"
+              onClick={() => void loadCareerResumes()}
+            >
+              職務経歴・経歴書
+            </button>
+            <button
               className="danger-button"
               onClick={() => setShowDelete(true)}
             >
@@ -767,6 +793,11 @@ function EngineerDetail({
               スキル・資格の取得に失敗しました。
             </p>
           ) : null}
+          {careerResumeError ? (
+            <p className="error" role="alert">
+              職務経歴・経歴書の取得に失敗しました。
+            </p>
+          ) : null}
           {showPrivate ? (
             <EngineerPrivateForm
               api={api}
@@ -798,6 +829,15 @@ function EngineerDetail({
               skills={skills}
               qualifications={qualifications}
               onSaved={() => void loadCapabilities()}
+            />
+          ) : null}
+          {careerHistories && resumes ? (
+            <EngineerCareerResumePanel
+              api={api}
+              engineerId={id}
+              histories={careerHistories}
+              resumes={resumes}
+              onSaved={() => void loadCareerResumes()}
             />
           ) : null}
           {auditEvents ? (
@@ -1839,6 +1879,149 @@ function CompanyDetail({
           ) : null}
         </>
       )}
+    </section>
+  );
+}
+
+function EngineerCareerResumePanel({
+  api,
+  engineerId,
+  histories,
+  resumes,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  engineerId: string;
+  histories: EngineerCareerHistory[];
+  resumes: EngineerResume[];
+  onSaved: () => void;
+}) {
+  const [projectName, setProjectName] = useState('');
+  const [title, setTitle] = useState('職務経歴書');
+  const [fileName, setFileName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  async function addCareer(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.saveEngineerCareerHistory(engineerId, 'new', 0, {
+        projectName,
+        clientName: null,
+        roleName: null,
+        industry: null,
+        overview: null,
+        responsibilities: null,
+        achievements: null,
+        teamSize: null,
+        startedOn: null,
+        endedOn: null,
+        displayOrder: histories.length,
+        sourceResumeVersionId: null,
+      });
+      setProjectName('');
+      onSaved();
+    } catch (x) {
+      setError(x);
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function addResume(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api.addEngineerResumeVersion(engineerId, 'new', 0, {
+        title,
+        resumeStatus: 'active',
+        fileStoragePath: null,
+        originalFileName: fileName || null,
+        mimeType: null,
+        fileSizeBytes: null,
+        fileChecksum: null,
+        sourceType: 'manual',
+      });
+      setFileName('');
+      onSaved();
+    } catch (x) {
+      setError(x);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <section
+      className="audit-panel"
+      aria-labelledby="engineer-career-resume-heading"
+    >
+      <h3 id="engineer-career-resume-heading">職務経歴・経歴書</h3>
+      {error ? <ErrorNotice error={error} /> : null}
+      <h4>職務経歴</h4>
+      {histories.length ? (
+        <ul>
+          {histories.map((x) => (
+            <li key={x.id}>
+              <strong>{x.projectName}</strong>
+              {x.roleName ? ` — ${x.roleName}` : ''}（
+              {x.startedOn ?? '開始日未登録'}〜{x.endedOn ?? '現在'}）
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>職務経歴はありません。</p>
+      )}
+      <form onSubmit={(e) => void addCareer(e)}>
+        <label>
+          プロジェクト名
+          <input
+            required
+            maxLength={300}
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+          />
+        </label>
+        <button
+          className="primary-button"
+          disabled={saving || !projectName.trim()}
+        >
+          職務経歴を追加
+        </button>
+      </form>
+      <h4>経歴書バージョン</h4>
+      {resumes.length ? (
+        <ul>
+          {resumes.map((x) => (
+            <li key={x.id}>
+              <strong>{x.title}</strong>（{x.versions.length}版）
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>経歴書はありません。</p>
+      )}
+      <form onSubmit={(e) => void addResume(e)}>
+        <label>
+          タイトル
+          <input
+            required
+            maxLength={300}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </label>
+        <label>
+          元ファイル名（任意）
+          <input
+            value={fileName}
+            onChange={(e) => setFileName(e.target.value)}
+          />
+        </label>
+        <button className="primary-button" disabled={saving || !title.trim()}>
+          新しい版を追加
+        </button>
+      </form>
     </section>
   );
 }

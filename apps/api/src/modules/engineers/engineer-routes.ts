@@ -10,6 +10,8 @@ import type {
   EngineerPreferenceInput,
   EngineerSkillInput,
   EngineerQualificationInput,
+  EngineerCareerHistoryInput,
+  EngineerResumeVersionInput,
 } from './engineer-repository.js';
 
 const uuid =
@@ -33,6 +35,97 @@ export function registerEngineerRoutes(
   app: FastifyInstance,
   repository: EngineerRepository,
 ) {
+  app.get(
+    '/api/v1/engineers/:id/career-histories',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      if (!uuid.test(id)) throw invalid('id must be a UUID');
+      await requireRead(repository, request.user.accessToken);
+      return {
+        items: await repository.listCareerHistories(
+          request.user.accessToken,
+          id,
+        ),
+      };
+    },
+  );
+  app.put(
+    '/api/v1/engineers/:id/career-histories/:itemId',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id, itemId } = request.params as { id: string; itemId: string };
+      if (!uuid.test(id) || (itemId !== 'new' && !uuid.test(itemId)))
+        throw invalid('id is invalid');
+      const version =
+        itemId === 'new'
+          ? parsePrivateIfMatch(request.headers['if-match'])
+          : parseIfMatch(request.headers['if-match']);
+      await requireManage(repository, request.user.accessToken);
+      const saved = await repository.saveCareerHistory(
+        request.user.accessToken,
+        id,
+        itemId === 'new' ? null : itemId,
+        version,
+        parseCareerInput(request.body),
+        request.id,
+      );
+      if (!saved)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Career history was changed; reload and try again',
+        );
+      return reply.header('etag', `"${saved.rowVersion}"`).send(saved);
+    },
+  );
+  app.get(
+    '/api/v1/engineers/:id/resumes',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      if (!uuid.test(id)) throw invalid('id must be a UUID');
+      await requireRead(repository, request.user.accessToken);
+      return {
+        items: await repository.listResumes(request.user.accessToken, id),
+      };
+    },
+  );
+  app.post(
+    '/api/v1/engineers/:id/resumes/:resumeId/versions',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id, resumeId } = request.params as {
+        id: string;
+        resumeId: string;
+      };
+      if (!uuid.test(id) || (resumeId !== 'new' && !uuid.test(resumeId)))
+        throw invalid('id is invalid');
+      const version =
+        resumeId === 'new'
+          ? parsePrivateIfMatch(request.headers['if-match'])
+          : parseIfMatch(request.headers['if-match']);
+      await requireManage(repository, request.user.accessToken);
+      const saved = await repository.addResumeVersion(
+        request.user.accessToken,
+        id,
+        resumeId === 'new' ? null : resumeId,
+        version,
+        parseResumeVersionInput(request.body),
+        request.id,
+      );
+      if (!saved)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Resume was changed; reload and try again',
+        );
+      return reply
+        .code(201)
+        .header('etag', `"${saved.rowVersion}"`)
+        .send(saved);
+    },
+  );
   app.get(
     '/api/v1/engineers/:id/skills',
     { preHandler: (request) => app.authenticate(request) },
@@ -440,6 +533,73 @@ function parseSkillInput(body: unknown): EngineerSkillInput {
   )
     throw invalid('skill is invalid');
   return b as unknown as EngineerSkillInput;
+}
+function parseCareerInput(body: unknown): EngineerCareerHistoryInput {
+  if (!body || typeof body !== 'object')
+    throw invalid('career history is invalid');
+  const b = body as Record<string, unknown>;
+  if (
+    typeof b.projectName !== 'string' ||
+    b.projectName.trim().length < 1 ||
+    b.projectName.length > 300 ||
+    !Number.isInteger(b.displayOrder)
+  )
+    throw invalid('career history is invalid');
+  for (const k of [
+    'clientName',
+    'roleName',
+    'industry',
+    'overview',
+    'responsibilities',
+    'achievements',
+    'startedOn',
+    'endedOn',
+    'sourceResumeVersionId',
+  ])
+    if (b[k] !== null && typeof b[k] !== 'string')
+      throw invalid('career history is invalid');
+  if (
+    b.teamSize !== null &&
+    (!Number.isInteger(b.teamSize) || Number(b.teamSize) < 0)
+  )
+    throw invalid('career history is invalid');
+  const startedOn = b.startedOn as string | null;
+  const endedOn = b.endedOn as string | null;
+  const sourceResumeVersionId = b.sourceResumeVersionId as string | null;
+  if (startedOn && endedOn && endedOn < startedOn)
+    throw invalid('career history is invalid');
+  if (sourceResumeVersionId && !uuid.test(sourceResumeVersionId))
+    throw invalid('career history is invalid');
+  return b as unknown as EngineerCareerHistoryInput;
+}
+function parseResumeVersionInput(body: unknown): EngineerResumeVersionInput {
+  if (!body || typeof body !== 'object')
+    throw invalid('resume version is invalid');
+  const b = body as Record<string, unknown>;
+  if (
+    typeof b.title !== 'string' ||
+    b.title.trim().length < 1 ||
+    b.title.length > 300 ||
+    typeof b.resumeStatus !== 'string' ||
+    !['draft', 'active', 'archived'].includes(b.resumeStatus) ||
+    typeof b.sourceType !== 'string' ||
+    !['upload', 'manual', 'migration', 'generated'].includes(b.sourceType)
+  )
+    throw invalid('resume version is invalid');
+  for (const k of [
+    'fileStoragePath',
+    'originalFileName',
+    'mimeType',
+    'fileChecksum',
+  ])
+    if (b[k] !== null && typeof b[k] !== 'string')
+      throw invalid('resume version is invalid');
+  if (
+    b.fileSizeBytes !== null &&
+    (!Number.isInteger(b.fileSizeBytes) || Number(b.fileSizeBytes) < 0)
+  )
+    throw invalid('resume version is invalid');
+  return b as unknown as EngineerResumeVersionInput;
 }
 function parseQualificationInput(body: unknown): EngineerQualificationInput {
   if (!body || typeof body !== 'object')
