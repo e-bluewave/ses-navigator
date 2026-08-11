@@ -7,6 +7,53 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /interviews:
+    get:
+      operationId: listInterviews
+      parameters:
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, minLength: 1, maxLength: 100 },
+          }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/InterviewStatus' },
+          }
+        - { name: cursor, in: query, schema: { type: string } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Interview list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InterviewList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /interviews/{id}:
+    get:
+      operationId: getInterview
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Interview detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Interview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /proposals:
     post:
       operationId: createProposal
@@ -122,7 +169,8 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ProposalStatusTransitionInput' }
+            schema:
+              { $ref: '#/components/schemas/ProposalStatusTransitionInput' }
       responses:
         '200':
           description: Proposal status transitioned
@@ -1998,6 +2046,60 @@ components:
       required: [items, page]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Proposal' } }
+        page:
+          type: object
+          required: [limit, nextCursor]
+          properties:
+            limit: { type: integer }
+            nextCursor: { type: ['string', 'null'] }
+    InterviewType:
+      type: string
+      enum: [online, onsite, phone, other]
+    InterviewStatus:
+      type: string
+      enum: [tentative, scheduled, completed, cancelled, no_show]
+    Interview:
+      type: object
+      required:
+        [
+          id,
+          proposalId,
+          proposalManagementNo,
+          projectPositionId,
+          engineerId,
+          interviewRound,
+          interviewType,
+          status,
+          scheduledStartAt,
+          scheduledEndAt,
+          locationText,
+          meetingUrl,
+          notes,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        proposalId: { type: string, format: uuid }
+        proposalManagementNo: { type: string }
+        projectPositionId: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        interviewRound: { type: integer, minimum: 1 }
+        interviewType: { $ref: '#/components/schemas/InterviewType' }
+        status: { $ref: '#/components/schemas/InterviewStatus' }
+        scheduledStartAt: { type: [string, 'null'], format: date-time }
+        scheduledEndAt: { type: [string, 'null'], format: date-time }
+        locationText: { type: [string, 'null'] }
+        meetingUrl: { type: [string, 'null'], format: uri }
+        notes: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    InterviewList:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          { type: array, items: { $ref: '#/components/schemas/Interview' } }
         page:
           type: object
           required: [limit, nextCursor]

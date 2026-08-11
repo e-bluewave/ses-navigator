@@ -13,6 +13,7 @@ import type {
   Company,
   CompanyContact,
   Engineer,
+  Interview,
   Proposal,
   Project,
 } from '../api/generated.js';
@@ -46,6 +47,24 @@ const proposal: Proposal = {
   status: 'sent',
   proposedStartDate: '2026-09-01',
   validityDate: '2026-08-31',
+  updatedAt: '2026-08-11T00:00:00Z',
+  rowVersion: 1,
+};
+
+const interview: Interview = {
+  id: '77777777-7777-4777-8777-777777777777',
+  proposalId: proposal.id,
+  proposalManagementNo: proposal.managementNo,
+  projectPositionId: proposal.projectPositionId,
+  engineerId: proposal.engineerId,
+  interviewRound: 1,
+  interviewType: 'online',
+  status: 'scheduled',
+  scheduledStartAt: '2026-08-20T01:00:00Z',
+  scheduledEndAt: '2026-08-20T02:00:00Z',
+  locationText: null,
+  meetingUrl: 'https://meet.example.com/interview',
+  notes: '経歴書を確認する',
   updatedAt: '2026-08-11T00:00:00Z',
   rowVersion: 1,
 };
@@ -131,6 +150,10 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    listInterviews: vi.fn(() =>
+      Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
+    ),
+    getInterview: vi.fn(() => Promise.reject(new Error('not configured'))),
     listProposals: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -221,6 +244,24 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('lists interviews and opens interview detail', async () => {
+    window.history.replaceState({}, '', '/interviews');
+    const client = api({
+      listInterviews: vi.fn(() =>
+        Promise.resolve({
+          items: [interview],
+          page: { limit: 50, nextCursor: null },
+        }),
+      ),
+      getInterview: vi.fn(() => Promise.resolve(interview)),
+    });
+    render(<App auth={auth()} api={client} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'PR-000001' }));
+    expect(await screen.findByText('案件ポジションID')).toBeInTheDocument();
+    expect(screen.getByText('予定確定')).toBeInTheDocument();
+    expect(screen.getByText('経歴書を確認する')).toBeInTheDocument();
+  });
+
   it('lists proposals and opens proposal detail', async () => {
     window.history.replaceState({}, '', '/proposals');
     const client = api({
