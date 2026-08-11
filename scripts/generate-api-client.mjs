@@ -5,6 +5,8 @@ const outputPath = new URL('../apps/web/src/api/generated.ts', import.meta.url);
 const contract = await readFile(contractPath, 'utf8');
 
 const requiredContractFragments = [
+  'operationId: listProposals',
+  'operationId: getProposal',
   'operationId: listProjects',
   'operationId: getProject',
   'operationId: createProject',
@@ -69,6 +71,18 @@ export type EngineerStatus =
   'candidate' | 'active' | 'inactive' | 'retired' | 'blocked';
 export type AvailabilityStatus =
   'unknown' | 'available' | 'proposed' | 'engaged' | 'unavailable';
+export type ProposalStatus =
+  | 'draft'
+  | 'pending_approval'
+  | 'approved'
+  | 'sent'
+  | 'interview_requested'
+  | 'interviewing'
+  | 'offered'
+  | 'won'
+  | 'lost'
+  | 'withdrawn'
+  | 'cancelled';
 
 export interface AuthContext {
   requiresMfa: boolean;
@@ -444,6 +458,34 @@ export interface ListProjectsQuery {
   q?: string;
   status?: ProjectStatus;
   recruitmentStatus?: RecruitmentStatus;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface Proposal {
+  id: string;
+  managementNo: string;
+  projectPositionId: string;
+  engineerId: string;
+  destinationCompanyId: string;
+  destinationContactId: string | null;
+  resumeVersionId: string | null;
+  requirementVersionId: string | null;
+  proposedUnitPrice: number | null;
+  currencyCode: string;
+  status: ProposalStatus;
+  proposedStartDate: string | null;
+  validityDate: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface ProposalList {
+  items: Proposal[];
+  page: { limit: number; nextCursor: string | null };
+}
+export interface ListProposalsQuery {
+  q?: string;
+  status?: ProposalStatus;
   cursor?: string;
   limit?: number;
 }

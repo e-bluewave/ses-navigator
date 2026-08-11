@@ -30,6 +30,8 @@ import type {
   EngineerQualificationInput,
   EngineerCareerHistory,
   EngineerResume,
+  Proposal,
+  ProposalStatus,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -52,7 +54,23 @@ const recruitmentStatusLabels = {
   ended: '募集終了',
 } as const;
 
+const proposalStatusLabels: Record<ProposalStatus, string> = {
+  draft: '下書き',
+  pending_approval: '承認待ち',
+  approved: '承認済み',
+  sent: '送付済み',
+  interview_requested: '面談依頼',
+  interviewing: '面談中',
+  offered: 'オファー',
+  won: '成約',
+  lost: '失注',
+  withdrawn: '辞退',
+  cancelled: '中止',
+};
+
 type Route =
+  | { page: 'proposals' }
+  | { page: 'proposal-detail'; id: string }
   | { page: 'list' }
   | { page: 'detail'; id: string }
   | { page: 'new' }
@@ -69,6 +87,10 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/proposals') return { page: 'proposals' };
+  const proposal = window.location.pathname.match(/^\/proposals\/([^/]+)$/);
+  if (proposal)
+    return { page: 'proposal-detail', id: decodeURIComponent(proposal[1]!) };
   if (window.location.pathname === '/engineers') return { page: 'engineers' };
   if (window.location.pathname === '/engineers/new')
     return { page: 'engineer-new' };
@@ -109,6 +131,181 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
     <AuthProvider auth={auth}>
       <AuthenticatedApp {...(api === undefined ? {} : { api })} />
     </AuthProvider>
+  );
+}
+
+function ProposalListView({
+  api,
+  onOpen,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<Proposal[]>([]);
+  const [status, setStatus] = useState<ProposalStatus | ''>('');
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void api
+      .listProposals({
+        ...(query ? { q: query } : {}),
+        ...(status ? { status } : {}),
+      })
+      .then((result) => {
+        setItems(result.items);
+        setError('');
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '提案一覧を取得できませんでした。',
+          );
+      });
+  }, [api, onUnauthorized, query, status]);
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <h2>提案</h2>
+          <p>RLSで参照可能な提案を表示します。</p>
+        </div>
+      </div>
+      <div className="filter-row">
+        <input
+          aria-label="提案番号で検索"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="提案番号"
+        />
+        <select
+          aria-label="提案状態"
+          value={status}
+          onChange={(event) =>
+            setStatus(event.target.value as ProposalStatus | '')
+          }
+        >
+          <option value="">すべての状態</option>
+          {Object.entries(proposalStatusLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      <table>
+        <thead>
+          <tr>
+            <th>提案番号</th>
+            <th>状態</th>
+            <th>単価</th>
+            <th>開始日</th>
+            <th>有効期限</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.id} onClick={() => onOpen(item.id)}>
+              <td>
+                <button className="link-button">{item.managementNo}</button>
+              </td>
+              <td>{proposalStatusLabels[item.status]}</td>
+              <td>
+                {item.proposedUnitPrice === null
+                  ? '—'
+                  : `${item.proposedUnitPrice.toLocaleString()} ${item.currencyCode}`}
+              </td>
+              <td>{item.proposedStartDate ?? '—'}</td>
+              <td>{item.validityDate ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {items.length === 0 && !error && <p>該当する提案はありません。</p>}
+    </section>
+  );
+}
+
+function ProposalDetail({
+  api,
+  id,
+  onBack,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  id: string;
+  onBack: () => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [item, setItem] = useState<Proposal | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void api
+      .getProposal(id)
+      .then(setItem)
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '提案詳細を取得できませんでした。',
+          );
+      });
+  }, [api, id, onUnauthorized]);
+  if (error)
+    return (
+      <section className="content-panel">
+        <p role="alert">{error}</p>
+        <button onClick={onBack}>一覧へ戻る</button>
+      </section>
+    );
+  if (!item)
+    return (
+      <section className="content-panel" role="status">
+        提案を読み込んでいます…
+      </section>
+    );
+  return (
+    <section className="content-panel">
+      <button className="secondary-button" onClick={onBack}>
+        一覧へ戻る
+      </button>
+      <h2>{item.managementNo}</h2>
+      <dl className="detail-grid">
+        <dt>状態</dt>
+        <dd>{proposalStatusLabels[item.status]}</dd>
+        <dt>案件ポジションID</dt>
+        <dd>{item.projectPositionId}</dd>
+        <dt>技術者ID</dt>
+        <dd>{item.engineerId}</dd>
+        <dt>提出先会社ID</dt>
+        <dd>{item.destinationCompanyId}</dd>
+        <dt>提出先担当者ID</dt>
+        <dd>{item.destinationContactId ?? '—'}</dd>
+        <dt>提案単価</dt>
+        <dd>
+          {item.proposedUnitPrice === null
+            ? '—'
+            : `${item.proposedUnitPrice.toLocaleString()} ${item.currencyCode}`}
+        </dd>
+        <dt>提案開始日</dt>
+        <dd>{item.proposedStartDate ?? '—'}</dd>
+        <dt>有効期限</dt>
+        <dd>{item.validityDate ?? '—'}</dd>
+        <dt>経歴書版ID</dt>
+        <dd>{item.resumeVersionId ?? '—'}</dd>
+        <dt>要件版ID</dt>
+        <dd>{item.requirementVersionId ?? '—'}</dd>
+      </dl>
+    </section>
   );
 }
 
@@ -218,6 +415,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/proposals')}
+        >
+          提案
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/projects')}
         >
           案件
@@ -241,7 +444,20 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'list' ? (
+      {route.page === 'proposals' ? (
+        <ProposalListView
+          api={api}
+          onOpen={(id) => navigate(`/proposals/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'proposal-detail' ? (
+        <ProposalDetail
+          api={api}
+          id={route.id}
+          onBack={() => navigate('/proposals')}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'list' ? (
         <ProjectList
           api={api}
           onOpen={(id) => navigate(`/projects/${id}`)}

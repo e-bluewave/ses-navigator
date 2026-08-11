@@ -41,10 +41,15 @@ import type {
   EngineerResume,
   EngineerResumeVersionInput,
   EngineerResumeList,
+  Proposal,
+  ProposalList,
+  ListProposalsQuery,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
+  listProposals(query?: ListProposalsQuery): Promise<ProposalList>;
+  getProposal(id: string): Promise<Proposal>;
   listEngineerCareerHistories(id: string): Promise<EngineerCareerHistoryList>;
   saveEngineerCareerHistory(
     id: string,
@@ -214,6 +219,18 @@ export function createProjectsApi(options: {
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
+    },
+    listProposals(query = {}) {
+      const params = new URLSearchParams();
+      if (query.q) params.set('q', query.q);
+      if (query.status) params.set('status', query.status);
+      if (query.cursor) params.set('cursor', query.cursor);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return get<ProposalList>(`/proposals${suffix}`);
+    },
+    getProposal(id) {
+      return get<Proposal>(`/proposals/${encodeURIComponent(id)}`);
     },
     listEngineerCareerHistories(id) {
       return get<EngineerCareerHistoryList>(
