@@ -8,6 +8,23 @@ security:
   - bearerAuth: []
 paths:
   /interviews:
+    post:
+      operationId: createInterview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InterviewInput' }
+      responses:
+        '201':
+          description: Interview schedule created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Interview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
     get:
       operationId: listInterviews
       parameters:
@@ -36,6 +53,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /interviews/{id}:
+    put:
+      operationId: updateInterview
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InterviewInput' }
+      responses:
+        '200':
+          description: Interview schedule updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Interview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     get:
       operationId: getInterview
       parameters:
@@ -2075,6 +2123,7 @@ components:
           locationText,
           meetingUrl,
           notes,
+          scheduleCandidates,
           updatedAt,
           rowVersion,
         ]
@@ -2092,8 +2141,58 @@ components:
         locationText: { type: [string, 'null'] }
         meetingUrl: { type: [string, 'null'], format: uri }
         notes: { type: [string, 'null'] }
+        scheduleCandidates:
+          type: array
+          items: { $ref: '#/components/schemas/InterviewScheduleCandidate' }
         updatedAt: { type: string, format: date-time }
         rowVersion: { type: integer, minimum: 1 }
+    InterviewScheduleCandidate:
+      type: object
+      additionalProperties: false
+      required: [id, startAt, endAt, candidateOrder]
+      properties:
+        id: { type: string, format: uuid }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        candidateOrder: { type: integer, minimum: 1 }
+    InterviewScheduleCandidateInput:
+      type: object
+      additionalProperties: false
+      required: [startAt, endAt]
+      properties:
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+    InterviewInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          proposalId,
+          interviewRound,
+          interviewType,
+          status,
+          scheduledStartAt,
+          scheduledEndAt,
+          locationText,
+          meetingUrl,
+          notes,
+          scheduleCandidates,
+        ]
+      properties:
+        proposalId: { type: string, format: uuid }
+        interviewRound: { type: integer, minimum: 1, maximum: 99 }
+        interviewType: { $ref: '#/components/schemas/InterviewType' }
+        status: { type: string, enum: [tentative, scheduled] }
+        scheduledStartAt: { type: [string, 'null'], format: date-time }
+        scheduledEndAt: { type: [string, 'null'], format: date-time }
+        locationText: { type: [string, 'null'], maxLength: 500 }
+        meetingUrl: { type: [string, 'null'], maxLength: 2000 }
+        notes: { type: [string, 'null'], maxLength: 5000 }
+        scheduleCandidates:
+          type: array
+          maxItems: 10
+          items:
+            { $ref: '#/components/schemas/InterviewScheduleCandidateInput' }
     InterviewList:
       type: object
       required: [items, page]

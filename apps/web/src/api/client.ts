@@ -47,6 +47,7 @@ import type {
   ProposalStatusTransitionInput,
   ListProposalsQuery,
   Interview,
+  InterviewInput,
   InterviewList,
   ListInterviewsQuery,
 } from './generated.js';
@@ -55,6 +56,12 @@ export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
   listInterviews(query?: ListInterviewsQuery): Promise<InterviewList>;
   getInterview(id: string): Promise<Interview>;
+  createInterview(input: InterviewInput): Promise<Interview>;
+  updateInterview(
+    id: string,
+    rowVersion: number,
+    input: InterviewInput,
+  ): Promise<Interview>;
   listProposals(query?: ListProposalsQuery): Promise<ProposalList>;
   getProposal(id: string): Promise<Proposal>;
   createProposal(input: ProposalInput): Promise<Proposal>;
@@ -249,6 +256,17 @@ export function createProjectsApi(options: {
     },
     getInterview(id) {
       return get<Interview>(`/interviews/${encodeURIComponent(id)}`);
+    },
+    createInterview(input) {
+      return send<Interview>('/interviews', 'POST', input);
+    },
+    updateInterview(id, rowVersion, input) {
+      return send<Interview>(
+        `/interviews/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
     },
     listProposals(query = {}) {
       const params = new URLSearchParams();

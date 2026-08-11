@@ -462,8 +462,31 @@ export interface Interview {
   locationText: string | null;
   meetingUrl: string | null;
   notes: string | null;
+  scheduleCandidates: InterviewScheduleCandidate[];
   updatedAt: string;
   rowVersion: number;
+}
+export interface InterviewScheduleCandidate {
+  id: string;
+  startAt: string;
+  endAt: string;
+  candidateOrder: number;
+}
+export interface InterviewScheduleCandidateInput {
+  startAt: string;
+  endAt: string;
+}
+export interface InterviewInput {
+  proposalId: string;
+  interviewRound: number;
+  interviewType: InterviewType;
+  status: 'tentative' | 'scheduled';
+  scheduledStartAt: string | null;
+  scheduledEndAt: string | null;
+  locationText: string | null;
+  meetingUrl: string | null;
+  notes: string | null;
+  scheduleCandidates: InterviewScheduleCandidateInput[];
 }
 export interface InterviewList {
   items: Interview[];

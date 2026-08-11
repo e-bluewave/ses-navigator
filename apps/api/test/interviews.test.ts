@@ -20,6 +20,14 @@ const interview: Interview = {
   locationText: null,
   meetingUrl: 'https://meet.example.com/interview',
   notes: '経歴書を確認する',
+  scheduleCandidates: [
+    {
+      id: '55555555-5555-4555-8555-555555555555',
+      startAt: '2026-08-19T01:00:00Z',
+      endAt: '2026-08-19T02:00:00Z',
+      candidateOrder: 1,
+    },
+  ],
   updatedAt: '2026-08-11T00:00:00Z',
   rowVersion: 2,
 };
@@ -33,10 +41,13 @@ function repository(
 ): InterviewRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
+    canManage: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() =>
       Promise.resolve({ items: [interview], nextCursor: null }),
     ),
     findById: vi.fn(() => Promise.resolve(interview)),
+    create: vi.fn(() => Promise.resolve(interview)),
+    update: vi.fn(() => Promise.resolve(interview)),
     ...overrides,
   };
 }
@@ -105,6 +116,105 @@ describe('interview read API', () => {
       method: 'GET',
       url: '/api/v1/interviews?status=unknown',
       headers: { authorization: 'Bearer valid' },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('interview write API', () => {
+  const input = {
+    proposalId: interview.proposalId,
+    interviewRound: 1,
+    interviewType: 'online',
+    status: 'scheduled',
+    scheduledStartAt: '2026-08-20T01:00:00Z',
+    scheduledEndAt: '2026-08-20T02:00:00Z',
+    locationText: null,
+    meetingUrl: 'https://meet.example.com/interview',
+    notes: '経歴書を確認する',
+    scheduleCandidates: [
+      {
+        startAt: '2026-08-19T01:00:00Z',
+        endAt: '2026-08-19T02:00:00Z',
+      },
+    ],
+  };
+
+  it('creates an interview schedule through the limited repository path', async () => {
+    const create = vi.fn(() => Promise.resolve(interview));
+    const response = await app(repository({ create })).inject({
+      method: 'POST',
+      url: '/api/v1/interviews',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.headers.etag).toBe('"2"');
+    expect(create).toHaveBeenCalledWith(
+      'valid',
+      {
+        ...input,
+        scheduledStartAt: '2026-08-20T01:00:00.000Z',
+        scheduledEndAt: '2026-08-20T02:00:00.000Z',
+        scheduleCandidates: [
+          {
+            startAt: '2026-08-19T01:00:00.000Z',
+            endAt: '2026-08-19T02:00:00.000Z',
+          },
+        ],
+      },
+      expect.any(String),
+    );
+  });
+
+  it('requires interview.manage to create an interview', async () => {
+    const response = await app(
+      repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: '/api/v1/interviews',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('uses If-Match when updating an interview schedule', async () => {
+    const update = vi.fn(() =>
+      Promise.resolve({ ...interview, rowVersion: 3 }),
+    );
+    const response = await app(repository({ update })).inject({
+      method: 'PUT',
+      url: `/api/v1/interviews/${interview.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      'valid',
+      interview.id,
+      2,
+      {
+        ...input,
+        scheduledStartAt: '2026-08-20T01:00:00.000Z',
+        scheduledEndAt: '2026-08-20T02:00:00.000Z',
+        scheduleCandidates: [
+          {
+            startAt: '2026-08-19T01:00:00.000Z',
+            endAt: '2026-08-19T02:00:00.000Z',
+          },
+        ],
+      },
+      expect.any(String),
+    );
+  });
+
+  it('rejects scheduled interviews without confirmed times', async () => {
+    const response = await app().inject({
+      method: 'POST',
+      url: '/api/v1/interviews',
+      headers: { authorization: 'Bearer valid' },
+      payload: { ...input, scheduledStartAt: null, scheduledEndAt: null },
     });
     expect(response.statusCode).toBe(400);
   });
