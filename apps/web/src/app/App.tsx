@@ -31,6 +31,7 @@ import type {
   EngineerCareerHistory,
   EngineerResume,
   Proposal,
+  ProposalInput,
   ProposalStatus,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
@@ -68,9 +69,25 @@ const proposalStatusLabels: Record<ProposalStatus, string> = {
   cancelled: '中止',
 };
 
+const proposalTransitions: Record<ProposalStatus, ProposalStatus[]> = {
+  draft: ['pending_approval', 'cancelled'],
+  pending_approval: ['draft', 'approved', 'cancelled'],
+  approved: ['draft', 'sent', 'cancelled'],
+  sent: ['interview_requested', 'lost', 'withdrawn', 'cancelled'],
+  interview_requested: ['interviewing', 'lost', 'withdrawn', 'cancelled'],
+  interviewing: ['offered', 'lost', 'withdrawn', 'cancelled'],
+  offered: ['won', 'lost', 'withdrawn', 'cancelled'],
+  won: [],
+  lost: [],
+  withdrawn: [],
+  cancelled: [],
+};
+
 type Route =
   | { page: 'proposals' }
   | { page: 'proposal-detail'; id: string }
+  | { page: 'proposal-new' }
+  | { page: 'proposal-edit'; id: string }
   | { page: 'list' }
   | { page: 'detail'; id: string }
   | { page: 'new' }
@@ -88,6 +105,16 @@ type Route =
 
 function currentRoute(): Route {
   if (window.location.pathname === '/proposals') return { page: 'proposals' };
+  if (window.location.pathname === '/proposals/new')
+    return { page: 'proposal-new' };
+  const proposalEdit = window.location.pathname.match(
+    /^\/proposals\/([^/]+)\/edit$/,
+  );
+  if (proposalEdit)
+    return {
+      page: 'proposal-edit',
+      id: decodeURIComponent(proposalEdit[1]!),
+    };
   const proposal = window.location.pathname.match(/^\/proposals\/([^/]+)$/);
   if (proposal)
     return { page: 'proposal-detail', id: decodeURIComponent(proposal[1]!) };
@@ -137,10 +164,12 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
 function ProposalListView({
   api,
   onOpen,
+  onCreate,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   onOpen: (id: string) => void;
+  onCreate: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [items, setItems] = useState<Proposal[]>([]);
@@ -175,6 +204,9 @@ function ProposalListView({
           <h2>提案</h2>
           <p>RLSで参照可能な提案を表示します。</p>
         </div>
+        <button className="primary-button" onClick={onCreate}>
+          提案を登録
+        </button>
       </div>
       <div className="filter-row">
         <input
@@ -236,15 +268,21 @@ function ProposalDetail({
   api,
   id,
   onBack,
+  onEdit,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
+  onEdit: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [item, setItem] = useState<Proposal | null>(null);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [nextStatus, setNextStatus] = useState<ProposalStatus | ''>('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     void api
       .getProposal(id)
@@ -260,6 +298,36 @@ function ProposalDetail({
           );
       });
   }, [api, id, onUnauthorized]);
+  async function transition(event: FormEvent) {
+    event.preventDefault();
+    if (!item || !nextStatus) return;
+    setSaving(true);
+    setActionError('');
+    try {
+      const updated = await api.transitionProposalStatus(
+        item.id,
+        item.rowVersion,
+        {
+          status: nextStatus,
+          reason: reason.trim() || null,
+        },
+      );
+      setItem(updated);
+      setNextStatus('');
+      setReason('');
+    } catch (failure) {
+      if (failure instanceof ApiClientError && failure.status === 401)
+        await onUnauthorized();
+      else
+        setActionError(
+          failure instanceof Error
+            ? failure.message
+            : '提案状態を更新できませんでした。',
+        );
+    } finally {
+      setSaving(false);
+    }
+  }
   if (error)
     return (
       <section className="content-panel">
@@ -278,7 +346,14 @@ function ProposalDetail({
       <button className="secondary-button" onClick={onBack}>
         一覧へ戻る
       </button>
-      <h2>{item.managementNo}</h2>
+      <div className="section-heading">
+        <h2>{item.managementNo}</h2>
+        {item.status === 'draft' ? (
+          <button className="primary-button" onClick={onEdit}>
+            編集
+          </button>
+        ) : null}
+      </div>
       <dl className="detail-grid">
         <dt>状態</dt>
         <dd>{proposalStatusLabels[item.status]}</dd>
@@ -305,6 +380,263 @@ function ProposalDetail({
         <dt>要件版ID</dt>
         <dd>{item.requirementVersionId ?? '—'}</dd>
       </dl>
+      {proposalTransitions[item.status].length > 0 ? (
+        <form
+          className="project-form"
+          onSubmit={(event) => void transition(event)}
+        >
+          <h3>状態を更新</h3>
+          {actionError ? <p role="alert">{actionError}</p> : null}
+          <label>
+            次の状態
+            <select
+              required
+              value={nextStatus}
+              onChange={(event) =>
+                setNextStatus(event.target.value as ProposalStatus | '')
+              }
+            >
+              <option value="">選択してください</option>
+              {proposalTransitions[item.status].map((status) => (
+                <option key={status} value={status}>
+                  {proposalStatusLabels[status]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            変更理由
+            <textarea
+              maxLength={500}
+              required={
+                nextStatus === 'lost' ||
+                nextStatus === 'withdrawn' ||
+                nextStatus === 'cancelled'
+              }
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </label>
+          <button className="primary-button" disabled={saving || !nextStatus}>
+            {saving ? '更新中…' : '状態を更新'}
+          </button>
+        </form>
+      ) : null}
+    </section>
+  );
+}
+
+function ProposalForm({
+  api,
+  id,
+  onCancel,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  id?: string;
+  onCancel: () => void;
+  onSaved: (id: string) => void;
+}) {
+  const empty: ProposalInput = {
+    managementNo: '',
+    projectPositionId: '',
+    engineerId: '',
+    destinationCompanyId: '',
+    destinationContactId: null,
+    resumeVersionId: null,
+    requirementVersionId: null,
+    proposedUnitPrice: null,
+    currencyCode: 'JPY',
+    proposedStartDate: null,
+    validityDate: null,
+  };
+  const [input, setInput] = useState<ProposalInput>(empty);
+  const [rowVersion, setRowVersion] = useState<number | null>(null);
+  const [loading, setLoading] = useState(id !== undefined);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!id) return;
+    void api
+      .getProposal(id)
+      .then((proposal) => {
+        setInput({
+          managementNo: proposal.managementNo,
+          projectPositionId: proposal.projectPositionId,
+          engineerId: proposal.engineerId,
+          destinationCompanyId: proposal.destinationCompanyId,
+          destinationContactId: proposal.destinationContactId,
+          resumeVersionId: proposal.resumeVersionId,
+          requirementVersionId: proposal.requirementVersionId,
+          proposedUnitPrice: proposal.proposedUnitPrice,
+          currencyCode: proposal.currencyCode,
+          proposedStartDate: proposal.proposedStartDate,
+          validityDate: proposal.validityDate,
+        });
+        setRowVersion(proposal.rowVersion);
+      })
+      .catch((failure: unknown) =>
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : '提案を読み込めませんでした。',
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [api, id]);
+  const text = (name: keyof ProposalInput, value: string) =>
+    setInput((current) => ({ ...current, [name]: value }));
+  const nullable = (name: keyof ProposalInput, value: string) =>
+    setInput((current) => ({
+      ...current,
+      [name]: value.trim() === '' ? null : value,
+    }));
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const proposal = id
+        ? await api.updateProposal(id, rowVersion!, input)
+        : await api.createProposal(input);
+      onSaved(proposal.id);
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : '提案を保存できませんでした。',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  if (loading)
+    return (
+      <section className="content-panel" role="status">
+        提案を読み込んでいます…
+      </section>
+    );
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <h2>{id ? '提案を編集' : '提案を登録'}</h2>
+        <button className="secondary-button" onClick={onCancel}>
+          キャンセル
+        </button>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <form className="project-form" onSubmit={(event) => void submit(event)}>
+        <label>
+          提案番号
+          <input
+            required
+            maxLength={32}
+            value={input.managementNo}
+            onChange={(event) => text('managementNo', event.target.value)}
+          />
+        </label>
+        <label>
+          案件ポジションID
+          <input
+            required
+            value={input.projectPositionId}
+            onChange={(event) => text('projectPositionId', event.target.value)}
+          />
+        </label>
+        <label>
+          技術者ID
+          <input
+            required
+            value={input.engineerId}
+            onChange={(event) => text('engineerId', event.target.value)}
+          />
+        </label>
+        <label>
+          提出先会社ID
+          <input
+            required
+            value={input.destinationCompanyId}
+            onChange={(event) =>
+              text('destinationCompanyId', event.target.value)
+            }
+          />
+        </label>
+        <label>
+          提出先担当者ID
+          <input
+            value={input.destinationContactId ?? ''}
+            onChange={(event) =>
+              nullable('destinationContactId', event.target.value)
+            }
+          />
+        </label>
+        <label>
+          経歴書版ID
+          <input
+            value={input.resumeVersionId ?? ''}
+            onChange={(event) =>
+              nullable('resumeVersionId', event.target.value)
+            }
+          />
+        </label>
+        <label>
+          案件要件版ID
+          <input
+            value={input.requirementVersionId ?? ''}
+            onChange={(event) =>
+              nullable('requirementVersionId', event.target.value)
+            }
+          />
+        </label>
+        <label>
+          提案単価
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={input.proposedUnitPrice ?? ''}
+            onChange={(event) =>
+              setInput((current) => ({
+                ...current,
+                proposedUnitPrice:
+                  event.target.value === '' ? null : Number(event.target.value),
+              }))
+            }
+          />
+        </label>
+        <label>
+          通貨
+          <input
+            required
+            maxLength={3}
+            value={input.currencyCode}
+            onChange={(event) =>
+              text('currencyCode', event.target.value.toUpperCase())
+            }
+          />
+        </label>
+        <label>
+          提案開始日
+          <input
+            type="date"
+            value={input.proposedStartDate ?? ''}
+            onChange={(event) =>
+              nullable('proposedStartDate', event.target.value)
+            }
+          />
+        </label>
+        <label>
+          有効期限
+          <input
+            type="date"
+            value={input.validityDate ?? ''}
+            onChange={(event) => nullable('validityDate', event.target.value)}
+          />
+        </label>
+        <button className="primary-button" disabled={saving}>
+          {saving ? '保存中…' : id ? '提案を保存' : '提案を登録'}
+        </button>
+      </form>
     </section>
   );
 }
@@ -448,6 +780,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         <ProposalListView
           api={api}
           onOpen={(id) => navigate(`/proposals/${id}`)}
+          onCreate={() => navigate('/proposals/new')}
           onUnauthorized={signOut}
         />
       ) : route.page === 'proposal-detail' ? (
@@ -455,7 +788,21 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           api={api}
           id={route.id}
           onBack={() => navigate('/proposals')}
+          onEdit={() => navigate(`/proposals/${route.id}/edit`)}
           onUnauthorized={signOut}
+        />
+      ) : route.page === 'proposal-new' || route.page === 'proposal-edit' ? (
+        <ProposalForm
+          api={api}
+          {...(route.page === 'proposal-edit' ? { id: route.id } : {})}
+          onCancel={() =>
+            navigate(
+              route.page === 'proposal-edit'
+                ? `/proposals/${route.id}`
+                : '/proposals',
+            )
+          }
+          onSaved={(id) => navigate(`/proposals/${id}`)}
         />
       ) : route.page === 'list' ? (
         <ProjectList

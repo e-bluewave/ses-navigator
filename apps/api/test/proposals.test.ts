@@ -3,6 +3,7 @@ import { buildApp } from '../src/app.js';
 import type { AuthenticationService } from '../src/plugins/authentication.js';
 import type {
   Proposal,
+  ProposalInput,
   ProposalRepository,
 } from '../src/modules/proposals/proposal-repository.js';
 
@@ -26,6 +27,19 @@ const proposal: Proposal = {
 const authentication: AuthenticationService = {
   authenticate: (accessToken) => Promise.resolve({ id: 'user-a', accessToken }),
 };
+const input: ProposalInput = {
+  managementNo: proposal.managementNo,
+  projectPositionId: proposal.projectPositionId,
+  engineerId: proposal.engineerId,
+  destinationCompanyId: proposal.destinationCompanyId,
+  destinationContactId: null,
+  resumeVersionId: null,
+  requirementVersionId: null,
+  proposedUnitPrice: proposal.proposedUnitPrice,
+  currencyCode: 'JPY',
+  proposedStartDate: proposal.proposedStartDate,
+  validityDate: proposal.validityDate,
+};
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => Promise.all(apps.splice(0).map((app) => app.close())));
 function repository(
@@ -33,8 +47,13 @@ function repository(
 ): ProposalRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
+    canManage: vi.fn(() => Promise.resolve(true)),
+    canSend: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [proposal], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(proposal)),
+    create: vi.fn(() => Promise.resolve({ ...proposal, status: 'draft' })),
+    update: vi.fn(() => Promise.resolve({ ...proposal, status: 'draft' })),
+    transitionStatus: vi.fn(() => Promise.resolve(proposal)),
     ...overrides,
   };
 }
@@ -85,5 +104,87 @@ describe('proposal read API', () => {
       headers: { authorization: 'Bearer valid' },
     });
     expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('proposal write API', () => {
+  it('creates a draft proposal through the limited repository path', async () => {
+    const create = vi.fn(() =>
+      Promise.resolve({ ...proposal, status: 'draft', rowVersion: 1 }),
+    );
+    const response = await app(repository({ create })).inject({
+      method: 'POST',
+      url: '/api/v1/proposals',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.headers.etag).toBe('"1"');
+    expect(create).toHaveBeenCalledWith('valid', input, expect.any(String));
+  });
+
+  it('requires proposal.manage to create a proposal', async () => {
+    const response = await app(
+      repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: '/api/v1/proposals',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('uses If-Match when updating a draft', async () => {
+    const update = vi.fn(() =>
+      Promise.resolve({ ...proposal, status: 'draft', rowVersion: 3 }),
+    );
+    const response = await app(repository({ update })).inject({
+      method: 'PUT',
+      url: `/api/v1/proposals/${proposal.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      'valid',
+      proposal.id,
+      2,
+      input,
+      expect.any(String),
+    );
+  });
+
+  it('requires proposal.send for the sent transition', async () => {
+    const response = await app(
+      repository({ canSend: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: `/api/v1/proposals/${proposal.id}/status`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: { status: 'sent' },
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('records a reason for terminal status transitions', async () => {
+    const transitionStatus = vi.fn(() =>
+      Promise.resolve({ ...proposal, status: 'lost', rowVersion: 3 }),
+    );
+    const response = await app(repository({ transitionStatus })).inject({
+      method: 'POST',
+      url: `/api/v1/proposals/${proposal.id}/status`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: { status: 'lost', reason: 'Client selected another candidate' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(transitionStatus).toHaveBeenCalledWith(
+      'valid',
+      proposal.id,
+      2,
+      'lost',
+      'Client selected another candidate',
+      expect.any(String),
+    );
   });
 });

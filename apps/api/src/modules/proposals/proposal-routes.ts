@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ApiError } from '../../shared/errors.js';
 import type { ProposalRepository } from './proposal-repository.js';
+import type { ProposalInput } from './proposal-repository.js';
 
 const statuses = new Set([
   'draft',
@@ -22,6 +23,85 @@ export function registerProposalRoutes(
   app: FastifyInstance,
   repository: ProposalRepository,
 ): void {
+  app.post(
+    '/api/v1/proposals',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const input = parseProposalInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const proposal = await repository.create(
+        request.user.accessToken,
+        input,
+        request.id,
+      );
+      if (!proposal)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Proposal references are unavailable; reload and try again',
+        );
+      return reply
+        .code(201)
+        .header('etag', `"${proposal.rowVersion}"`)
+        .send(proposal);
+    },
+  );
+
+  app.put(
+    '/api/v1/proposals/:id',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const input = parseProposalInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const proposal = await repository.update(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        input,
+        request.id,
+      );
+      if (!proposal)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Proposal was changed, is no longer a draft, or is unavailable',
+        );
+      return reply.header('etag', `"${proposal.rowVersion}"`).send(proposal);
+    },
+  );
+
+  app.post(
+    '/api/v1/proposals/:id/status',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const transition = parseStatusTransition(request.body);
+      if (transition.status === 'sent')
+        await requireSend(repository, request.user.accessToken);
+      else await requireManage(repository, request.user.accessToken);
+      const proposal = await repository.transitionStatus(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        transition.status,
+        transition.reason,
+        request.id,
+      );
+      if (!proposal)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Proposal was changed or is unavailable; reload and try again',
+        );
+      return reply.header('etag', `"${proposal.rowVersion}"`).send(proposal);
+    },
+  );
+
   app.get(
     '/api/v1/proposals',
     { preHandler: (request) => app.authenticate(request) },
@@ -75,6 +155,108 @@ export function registerProposalRoutes(
       return proposal;
     },
   );
+}
+
+function parseProposalInput(value: unknown): ProposalInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const body = value as Record<string, unknown>;
+  const text = (name: string, max: number) => {
+    const item = body[name];
+    if (typeof item !== 'string' || item.trim().length < 1 || item.length > max)
+      throw invalid(`${name} is invalid`);
+    return item.trim();
+  };
+  const uuid = (name: string, nullable = false) => {
+    const item = body[name];
+    if (nullable && (item === null || item === undefined || item === ''))
+      return null;
+    if (typeof item !== 'string' || !uuidPattern.test(item))
+      throw invalid(`${name} must be a UUID`);
+    return item;
+  };
+  const price = body.proposedUnitPrice;
+  if (
+    price !== null &&
+    price !== undefined &&
+    (typeof price !== 'number' || !Number.isFinite(price) || price < 0)
+  )
+    throw invalid('proposedUnitPrice is invalid');
+  const currencyCode = text('currencyCode', 3).toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currencyCode))
+    throw invalid('currencyCode is invalid');
+  return {
+    managementNo: text('managementNo', 32),
+    projectPositionId: uuid('projectPositionId')!,
+    engineerId: uuid('engineerId')!,
+    destinationCompanyId: uuid('destinationCompanyId')!,
+    destinationContactId: uuid('destinationContactId', true),
+    resumeVersionId: uuid('resumeVersionId', true),
+    requirementVersionId: uuid('requirementVersionId', true),
+    proposedUnitPrice: typeof price === 'number' ? price : null,
+    currencyCode,
+    proposedStartDate: parseDate(body.proposedStartDate, 'proposedStartDate'),
+    validityDate: parseDate(body.validityDate, 'validityDate'),
+  };
+}
+
+function parseStatusTransition(value: unknown): {
+  status: string;
+  reason: string | null;
+} {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const body = value as Record<string, unknown>;
+  if (typeof body.status !== 'string' || !statuses.has(body.status))
+    throw invalid('status is invalid');
+  const rawReason = body.reason;
+  if (
+    rawReason !== null &&
+    rawReason !== undefined &&
+    (typeof rawReason !== 'string' || rawReason.length > 500)
+  )
+    throw invalid('reason is invalid');
+  const reason =
+    typeof rawReason === 'string' ? rawReason.trim() || null : null;
+  if (['lost', 'withdrawn', 'cancelled'].includes(body.status) && !reason)
+    throw invalid('reason is required for this status');
+  return { status: body.status, reason };
+}
+
+function parseDate(value: unknown, name: string): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  )
+    throw invalid(`${name} is invalid`);
+  return value;
+}
+
+function parseIfMatch(value: string | undefined): number {
+  const match = value?.match(/^(?:W\/)?"([1-9]\d*)"$/);
+  if (!match)
+    throw new ApiError(428, 'precondition_required', 'If-Match is required');
+  return Number(match[1]);
+}
+
+async function requireManage(repository: ProposalRepository, token: string) {
+  if (!(await repository.canManage(token)))
+    throw new ApiError(
+      403,
+      'forbidden',
+      'proposal.manage permission is required',
+    );
+}
+
+async function requireSend(repository: ProposalRepository, token: string) {
+  if (!(await repository.canSend(token)))
+    throw new ApiError(
+      403,
+      'forbidden',
+      'proposal.send permission is required',
+    );
 }
 
 async function requireRead(repository: ProposalRepository, token: string) {
