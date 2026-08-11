@@ -42,7 +42,9 @@ import type {
   EngineerResumeVersionInput,
   EngineerResumeList,
   Proposal,
+  ProposalInput,
   ProposalList,
+  ProposalStatusTransitionInput,
   ListProposalsQuery,
 } from './generated.js';
 
@@ -50,6 +52,17 @@ export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
   listProposals(query?: ListProposalsQuery): Promise<ProposalList>;
   getProposal(id: string): Promise<Proposal>;
+  createProposal(input: ProposalInput): Promise<Proposal>;
+  updateProposal(
+    id: string,
+    rowVersion: number,
+    input: ProposalInput,
+  ): Promise<Proposal>;
+  transitionProposalStatus(
+    id: string,
+    rowVersion: number,
+    input: ProposalStatusTransitionInput,
+  ): Promise<Proposal>;
   listEngineerCareerHistories(id: string): Promise<EngineerCareerHistoryList>;
   saveEngineerCareerHistory(
     id: string,
@@ -231,6 +244,25 @@ export function createProjectsApi(options: {
     },
     getProposal(id) {
       return get<Proposal>(`/proposals/${encodeURIComponent(id)}`);
+    },
+    createProposal(input) {
+      return send<Proposal>('/proposals', 'POST', input);
+    },
+    updateProposal(id, rowVersion, input) {
+      return send<Proposal>(
+        `/proposals/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    transitionProposalStatus(id, rowVersion, input) {
+      return send<Proposal>(
+        `/proposals/${encodeURIComponent(id)}/status`,
+        'POST',
+        input,
+        rowVersion,
+      );
     },
     listEngineerCareerHistories(id) {
       return get<EngineerCareerHistoryList>(

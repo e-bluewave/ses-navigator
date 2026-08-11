@@ -8,6 +8,23 @@ security:
   - bearerAuth: []
 paths:
   /proposals:
+    post:
+      operationId: createProposal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProposalInput' }
+      responses:
+        '201':
+          description: Draft proposal created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Proposal' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
     get:
       operationId: listProposals
       parameters:
@@ -36,6 +53,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /proposals/{id}:
+    put:
+      operationId: updateProposal
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProposalInput' }
+      responses:
+        '200':
+          description: Draft proposal updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Proposal' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     get:
       operationId: getProposal
       parameters:
@@ -54,6 +102,38 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /proposals/{id}/status:
+    post:
+      operationId: transitionProposalStatus
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProposalStatusTransitionInput' }
+      responses:
+        '200':
+          description: Proposal status transitioned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Proposal' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /companies:
     post:
       operationId: createCompany
@@ -1884,6 +1964,35 @@ components:
         validityDate: { type: [string, 'null'], format: date }
         updatedAt: { type: string, format: date-time }
         rowVersion: { type: integer, minimum: 1 }
+    ProposalInput:
+      type: object
+      required:
+        [
+          managementNo,
+          projectPositionId,
+          engineerId,
+          destinationCompanyId,
+          currencyCode,
+        ]
+      properties:
+        managementNo: { type: string, minLength: 1, maxLength: 32 }
+        projectPositionId: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        destinationCompanyId: { type: string, format: uuid }
+        destinationContactId: { type: [string, 'null'], format: uuid }
+        resumeVersionId: { type: [string, 'null'], format: uuid }
+        requirementVersionId: { type: [string, 'null'], format: uuid }
+        proposedUnitPrice: { type: [number, 'null'], minimum: 0 }
+        currencyCode:
+          { type: string, minLength: 3, maxLength: 3, pattern: '^[A-Z]{3}$' }
+        proposedStartDate: { type: [string, 'null'], format: date }
+        validityDate: { type: [string, 'null'], format: date }
+    ProposalStatusTransitionInput:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: '#/components/schemas/ProposalStatus' }
+        reason: { type: [string, 'null'], maxLength: 500 }
     ProposalList:
       type: object
       required: [items, page]

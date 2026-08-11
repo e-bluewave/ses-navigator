@@ -7,6 +7,9 @@ const contract = await readFile(contractPath, 'utf8');
 const requiredContractFragments = [
   'operationId: listProposals',
   'operationId: getProposal',
+  'operationId: createProposal',
+  'operationId: updateProposal',
+  'operationId: transitionProposalStatus',
   'operationId: listProjects',
   'operationId: getProject',
   'operationId: createProject',
@@ -478,6 +481,23 @@ export interface Proposal {
   validityDate: string | null;
   updatedAt: string;
   rowVersion: number;
+}
+export interface ProposalInput {
+  managementNo: string;
+  projectPositionId: string;
+  engineerId: string;
+  destinationCompanyId: string;
+  destinationContactId: string | null;
+  resumeVersionId: string | null;
+  requirementVersionId: string | null;
+  proposedUnitPrice: number | null;
+  currencyCode: string;
+  proposedStartDate: string | null;
+  validityDate: string | null;
+}
+export interface ProposalStatusTransitionInput {
+  status: ProposalStatus;
+  reason: string | null;
 }
 export interface ProposalList {
   items: Proposal[];

@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -134,6 +135,11 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
     getProposal: vi.fn(() => Promise.reject(new Error('not configured'))),
+    createProposal: vi.fn(() => Promise.reject(new Error('not configured'))),
+    updateProposal: vi.fn(() => Promise.reject(new Error('not configured'))),
+    transitionProposalStatus: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listEngineerCareerHistories: vi.fn(() => Promise.resolve({ items: [] })),
     saveEngineerCareerHistory: vi.fn(() =>
       Promise.reject(new Error('not configured')),
@@ -230,6 +236,54 @@ describe('App', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'PR-000001' }));
     expect(await screen.findByText('案件ポジションID')).toBeInTheDocument();
     expect(screen.getByText('送付済み')).toBeInTheDocument();
+  });
+  it('creates a draft proposal from the proposal form', async () => {
+    window.history.replaceState({}, '', '/proposals/new');
+    const created = { ...proposal, status: 'draft' as const };
+    const createProposal = vi.fn(() => Promise.resolve(created));
+    render(<App auth={auth()} api={api({ createProposal })} />);
+    fireEvent.change(await screen.findByLabelText('提案番号'), {
+      target: { value: created.managementNo },
+    });
+    fireEvent.change(screen.getByLabelText('案件ポジションID'), {
+      target: { value: created.projectPositionId },
+    });
+    fireEvent.change(screen.getByLabelText('技術者ID'), {
+      target: { value: created.engineerId },
+    });
+    fireEvent.change(screen.getByLabelText('提出先会社ID'), {
+      target: { value: created.destinationCompanyId },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '提案を登録' }));
+    await waitFor(() => expect(createProposal).toHaveBeenCalledOnce());
+  });
+  it('transitions proposal status with optimistic locking', async () => {
+    window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+    const transitionProposalStatus = vi.fn(() =>
+      Promise.resolve({ ...proposal, status: 'lost' as const, rowVersion: 2 }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getProposal: () => Promise.resolve(proposal),
+          transitionProposalStatus,
+        })}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('次の状態'), {
+      target: { value: 'lost' },
+    });
+    fireEvent.change(screen.getByLabelText('変更理由'), {
+      target: { value: '条件不一致' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '状態を更新' }));
+    await waitFor(() =>
+      expect(transitionProposalStatus).toHaveBeenCalledWith(proposal.id, 1, {
+        status: 'lost',
+        reason: '条件不一致',
+      }),
+    );
   });
   it('renders the engineer list and opens public detail', async () => {
     window.history.replaceState({}, '', '/engineers');
@@ -358,9 +412,13 @@ describe('App', () => {
     expect(
       await screen.findByDisplayValue('engineer@example.com'),
     ).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('電話'), {
-      target: { value: '090-0000-0000' },
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('電話'), {
+        target: { value: '090-0000-0000' },
+      });
+      await Promise.resolve();
     });
+    expect(screen.getByLabelText('電話')).toHaveValue('090-0000-0000');
     fireEvent.click(screen.getByRole('button', { name: '機密個人情報を保存' }));
     await waitFor(() =>
       expect(updateEngineerPrivate).toHaveBeenCalledWith(
