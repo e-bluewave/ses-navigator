@@ -33,6 +33,8 @@ import type {
   Proposal,
   ProposalInput,
   ProposalStatus,
+  Interview,
+  InterviewStatus,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -83,7 +85,24 @@ const proposalTransitions: Record<ProposalStatus, ProposalStatus[]> = {
   cancelled: [],
 };
 
+const interviewStatusLabels: Record<InterviewStatus, string> = {
+  tentative: '仮予定',
+  scheduled: '予定確定',
+  completed: '実施済み',
+  cancelled: 'キャンセル',
+  no_show: '不参加',
+};
+
+const interviewTypeLabels = {
+  online: 'オンライン',
+  onsite: '対面',
+  phone: '電話',
+  other: 'その他',
+} as const;
+
 type Route =
+  | { page: 'interviews' }
+  | { page: 'interview-detail'; id: string }
   | { page: 'proposals' }
   | { page: 'proposal-detail'; id: string }
   | { page: 'proposal-new' }
@@ -104,6 +123,10 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/interviews') return { page: 'interviews' };
+  const interview = window.location.pathname.match(/^\/interviews\/([^/]+)$/);
+  if (interview)
+    return { page: 'interview-detail', id: decodeURIComponent(interview[1]!) };
   if (window.location.pathname === '/proposals') return { page: 'proposals' };
   if (window.location.pathname === '/proposals/new')
     return { page: 'proposal-new' };
@@ -158,6 +181,198 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
     <AuthProvider auth={auth}>
       <AuthenticatedApp {...(api === undefined ? {} : { api })} />
     </AuthProvider>
+  );
+}
+
+function InterviewListView({
+  api,
+  onOpen,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<Interview[]>([]);
+  const [status, setStatus] = useState<InterviewStatus | ''>('');
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void api
+      .listInterviews({
+        ...(query ? { q: query } : {}),
+        ...(status ? { status } : {}),
+      })
+      .then((result) => {
+        setItems(result.items);
+        setError('');
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '面談一覧を取得できませんでした。',
+          );
+      });
+  }, [api, onUnauthorized, query, status]);
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <h2>面談</h2>
+          <p>RLSで参照可能な面談を表示します。</p>
+        </div>
+      </div>
+      <div className="filter-row">
+        <input
+          aria-label="提案番号で面談を検索"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="提案番号"
+        />
+        <select
+          aria-label="面談状態"
+          value={status}
+          onChange={(event) =>
+            setStatus(event.target.value as InterviewStatus | '')
+          }
+        >
+          <option value="">すべての状態</option>
+          {Object.entries(interviewStatusLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      <table>
+        <thead>
+          <tr>
+            <th>提案番号</th>
+            <th>回数</th>
+            <th>状態</th>
+            <th>種別</th>
+            <th>開始予定</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.id}>
+              <td>
+                <button className="link-button" onClick={() => onOpen(item.id)}>
+                  {item.proposalManagementNo}
+                </button>
+              </td>
+              <td>{item.interviewRound}回目</td>
+              <td>{interviewStatusLabels[item.status]}</td>
+              <td>{interviewTypeLabels[item.interviewType]}</td>
+              <td>{formatDateTime(item.scheduledStartAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {items.length === 0 && !error && <p>該当する面談はありません。</p>}
+    </section>
+  );
+}
+
+function InterviewDetail({
+  api,
+  id,
+  onBack,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  id: string;
+  onBack: () => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [item, setItem] = useState<Interview | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void api
+      .getInterview(id)
+      .then((result) => {
+        setItem(result);
+        setError('');
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '面談詳細を取得できませんでした。',
+          );
+      });
+  }, [api, id, onUnauthorized]);
+  if (error)
+    return (
+      <section className="content-panel">
+        <p role="alert">{error}</p>
+        <button className="secondary-button" onClick={onBack}>
+          面談一覧へ戻る
+        </button>
+      </section>
+    );
+  if (!item)
+    return (
+      <section className="content-panel" role="status">
+        面談を読み込んでいます…
+      </section>
+    );
+  const meetingHref = item.meetingUrl?.startsWith('https://')
+    ? item.meetingUrl
+    : null;
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{item.interviewRound}回目</p>
+          <h2>{item.proposalManagementNo} の面談</h2>
+        </div>
+        <button className="secondary-button" onClick={onBack}>
+          面談一覧へ戻る
+        </button>
+      </div>
+      <dl className="detail-grid">
+        <dt>状態</dt>
+        <dd>{interviewStatusLabels[item.status]}</dd>
+        <dt>種別</dt>
+        <dd>{interviewTypeLabels[item.interviewType]}</dd>
+        <dt>開始予定</dt>
+        <dd>{formatDateTime(item.scheduledStartAt)}</dd>
+        <dt>終了予定</dt>
+        <dd>{formatDateTime(item.scheduledEndAt)}</dd>
+        <dt>会場</dt>
+        <dd>{item.locationText ?? '未設定'}</dd>
+        <dt>会議URL</dt>
+        <dd>
+          {meetingHref ? (
+            <a href={meetingHref} target="_blank" rel="noreferrer">
+              {item.meetingUrl}
+            </a>
+          ) : (
+            (item.meetingUrl ?? '未設定')
+          )}
+        </dd>
+        <dt>案件ポジションID</dt>
+        <dd>{item.projectPositionId}</dd>
+        <dt>技術者ID</dt>
+        <dd>{item.engineerId}</dd>
+        <dt>提案ID</dt>
+        <dd>{item.proposalId}</dd>
+        <dt>備考</dt>
+        <dd>{item.notes ?? '未設定'}</dd>
+        <dt>版番号</dt>
+        <dd>{item.rowVersion}</dd>
+      </dl>
+    </section>
   );
 }
 
@@ -747,6 +962,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/interviews')}
+        >
+          面談
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/proposals')}
         >
           提案
@@ -776,7 +997,20 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'proposals' ? (
+      {route.page === 'interviews' ? (
+        <InterviewListView
+          api={api}
+          onOpen={(id) => navigate(`/interviews/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'interview-detail' ? (
+        <InterviewDetail
+          api={api}
+          id={route.id}
+          onBack={() => navigate('/interviews')}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'proposals' ? (
         <ProposalListView
           api={api}
           onOpen={(id) => navigate(`/proposals/${id}`)}
@@ -4154,9 +4388,11 @@ function formatDate(value: string | null): string {
     : new Intl.DateTimeFormat('ja-JP').format(new Date(`${value}T00:00:00Z`));
 }
 
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat('ja-JP', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+function formatDateTime(value: string | null): string {
+  return value === null
+    ? '未設定'
+    : new Intl.DateTimeFormat('ja-JP', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date(value));
 }

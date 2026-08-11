@@ -22,6 +22,9 @@ export type ProposalStatus =
   | 'lost'
   | 'withdrawn'
   | 'cancelled';
+export type InterviewType = 'online' | 'onsite' | 'phone' | 'other';
+export type InterviewStatus =
+  'tentative' | 'scheduled' | 'completed' | 'cancelled' | 'no_show';
 
 export interface AuthContext {
   requiresMfa: boolean;
@@ -442,6 +445,33 @@ export interface ProposalList {
 export interface ListProposalsQuery {
   q?: string;
   status?: ProposalStatus;
+  cursor?: string;
+  limit?: number;
+}
+export interface Interview {
+  id: string;
+  proposalId: string;
+  proposalManagementNo: string;
+  projectPositionId: string;
+  engineerId: string;
+  interviewRound: number;
+  interviewType: InterviewType;
+  status: InterviewStatus;
+  scheduledStartAt: string | null;
+  scheduledEndAt: string | null;
+  locationText: string | null;
+  meetingUrl: string | null;
+  notes: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface InterviewList {
+  items: Interview[];
+  page: { limit: number; nextCursor: string | null };
+}
+export interface ListInterviewsQuery {
+  q?: string;
+  status?: InterviewStatus;
   cursor?: string;
   limit?: number;
 }
