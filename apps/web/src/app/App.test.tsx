@@ -74,6 +74,10 @@ const interview: Interview = {
       candidateOrder: 1,
     },
   ],
+  participants: [],
+  feedback: [],
+  outcome: null,
+  statusHistory: [],
   updatedAt: '2026-08-11T00:00:00Z',
   rowVersion: 1,
 };
@@ -165,6 +169,9 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     getInterview: vi.fn(() => Promise.reject(new Error('not configured'))),
     createInterview: vi.fn(() => Promise.reject(new Error('not configured'))),
     updateInterview: vi.fn(() => Promise.reject(new Error('not configured'))),
+    saveInterviewResult: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listProposals: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -300,6 +307,52 @@ describe('App', () => {
     expect(saved.scheduleCandidates).toHaveLength(1);
     expect(saved.scheduleCandidates[0]!.startAt).toMatch(/^2026-08-19T/);
     expect(saved.scheduleCandidates[0]!.endAt).toMatch(/^2026-08-19T/);
+  });
+
+  it('records an interview participant and completed result', async () => {
+    window.history.replaceState({}, '', `/interviews/${interview.id}/result`);
+    const completed = {
+      ...interview,
+      status: 'completed' as const,
+      rowVersion: 2,
+    };
+    const saveInterviewResult = vi
+      .fn<ProjectsApi['saveInterviewResult']>()
+      .mockResolvedValue(completed);
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getInterview: vi.fn(() => Promise.resolve(interview)),
+          saveInterviewResult,
+        })}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: '参加者を追加' }),
+    );
+    fireEvent.change(screen.getByLabelText('表示名'), {
+      target: { value: '顧客担当者' },
+    });
+    fireEvent.change(screen.getByLabelText('判定'), {
+      target: { value: 'pass' },
+    });
+    fireEvent.change(screen.getByLabelText('決定日時'), {
+      target: { value: '2026-08-20T11:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '参加者・結果を保存' }));
+    await waitFor(() => expect(saveInterviewResult).toHaveBeenCalledOnce());
+    const [savedId, savedVersion, saved] = saveInterviewResult.mock.calls[0]!;
+    expect(savedId).toBe(interview.id);
+    expect(savedVersion).toBe(1);
+    expect(saved.status).toBe('completed');
+    expect(saved.participants).toHaveLength(1);
+    expect(saved.participants[0]).toMatchObject({
+      participantType: 'other',
+      displayName: '顧客担当者',
+      attendanceStatus: 'attended',
+    });
+    expect(saved.outcome?.outcome).toBe('pass');
   });
 
   it('lists proposals and opens proposal detail', async () => {

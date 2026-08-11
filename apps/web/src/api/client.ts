@@ -48,6 +48,7 @@ import type {
   ListProposalsQuery,
   Interview,
   InterviewInput,
+  InterviewResultInput,
   InterviewList,
   ListInterviewsQuery,
 } from './generated.js';
@@ -61,6 +62,11 @@ export interface ProjectsApi {
     id: string,
     rowVersion: number,
     input: InterviewInput,
+  ): Promise<Interview>;
+  saveInterviewResult(
+    id: string,
+    rowVersion: number,
+    input: InterviewResultInput,
   ): Promise<Interview>;
   listProposals(query?: ListProposalsQuery): Promise<ProposalList>;
   getProposal(id: string): Promise<Proposal>;
@@ -264,6 +270,14 @@ export function createProjectsApi(options: {
       return send<Interview>(
         `/interviews/${encodeURIComponent(id)}`,
         'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    saveInterviewResult(id, rowVersion, input) {
+      return send<Interview>(
+        `/interviews/${encodeURIComponent(id)}/result`,
+        'POST',
         input,
         rowVersion,
       );
