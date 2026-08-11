@@ -36,12 +36,32 @@ select app.attach_row_version_trigger('app.interview_schedule_candidates'::regcl
 alter table app.interview_schedule_candidates enable row level security;
 alter table app.interview_schedule_candidates force row level security;
 
-select private.install_authorization_policies(
-  'app.interview_schedule_candidates',
-  'app.can_access_interview(interview_id, ''interview.read'', ''view'')',
-  'app.can_access_interview(interview_id, ''interview.manage'', ''edit'')',
-  'app.can_access_interview(interview_id, ''interview.manage'', ''edit'')'
-);
+create policy authorization_select
+  on app.interview_schedule_candidates
+  for select
+  to authenticated
+  using (
+    app.can_access_interview(interview_id, 'interview.read', 'view')
+  );
+
+create policy authorization_insert
+  on app.interview_schedule_candidates
+  for insert
+  to authenticated
+  with check (
+    app.can_access_interview(interview_id, 'interview.manage', 'edit')
+  );
+
+create policy authorization_update
+  on app.interview_schedule_candidates
+  for update
+  to authenticated
+  using (
+    app.can_access_interview(interview_id, 'interview.manage', 'edit')
+  )
+  with check (
+    app.can_access_interview(interview_id, 'interview.manage', 'edit')
+  );
 
 grant select on table app.interview_schedule_candidates to authenticated;
 
