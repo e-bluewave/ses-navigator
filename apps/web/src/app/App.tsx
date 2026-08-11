@@ -34,7 +34,9 @@ import type {
   ProposalInput,
   ProposalStatus,
   Interview,
+  InterviewInput,
   InterviewStatus,
+  InterviewType,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -86,7 +88,7 @@ const proposalTransitions: Record<ProposalStatus, ProposalStatus[]> = {
 };
 
 const interviewStatusLabels: Record<InterviewStatus, string> = {
-  tentative: '仮予定',
+  tentative: '日程調整中',
   scheduled: '予定確定',
   completed: '実施済み',
   cancelled: 'キャンセル',
@@ -103,6 +105,8 @@ const interviewTypeLabels = {
 type Route =
   | { page: 'interviews' }
   | { page: 'interview-detail'; id: string }
+  | { page: 'interview-new' }
+  | { page: 'interview-edit'; id: string }
   | { page: 'proposals' }
   | { page: 'proposal-detail'; id: string }
   | { page: 'proposal-new' }
@@ -124,6 +128,16 @@ type Route =
 
 function currentRoute(): Route {
   if (window.location.pathname === '/interviews') return { page: 'interviews' };
+  if (window.location.pathname === '/interviews/new')
+    return { page: 'interview-new' };
+  const interviewEdit = window.location.pathname.match(
+    /^\/interviews\/([^/]+)\/edit$/,
+  );
+  if (interviewEdit)
+    return {
+      page: 'interview-edit',
+      id: decodeURIComponent(interviewEdit[1]!),
+    };
   const interview = window.location.pathname.match(/^\/interviews\/([^/]+)$/);
   if (interview)
     return { page: 'interview-detail', id: decodeURIComponent(interview[1]!) };
@@ -187,10 +201,12 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
 function InterviewListView({
   api,
   onOpen,
+  onCreate,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   onOpen: (id: string) => void;
+  onCreate: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [items, setItems] = useState<Interview[]>([]);
@@ -225,6 +241,9 @@ function InterviewListView({
           <h2>面談</h2>
           <p>RLSで参照可能な面談を表示します。</p>
         </div>
+        <button className="primary-button" onClick={onCreate}>
+          面談を登録
+        </button>
       </div>
       <div className="filter-row">
         <input
@@ -284,11 +303,13 @@ function InterviewDetail({
   api,
   id,
   onBack,
+  onEdit,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
+  onEdit: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [item, setItem] = useState<Interview | null>(null);
@@ -339,6 +360,11 @@ function InterviewDetail({
         <button className="secondary-button" onClick={onBack}>
           面談一覧へ戻る
         </button>
+        {item.status === 'tentative' || item.status === 'scheduled' ? (
+          <button className="primary-button" onClick={onEdit}>
+            編集
+          </button>
+        ) : null}
       </div>
       <dl className="detail-grid">
         <dt>状態</dt>
@@ -369,11 +395,323 @@ function InterviewDetail({
         <dd>{item.proposalId}</dd>
         <dt>備考</dt>
         <dd>{item.notes ?? '未設定'}</dd>
+        <dt>候補日時</dt>
+        <dd>
+          {item.scheduleCandidates.length === 0 ? (
+            '未設定'
+          ) : (
+            <ol>
+              {item.scheduleCandidates.map((candidate) => (
+                <li key={candidate.id}>
+                  {formatDateTime(candidate.startAt)} ～{' '}
+                  {formatDateTime(candidate.endAt)}
+                </li>
+              ))}
+            </ol>
+          )}
+        </dd>
         <dt>版番号</dt>
         <dd>{item.rowVersion}</dd>
       </dl>
     </section>
   );
+}
+
+function InterviewForm({
+  api,
+  id,
+  onCancel,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  id?: string;
+  onCancel: () => void;
+  onSaved: (id: string) => void;
+}) {
+  type CandidateDraft = { startAt: string; endAt: string };
+  const empty: InterviewInput = {
+    proposalId: '',
+    interviewRound: 1,
+    interviewType: 'online',
+    status: 'tentative',
+    scheduledStartAt: null,
+    scheduledEndAt: null,
+    locationText: null,
+    meetingUrl: null,
+    notes: null,
+    scheduleCandidates: [],
+  };
+  const [input, setInput] = useState<InterviewInput>(empty);
+  const [candidates, setCandidates] = useState<CandidateDraft[]>([]);
+  const [rowVersion, setRowVersion] = useState<number | null>(null);
+  const [loading, setLoading] = useState(id !== undefined);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!id) return;
+    void api
+      .getInterview(id)
+      .then((interview) => {
+        setInput({
+          proposalId: interview.proposalId,
+          interviewRound: interview.interviewRound,
+          interviewType: interview.interviewType,
+          status: interview.status === 'scheduled' ? 'scheduled' : 'tentative',
+          scheduledStartAt: interview.scheduledStartAt,
+          scheduledEndAt: interview.scheduledEndAt,
+          locationText: interview.locationText,
+          meetingUrl: interview.meetingUrl,
+          notes: interview.notes,
+          scheduleCandidates: [],
+        });
+        setCandidates(
+          interview.scheduleCandidates.map((candidate) => ({
+            startAt: toDateTimeLocal(candidate.startAt),
+            endAt: toDateTimeLocal(candidate.endAt),
+          })),
+        );
+        setRowVersion(interview.rowVersion);
+      })
+      .catch((failure: unknown) =>
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : '面談を読み込めませんでした。',
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [api, id]);
+  const update = <K extends keyof InterviewInput>(
+    name: K,
+    value: InterviewInput[K],
+  ) => setInput((current) => ({ ...current, [name]: value }));
+  const updateCandidate = (
+    index: number,
+    name: keyof CandidateDraft,
+    value: string,
+  ) =>
+    setCandidates((current) =>
+      current.map((candidate, candidateIndex) =>
+        candidateIndex === index ? { ...candidate, [name]: value } : candidate,
+      ),
+    );
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    const payload: InterviewInput = {
+      ...input,
+      scheduledStartAt: input.scheduledStartAt
+        ? new Date(input.scheduledStartAt).toISOString()
+        : null,
+      scheduledEndAt: input.scheduledEndAt
+        ? new Date(input.scheduledEndAt).toISOString()
+        : null,
+      scheduleCandidates: candidates.map((candidate) => ({
+        startAt: new Date(candidate.startAt).toISOString(),
+        endAt: new Date(candidate.endAt).toISOString(),
+      })),
+    };
+    try {
+      const interview = id
+        ? await api.updateInterview(id, rowVersion!, payload)
+        : await api.createInterview(payload);
+      onSaved(interview.id);
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : '面談を保存できませんでした。',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  if (loading)
+    return (
+      <section className="content-panel" role="status">
+        面談を読み込んでいます…
+      </section>
+    );
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <h2>{id ? '面談を編集' : '面談を登録'}</h2>
+        <button className="secondary-button" onClick={onCancel}>
+          キャンセル
+        </button>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <form className="project-form" onSubmit={(event) => void submit(event)}>
+        <label>
+          提案ID
+          <input
+            required
+            disabled={id !== undefined}
+            value={input.proposalId}
+            onChange={(event) => update('proposalId', event.target.value)}
+          />
+        </label>
+        <label>
+          面談回数
+          <input
+            required
+            type="number"
+            min={1}
+            max={99}
+            value={input.interviewRound}
+            onChange={(event) =>
+              update('interviewRound', Number(event.target.value))
+            }
+          />
+        </label>
+        <label>
+          種別
+          <select
+            value={input.interviewType}
+            onChange={(event) =>
+              update('interviewType', event.target.value as InterviewType)
+            }
+          >
+            {Object.entries(interviewTypeLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          状態
+          <select
+            value={input.status}
+            onChange={(event) =>
+              update('status', event.target.value as InterviewInput['status'])
+            }
+          >
+            <option value="tentative">日程調整中</option>
+            <option value="scheduled">予定確定</option>
+          </select>
+        </label>
+        <label>
+          確定開始日時
+          <input
+            type="datetime-local"
+            required={input.status === 'scheduled'}
+            value={toDateTimeLocal(input.scheduledStartAt)}
+            onChange={(event) =>
+              update('scheduledStartAt', event.target.value || null)
+            }
+          />
+        </label>
+        <label>
+          確定終了日時
+          <input
+            type="datetime-local"
+            required={input.status === 'scheduled'}
+            value={toDateTimeLocal(input.scheduledEndAt)}
+            onChange={(event) =>
+              update('scheduledEndAt', event.target.value || null)
+            }
+          />
+        </label>
+        <label>
+          会場
+          <input
+            maxLength={500}
+            value={input.locationText ?? ''}
+            onChange={(event) =>
+              update('locationText', event.target.value || null)
+            }
+          />
+        </label>
+        <label>
+          会議URL
+          <input
+            type="url"
+            maxLength={2000}
+            value={input.meetingUrl ?? ''}
+            onChange={(event) =>
+              update('meetingUrl', event.target.value || null)
+            }
+          />
+        </label>
+        <label>
+          備考
+          <textarea
+            maxLength={5000}
+            value={input.notes ?? ''}
+            onChange={(event) => update('notes', event.target.value || null)}
+          />
+        </label>
+        <fieldset>
+          <legend>候補日時（最大10件）</legend>
+          {candidates.map((candidate, index) => (
+            <div className="filter-row" key={index}>
+              <label>
+                候補{index + 1}開始
+                <input
+                  required
+                  type="datetime-local"
+                  value={candidate.startAt}
+                  onChange={(event) =>
+                    updateCandidate(index, 'startAt', event.target.value)
+                  }
+                />
+              </label>
+              <label>
+                候補{index + 1}終了
+                <input
+                  required
+                  type="datetime-local"
+                  value={candidate.endAt}
+                  onChange={(event) =>
+                    updateCandidate(index, 'endAt', event.target.value)
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  setCandidates((current) =>
+                    current.filter(
+                      (_, candidateIndex) => candidateIndex !== index,
+                    ),
+                  )
+                }
+              >
+                削除
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={candidates.length >= 10}
+            onClick={() =>
+              setCandidates((current) => [
+                ...current,
+                { startAt: '', endAt: '' },
+              ])
+            }
+          >
+            候補日時を追加
+          </button>
+        </fieldset>
+        <button className="primary-button" disabled={saving}>
+          {saving ? '保存中…' : '保存'}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function toDateTimeLocal(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
 }
 
 function ProposalListView({
@@ -1001,6 +1339,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         <InterviewListView
           api={api}
           onOpen={(id) => navigate(`/interviews/${id}`)}
+          onCreate={() => navigate('/interviews/new')}
           onUnauthorized={signOut}
         />
       ) : route.page === 'interview-detail' ? (
@@ -1008,7 +1347,21 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           api={api}
           id={route.id}
           onBack={() => navigate('/interviews')}
+          onEdit={() => navigate(`/interviews/${route.id}/edit`)}
           onUnauthorized={signOut}
+        />
+      ) : route.page === 'interview-new' || route.page === 'interview-edit' ? (
+        <InterviewForm
+          api={api}
+          {...(route.page === 'interview-edit' ? { id: route.id } : {})}
+          onCancel={() =>
+            navigate(
+              route.page === 'interview-edit'
+                ? `/interviews/${route.id}`
+                : '/interviews',
+            )
+          }
+          onSaved={(id) => navigate(`/interviews/${id}`)}
         />
       ) : route.page === 'proposals' ? (
         <ProposalListView

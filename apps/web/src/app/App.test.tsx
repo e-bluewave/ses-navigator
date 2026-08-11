@@ -14,6 +14,7 @@ import type {
   CompanyContact,
   Engineer,
   Interview,
+  InterviewInput,
   Proposal,
   Project,
 } from '../api/generated.js';
@@ -65,6 +66,14 @@ const interview: Interview = {
   locationText: null,
   meetingUrl: 'https://meet.example.com/interview',
   notes: '経歴書を確認する',
+  scheduleCandidates: [
+    {
+      id: '88888888-8888-4888-8888-888888888888',
+      startAt: '2026-08-19T01:00:00Z',
+      endAt: '2026-08-19T02:00:00Z',
+      candidateOrder: 1,
+    },
+  ],
   updatedAt: '2026-08-11T00:00:00Z',
   rowVersion: 1,
 };
@@ -154,6 +163,8 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
     getInterview: vi.fn(() => Promise.reject(new Error('not configured'))),
+    createInterview: vi.fn(() => Promise.reject(new Error('not configured'))),
+    updateInterview: vi.fn(() => Promise.reject(new Error('not configured'))),
     listProposals: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -260,6 +271,35 @@ describe('App', () => {
     expect(await screen.findByText('案件ポジションID')).toBeInTheDocument();
     expect(screen.getByText('予定確定')).toBeInTheDocument();
     expect(screen.getByText('経歴書を確認する')).toBeInTheDocument();
+    expect(screen.getByText('候補日時')).toBeInTheDocument();
+  });
+
+  it('creates a tentative interview with a schedule candidate', async () => {
+    window.history.replaceState({}, '', '/interviews/new');
+    const created = { ...interview, status: 'tentative' as const };
+    const createInterview = vi
+      .fn<(input: InterviewInput) => Promise<Interview>>()
+      .mockResolvedValue(created);
+    render(<App auth={auth()} api={api({ createInterview })} />);
+    fireEvent.change(await screen.findByLabelText('提案ID'), {
+      target: { value: proposal.id },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '候補日時を追加' }));
+    fireEvent.change(screen.getByLabelText('候補1開始'), {
+      target: { value: '2026-08-19T10:00' },
+    });
+    fireEvent.change(screen.getByLabelText('候補1終了'), {
+      target: { value: '2026-08-19T11:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(createInterview).toHaveBeenCalledOnce());
+    const saved = createInterview.mock.calls[0]![0];
+    expect(saved.proposalId).toBe(proposal.id);
+    expect(saved.interviewRound).toBe(1);
+    expect(saved.status).toBe('tentative');
+    expect(saved.scheduleCandidates).toHaveLength(1);
+    expect(saved.scheduleCandidates[0]!.startAt).toMatch(/^2026-08-19T/);
+    expect(saved.scheduleCandidates[0]!.endAt).toMatch(/^2026-08-19T/);
   });
 
   it('lists proposals and opens proposal detail', async () => {

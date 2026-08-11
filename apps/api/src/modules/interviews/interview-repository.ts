@@ -15,8 +15,29 @@ export interface Interview {
   locationText: string | null;
   meetingUrl: string | null;
   notes: string | null;
+  scheduleCandidates: InterviewScheduleCandidate[];
   updatedAt: string;
   rowVersion: number;
+}
+
+export interface InterviewScheduleCandidate {
+  id: string;
+  startAt: string;
+  endAt: string;
+  candidateOrder: number;
+}
+
+export interface InterviewInput {
+  proposalId: string;
+  interviewRound: number;
+  interviewType: string;
+  status: 'tentative' | 'scheduled';
+  scheduledStartAt: string | null;
+  scheduledEndAt: string | null;
+  locationText: string | null;
+  meetingUrl: string | null;
+  notes: string | null;
+  scheduleCandidates: Array<{ startAt: string; endAt: string }>;
 }
 
 export interface InterviewListQuery {
@@ -33,11 +54,24 @@ export interface InterviewListResult {
 
 export interface InterviewRepository {
   canRead(accessToken: string): Promise<boolean>;
+  canManage(accessToken: string): Promise<boolean>;
   list(
     accessToken: string,
     query: InterviewListQuery,
   ): Promise<InterviewListResult>;
   findById(accessToken: string, id: string): Promise<Interview | null>;
+  create(
+    accessToken: string,
+    input: InterviewInput,
+    requestId: string,
+  ): Promise<Interview | null>;
+  update(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: InterviewInput,
+    requestId: string,
+  ): Promise<Interview | null>;
 }
 
 type InterviewRow = {
@@ -53,6 +87,12 @@ type InterviewRow = {
   notes: string | null;
   updated_at: string;
   row_version: number;
+  schedule_candidates: Array<{
+    id: string;
+    candidate_start_at: string;
+    candidate_end_at: string;
+    candidate_order: number;
+  }>;
   proposal: {
     management_no: string;
     project_position_id: string;
@@ -61,13 +101,21 @@ type InterviewRow = {
 };
 
 const select =
-  'id,proposal_id,interview_round,interview_type,status,scheduled_start_at,scheduled_end_at,location_text,meeting_url,notes,updated_at,row_version,proposal:proposals!inner(management_no,project_position_id,engineer_id)';
+  'id,proposal_id,interview_round,interview_type,status,scheduled_start_at,scheduled_end_at,location_text,meeting_url,notes,updated_at,row_version,schedule_candidates:interview_schedule_candidates(id,candidate_start_at,candidate_end_at,candidate_order),proposal:proposals!inner(management_no,project_position_id,engineer_id)';
 
 export class SupabaseInterviewRepository implements InterviewRepository {
   async canRead(token: string): Promise<boolean> {
     const response = await this.request(token, '/rpc/has_permission', {
       method: 'POST',
       body: JSON.stringify({ required_permission: 'interview.read' }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async canManage(token: string): Promise<boolean> {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'interview.manage' }),
     });
     return (await response.json()) === true;
   }
@@ -119,6 +167,73 @@ export class SupabaseInterviewRepository implements InterviewRepository {
     return rows[0] ? toInterview(rows[0]) : null;
   }
 
+  async create(
+    token: string,
+    input: InterviewInput,
+    requestId: string,
+  ): Promise<Interview | null> {
+    return this.save(token, null, 0, input, requestId);
+  }
+
+  async update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: InterviewInput,
+    requestId: string,
+  ): Promise<Interview | null> {
+    return this.save(token, id, rowVersion, input, requestId);
+  }
+
+  private async save(
+    token: string,
+    id: string | null,
+    rowVersion: number,
+    input: InterviewInput,
+    requestId: string,
+  ): Promise<Interview | null> {
+    const response = await this.request(token, '/rpc/save_interview', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_interview_id: id,
+        p_row_version: rowVersion,
+        p_interview: {
+          proposal_id: input.proposalId,
+          interview_round: input.interviewRound,
+          interview_type: input.interviewType,
+          status: input.status,
+          scheduled_start_at: input.scheduledStartAt,
+          scheduled_end_at: input.scheduledEndAt,
+          location_text: input.locationText,
+          meeting_url: input.meetingUrl,
+          notes: input.notes,
+          schedule_candidates: input.scheduleCandidates.map((candidate) => ({
+            start_at: candidate.startAt,
+            end_at: candidate.endAt,
+          })),
+        },
+        p_request_id: requestId,
+      }),
+    });
+    const row = (await response.json()) as
+      | (Omit<InterviewRow, 'proposal'> & {
+          proposal_management_no: string;
+          project_position_id: string;
+          engineer_id: string;
+        })
+      | null;
+    return row
+      ? toInterview({
+          ...row,
+          proposal: {
+            management_no: row.proposal_management_no,
+            project_position_id: row.project_position_id,
+            engineer_id: row.engineer_id,
+          },
+        })
+      : null;
+  }
+
   private async request(
     token: string,
     path: string,
@@ -160,6 +275,14 @@ function toInterview(row: InterviewRow): Interview {
     locationText: row.location_text,
     meetingUrl: row.meeting_url,
     notes: row.notes,
+    scheduleCandidates: [...(row.schedule_candidates ?? [])]
+      .sort((left, right) => left.candidate_order - right.candidate_order)
+      .map((candidate) => ({
+        id: candidate.id,
+        startAt: candidate.candidate_start_at,
+        endAt: candidate.candidate_end_at,
+        candidateOrder: candidate.candidate_order,
+      })),
     updatedAt: row.updated_at,
     rowVersion: row.row_version,
   };
