@@ -102,6 +102,38 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /interviews/{id}/result:
+    post:
+      operationId: saveInterviewResult
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InterviewResultInput' }
+      responses:
+        '200':
+          description: Interview participants, result, and status saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Interview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /proposals:
     post:
       operationId: createProposal
@@ -2124,6 +2156,10 @@ components:
           meetingUrl,
           notes,
           scheduleCandidates,
+          participants,
+          feedback,
+          outcome,
+          statusHistory,
           updatedAt,
           rowVersion,
         ]
@@ -2144,6 +2180,19 @@ components:
         scheduleCandidates:
           type: array
           items: { $ref: '#/components/schemas/InterviewScheduleCandidate' }
+        participants:
+          type: array
+          items: { $ref: '#/components/schemas/InterviewParticipant' }
+        feedback:
+          type: array
+          items: { $ref: '#/components/schemas/InterviewFeedback' }
+        outcome:
+          oneOf:
+            - { $ref: '#/components/schemas/InterviewOutcome' }
+            - { type: 'null' }
+        statusHistory:
+          type: array
+          items: { $ref: '#/components/schemas/InterviewStatusHistory' }
         updatedAt: { type: string, format: date-time }
         rowVersion: { type: integer, minimum: 1 }
     InterviewScheduleCandidate:
@@ -2162,6 +2211,200 @@ components:
       properties:
         startAt: { type: string, format: date-time }
         endAt: { type: string, format: date-time }
+    InterviewParticipant:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          participantType,
+          engineerId,
+          userId,
+          companyContactId,
+          displayName,
+          email,
+          roleLabel,
+          attendanceStatus,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        participantType:
+          { type: string, enum: [engineer, user, company_contact, other] }
+        engineerId: { type: [string, 'null'], format: uuid }
+        userId: { type: [string, 'null'], format: uuid }
+        companyContactId: { type: [string, 'null'], format: uuid }
+        displayName: { type: [string, 'null'], maxLength: 200 }
+        email: { type: [string, 'null'], format: email }
+        roleLabel: { type: [string, 'null'], maxLength: 200 }
+        attendanceStatus:
+          {
+            type: string,
+            enum: [expected, accepted, declined, attended, absent],
+          }
+    InterviewParticipantInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          participantType,
+          engineerId,
+          userId,
+          companyContactId,
+          displayName,
+          email,
+          roleLabel,
+          attendanceStatus,
+        ]
+      properties:
+        participantType:
+          { type: string, enum: [engineer, user, company_contact, other] }
+        engineerId: { type: [string, 'null'], format: uuid }
+        userId: { type: [string, 'null'], format: uuid }
+        companyContactId: { type: [string, 'null'], format: uuid }
+        displayName: { type: [string, 'null'], maxLength: 200 }
+        email: { type: [string, 'null'], format: email }
+        roleLabel: { type: [string, 'null'], maxLength: 200 }
+        attendanceStatus:
+          {
+            type: string,
+            enum: [expected, accepted, declined, attended, absent],
+          }
+    InterviewFeedback:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          evaluatorUserId,
+          evaluatorContactId,
+          evaluationType,
+          overallRating,
+          technicalRating,
+          communicationRating,
+          recommendation,
+          comments,
+          submittedAt,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        evaluatorUserId: { type: [string, 'null'], format: uuid }
+        evaluatorContactId: { type: [string, 'null'], format: uuid }
+        evaluationType: { type: string, enum: [internal, customer, engineer] }
+        overallRating: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        technicalRating: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        communicationRating: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        recommendation:
+          {
+            type: [string, 'null'],
+            enum: [strong_yes, yes, hold, no, strong_no, null],
+          }
+        comments: { type: [string, 'null'], maxLength: 5000 }
+        submittedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    InterviewFeedbackInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          evaluationType,
+          overallRating,
+          technicalRating,
+          communicationRating,
+          recommendation,
+          comments,
+        ]
+      properties:
+        evaluationType: { type: string, enum: [internal] }
+        overallRating: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        technicalRating: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        communicationRating: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        recommendation:
+          {
+            type: [string, 'null'],
+            enum: [strong_yes, yes, hold, no, strong_no, null],
+          }
+        comments: { type: [string, 'null'], maxLength: 5000 }
+    InterviewOutcome:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          outcome,
+          decidedAt,
+          decisionSource,
+          reason,
+          nextAction,
+          nextActionDueAt,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        outcome: { type: string, enum: [pass, fail, hold, withdrawn, pending] }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        decisionSource:
+          {
+            type: [string, 'null'],
+            enum: [customer, internal, engineer, system, null],
+          }
+        reason: { type: [string, 'null'], maxLength: 2000 }
+        nextAction: { type: [string, 'null'], maxLength: 2000 }
+        nextActionDueAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    InterviewOutcomeInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          outcome,
+          decidedAt,
+          decisionSource,
+          reason,
+          nextAction,
+          nextActionDueAt,
+        ]
+      properties:
+        outcome: { type: string, enum: [pass, fail, hold, withdrawn, pending] }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        decisionSource:
+          { type: string, enum: [customer, internal, engineer, system] }
+        reason: { type: [string, 'null'], maxLength: 2000 }
+        nextAction: { type: [string, 'null'], maxLength: 2000 }
+        nextActionDueAt: { type: [string, 'null'], format: date-time }
+    InterviewStatusHistory:
+      type: object
+      additionalProperties: false
+      required: [id, fromStatus, toStatus, changedAt, reason]
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus: { type: [string, 'null'] }
+        toStatus: { $ref: '#/components/schemas/InterviewStatus' }
+        changedAt: { type: string, format: date-time }
+        reason: { type: [string, 'null'], maxLength: 500 }
+    InterviewResultInput:
+      type: object
+      additionalProperties: false
+      required: [status, reason, participants, feedback, outcome]
+      properties:
+        status: { type: string, enum: [completed, cancelled, no_show] }
+        reason: { type: [string, 'null'], maxLength: 500 }
+        participants:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/InterviewParticipantInput' }
+        feedback:
+          oneOf:
+            - { $ref: '#/components/schemas/InterviewFeedbackInput' }
+            - { type: 'null' }
+        outcome:
+          oneOf:
+            - { $ref: '#/components/schemas/InterviewOutcomeInput' }
+            - { type: 'null' }
     InterviewInput:
       type: object
       additionalProperties: false

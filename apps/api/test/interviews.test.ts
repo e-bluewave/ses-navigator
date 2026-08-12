@@ -28,6 +28,22 @@ const interview: Interview = {
       candidateOrder: 1,
     },
   ],
+  participants: [
+    {
+      id: '66666666-6666-4666-8666-666666666666',
+      participantType: 'engineer',
+      engineerId: '44444444-4444-4444-8444-444444444444',
+      userId: null,
+      companyContactId: null,
+      displayName: '青波 太郎',
+      email: null,
+      roleLabel: '候補者',
+      attendanceStatus: 'attended',
+    },
+  ],
+  feedback: [],
+  outcome: null,
+  statusHistory: [],
   updatedAt: '2026-08-11T00:00:00Z',
   rowVersion: 2,
 };
@@ -48,6 +64,7 @@ function repository(
     findById: vi.fn(() => Promise.resolve(interview)),
     create: vi.fn(() => Promise.resolve(interview)),
     update: vi.fn(() => Promise.resolve(interview)),
+    saveResult: vi.fn(() => Promise.resolve(interview)),
     ...overrides,
   };
 }
@@ -217,5 +234,102 @@ describe('interview write API', () => {
       payload: { ...input, scheduledStartAt: null, scheduledEndAt: null },
     });
     expect(response.statusCode).toBe(400);
+  });
+
+  it('saves participants, outcome, feedback, and completed status', async () => {
+    const completed = {
+      ...interview,
+      status: 'completed' as const,
+      rowVersion: 3,
+    };
+    const saveResult = vi.fn(() => Promise.resolve(completed));
+    const payload = {
+      status: 'completed',
+      reason: '一次面談を実施',
+      participants: [
+        {
+          participantType: 'engineer',
+          engineerId: interview.engineerId,
+          userId: null,
+          companyContactId: null,
+          displayName: '青波 太郎',
+          email: null,
+          roleLabel: '候補者',
+          attendanceStatus: 'attended',
+        },
+      ],
+      feedback: {
+        evaluationType: 'internal',
+        overallRating: 4,
+        technicalRating: 4,
+        communicationRating: 5,
+        recommendation: 'yes',
+        comments: '次へ進めたい',
+      },
+      outcome: {
+        outcome: 'pass',
+        decidedAt: '2026-08-20T02:00:00Z',
+        decisionSource: 'customer',
+        reason: '評価良好',
+        nextAction: '次回面談を調整',
+        nextActionDueAt: '2026-08-21T00:00:00Z',
+      },
+    };
+    const response = await app(repository({ saveResult })).inject({
+      method: 'POST',
+      url: `/api/v1/interviews/${interview.id}/result`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers.etag).toBe('"3"');
+    expect(saveResult).toHaveBeenCalledWith(
+      'valid',
+      interview.id,
+      2,
+      {
+        ...payload,
+        outcome: {
+          ...payload.outcome,
+          decidedAt: '2026-08-20T02:00:00.000Z',
+          nextActionDueAt: '2026-08-21T00:00:00.000Z',
+        },
+      },
+      expect.any(String),
+    );
+  });
+
+  it('requires a reason when cancelling an interview', async () => {
+    const response = await app().inject({
+      method: 'POST',
+      url: `/api/v1/interviews/${interview.id}/result`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: {
+        status: 'cancelled',
+        reason: null,
+        participants: [],
+        feedback: null,
+        outcome: null,
+      },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('requires interview.manage to save an interview result', async () => {
+    const response = await app(
+      repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: `/api/v1/interviews/${interview.id}/result`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: {
+        status: 'cancelled',
+        reason: '顧客都合',
+        participants: [],
+        feedback: null,
+        outcome: null,
+      },
+    });
+    expect(response.statusCode).toBe(403);
   });
 });

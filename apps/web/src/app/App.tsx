@@ -35,6 +35,8 @@ import type {
   ProposalStatus,
   Interview,
   InterviewInput,
+  InterviewResultInput,
+  InterviewParticipantInput,
   InterviewStatus,
   InterviewType,
 } from '../api/generated.js';
@@ -107,6 +109,7 @@ type Route =
   | { page: 'interview-detail'; id: string }
   | { page: 'interview-new' }
   | { page: 'interview-edit'; id: string }
+  | { page: 'interview-result'; id: string }
   | { page: 'proposals' }
   | { page: 'proposal-detail'; id: string }
   | { page: 'proposal-new' }
@@ -137,6 +140,14 @@ function currentRoute(): Route {
     return {
       page: 'interview-edit',
       id: decodeURIComponent(interviewEdit[1]!),
+    };
+  const interviewResult = window.location.pathname.match(
+    /^\/interviews\/([^/]+)\/result$/,
+  );
+  if (interviewResult)
+    return {
+      page: 'interview-result',
+      id: decodeURIComponent(interviewResult[1]!),
     };
   const interview = window.location.pathname.match(/^\/interviews\/([^/]+)$/);
   if (interview)
@@ -304,12 +315,14 @@ function InterviewDetail({
   id,
   onBack,
   onEdit,
+  onResult,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
   onEdit: () => void;
+  onResult: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [item, setItem] = useState<Interview | null>(null);
@@ -365,6 +378,9 @@ function InterviewDetail({
             編集
           </button>
         ) : null}
+        <button className="primary-button" onClick={onResult}>
+          参加者・結果を登録
+        </button>
       </div>
       <dl className="detail-grid">
         <dt>状態</dt>
@@ -405,6 +421,75 @@ function InterviewDetail({
                 <li key={candidate.id}>
                   {formatDateTime(candidate.startAt)} ～{' '}
                   {formatDateTime(candidate.endAt)}
+                </li>
+              ))}
+            </ol>
+          )}
+        </dd>
+        <dt>参加者</dt>
+        <dd>
+          {item.participants.length === 0 ? (
+            '未登録'
+          ) : (
+            <ul>
+              {item.participants.map((participant) => (
+                <li key={participant.id}>
+                  {participant.displayName ??
+                    participant.engineerId ??
+                    participant.userId ??
+                    participant.companyContactId}
+                  {' / '}
+                  {participant.attendanceStatus}
+                  {participant.roleLabel ? ` / ${participant.roleLabel}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+        </dd>
+        <dt>面談結果</dt>
+        <dd>
+          {item.outcome ? (
+            <>
+              {item.outcome.outcome}
+              {item.outcome.reason ? ` / ${item.outcome.reason}` : ''}
+              {item.outcome.nextAction
+                ? ` / 次の対応: ${item.outcome.nextAction}`
+                : ''}
+            </>
+          ) : (
+            '未登録'
+          )}
+        </dd>
+        <dt>評価</dt>
+        <dd>
+          {item.feedback.length === 0 ? (
+            '未登録'
+          ) : (
+            <ul>
+              {item.feedback.map((feedback) => (
+                <li key={feedback.id}>
+                  総合 {feedback.overallRating ?? '-'} / 技術{' '}
+                  {feedback.technicalRating ?? '-'} / コミュニケーション{' '}
+                  {feedback.communicationRating ?? '-'}
+                  {feedback.comments ? ` / ${feedback.comments}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+        </dd>
+        <dt>状態履歴</dt>
+        <dd>
+          {item.statusHistory.length === 0 ? (
+            '未登録'
+          ) : (
+            <ol>
+              {item.statusHistory.map((history) => (
+                <li key={history.id}>
+                  {formatDateTime(history.changedAt)}:{' '}
+                  {history.fromStatus ?? '作成'}
+                  {' → '}
+                  {history.toStatus}
+                  {history.reason ? ` / ${history.reason}` : ''}
                 </li>
               ))}
             </ol>
@@ -700,6 +785,545 @@ function InterviewForm({
         </fieldset>
         <button className="primary-button" disabled={saving}>
           {saving ? '保存中…' : '保存'}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function InterviewResultForm({
+  api,
+  id,
+  onCancel,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  id: string;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const emptyParticipant = (): InterviewParticipantInput => ({
+    participantType: 'other',
+    engineerId: null,
+    userId: null,
+    companyContactId: null,
+    displayName: null,
+    email: null,
+    roleLabel: null,
+    attendanceStatus: 'attended',
+  });
+  const [rowVersion, setRowVersion] = useState<number | null>(null);
+  const [status, setStatus] =
+    useState<InterviewResultInput['status']>('completed');
+  const [reason, setReason] = useState('');
+  const [participants, setParticipants] = useState<InterviewParticipantInput[]>(
+    [],
+  );
+  const [outcome, setOutcome] = useState<
+    NonNullable<InterviewResultInput['outcome']>
+  >({
+    outcome: 'pending',
+    decidedAt: null,
+    decisionSource: 'customer',
+    reason: null,
+    nextAction: null,
+    nextActionDueAt: null,
+  });
+  const [feedback, setFeedback] = useState<
+    NonNullable<InterviewResultInput['feedback']>
+  >({
+    evaluationType: 'internal',
+    overallRating: null,
+    technicalRating: null,
+    communicationRating: null,
+    recommendation: null,
+    comments: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void api
+      .getInterview(id)
+      .then((interview) => {
+        setRowVersion(interview.rowVersion);
+        if (
+          interview.status === 'completed' ||
+          interview.status === 'cancelled' ||
+          interview.status === 'no_show'
+        )
+          setStatus(interview.status);
+        setParticipants(
+          interview.participants.map((participant) => ({
+            participantType: participant.participantType,
+            engineerId: participant.engineerId,
+            userId: participant.userId,
+            companyContactId: participant.companyContactId,
+            displayName: participant.displayName,
+            email: participant.email,
+            roleLabel: participant.roleLabel,
+            attendanceStatus: participant.attendanceStatus,
+          })),
+        );
+        const internalFeedback = interview.feedback.find(
+          (item) => item.evaluationType === 'internal',
+        );
+        if (internalFeedback)
+          setFeedback({
+            evaluationType: 'internal',
+            overallRating: internalFeedback.overallRating,
+            technicalRating: internalFeedback.technicalRating,
+            communicationRating: internalFeedback.communicationRating,
+            recommendation: internalFeedback.recommendation,
+            comments: internalFeedback.comments,
+          });
+        if (interview.outcome)
+          setOutcome({
+            outcome: interview.outcome.outcome,
+            decidedAt: interview.outcome.decidedAt,
+            decisionSource: interview.outcome.decisionSource ?? 'customer',
+            reason: interview.outcome.reason,
+            nextAction: interview.outcome.nextAction,
+            nextActionDueAt: interview.outcome.nextActionDueAt,
+          });
+      })
+      .catch((failure: unknown) =>
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : '面談結果を読み込めませんでした。',
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [api, id]);
+  const updateParticipant = <K extends keyof InterviewParticipantInput>(
+    index: number,
+    name: K,
+    value: InterviewParticipantInput[K],
+  ) =>
+    setParticipants((current) =>
+      current.map((participant, participantIndex) =>
+        participantIndex === index
+          ? name === 'participantType'
+            ? {
+                ...emptyParticipant(),
+                participantType:
+                  value as InterviewParticipantInput['participantType'],
+              }
+            : { ...participant, [name]: value }
+          : participant,
+      ),
+    );
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    const hasFeedback =
+      feedback.overallRating !== null ||
+      feedback.technicalRating !== null ||
+      feedback.communicationRating !== null ||
+      feedback.recommendation !== null ||
+      Boolean(feedback.comments);
+    try {
+      await api.saveInterviewResult(id, rowVersion!, {
+        status,
+        reason: reason.trim() || null,
+        participants,
+        feedback: hasFeedback ? feedback : null,
+        outcome:
+          status === 'completed'
+            ? {
+                ...outcome,
+                decidedAt: outcome.decidedAt
+                  ? new Date(outcome.decidedAt).toISOString()
+                  : null,
+                nextActionDueAt: outcome.nextActionDueAt
+                  ? new Date(outcome.nextActionDueAt).toISOString()
+                  : null,
+              }
+            : null,
+      });
+      onSaved();
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : '面談参加者・結果を保存できませんでした。',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  if (loading)
+    return (
+      <section className="content-panel" role="status">
+        面談結果を読み込んでいます…
+      </section>
+    );
+  const suggestedProposalStatus = {
+    pass: 'オファー',
+    fail: '失注',
+    hold: '面談中を維持',
+    withdrawn: '辞退',
+    pending: '面談中を維持',
+  }[outcome.outcome];
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <h2>面談参加者・結果</h2>
+        <button className="secondary-button" onClick={onCancel}>
+          キャンセル
+        </button>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <form className="project-form" onSubmit={(event) => void submit(event)}>
+        <label>
+          面談状態
+          <select
+            value={status}
+            onChange={(event) =>
+              setStatus(event.target.value as InterviewResultInput['status'])
+            }
+          >
+            <option value="completed">実施済み</option>
+            <option value="cancelled">キャンセル</option>
+            <option value="no_show">不参加</option>
+          </select>
+        </label>
+        <label>
+          状態変更理由
+          <textarea
+            required={status !== 'completed'}
+            maxLength={500}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        </label>
+        <fieldset>
+          <legend>参加者（最大50件）</legend>
+          {participants.map((participant, index) => (
+            <div className="filter-row" key={index}>
+              <label>
+                参加者{index + 1}種別
+                <select
+                  value={participant.participantType}
+                  onChange={(event) =>
+                    updateParticipant(
+                      index,
+                      'participantType',
+                      event.target
+                        .value as InterviewParticipantInput['participantType'],
+                    )
+                  }
+                >
+                  <option value="engineer">技術者</option>
+                  <option value="user">社内利用者</option>
+                  <option value="company_contact">会社担当者</option>
+                  <option value="other">その他</option>
+                </select>
+              </label>
+              {participant.participantType === 'engineer' ? (
+                <label>
+                  技術者ID
+                  <input
+                    required
+                    value={participant.engineerId ?? ''}
+                    onChange={(event) =>
+                      updateParticipant(
+                        index,
+                        'engineerId',
+                        event.target.value || null,
+                      )
+                    }
+                  />
+                </label>
+              ) : participant.participantType === 'user' ? (
+                <label>
+                  利用者ID
+                  <input
+                    required
+                    value={participant.userId ?? ''}
+                    onChange={(event) =>
+                      updateParticipant(
+                        index,
+                        'userId',
+                        event.target.value || null,
+                      )
+                    }
+                  />
+                </label>
+              ) : participant.participantType === 'company_contact' ? (
+                <label>
+                  会社担当者ID
+                  <input
+                    required
+                    value={participant.companyContactId ?? ''}
+                    onChange={(event) =>
+                      updateParticipant(
+                        index,
+                        'companyContactId',
+                        event.target.value || null,
+                      )
+                    }
+                  />
+                </label>
+              ) : (
+                <label>
+                  表示名
+                  <input
+                    required
+                    maxLength={200}
+                    value={participant.displayName ?? ''}
+                    onChange={(event) =>
+                      updateParticipant(
+                        index,
+                        'displayName',
+                        event.target.value || null,
+                      )
+                    }
+                  />
+                </label>
+              )}
+              <label>
+                メール
+                <input
+                  type="email"
+                  maxLength={320}
+                  value={participant.email ?? ''}
+                  onChange={(event) =>
+                    updateParticipant(
+                      index,
+                      'email',
+                      event.target.value || null,
+                    )
+                  }
+                />
+              </label>
+              <label>
+                役割
+                <input
+                  maxLength={200}
+                  value={participant.roleLabel ?? ''}
+                  onChange={(event) =>
+                    updateParticipant(
+                      index,
+                      'roleLabel',
+                      event.target.value || null,
+                    )
+                  }
+                />
+              </label>
+              <label>
+                出席状況
+                <select
+                  value={participant.attendanceStatus}
+                  onChange={(event) =>
+                    updateParticipant(
+                      index,
+                      'attendanceStatus',
+                      event.target
+                        .value as InterviewParticipantInput['attendanceStatus'],
+                    )
+                  }
+                >
+                  <option value="expected">予定</option>
+                  <option value="accepted">承諾</option>
+                  <option value="declined">辞退</option>
+                  <option value="attended">出席</option>
+                  <option value="absent">欠席</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  setParticipants((current) =>
+                    current.filter(
+                      (_, participantIndex) => participantIndex !== index,
+                    ),
+                  )
+                }
+              >
+                削除
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={participants.length >= 50}
+            onClick={() =>
+              setParticipants((current) => [...current, emptyParticipant()])
+            }
+          >
+            参加者を追加
+          </button>
+        </fieldset>
+        {status === 'completed' ? (
+          <>
+            <fieldset>
+              <legend>結果</legend>
+              <label>
+                判定
+                <select
+                  value={outcome.outcome}
+                  onChange={(event) =>
+                    setOutcome((current) => ({
+                      ...current,
+                      outcome: event.target.value as typeof current.outcome,
+                    }))
+                  }
+                >
+                  <option value="pass">通過</option>
+                  <option value="fail">見送り</option>
+                  <option value="hold">保留</option>
+                  <option value="withdrawn">辞退</option>
+                  <option value="pending">回答待ち</option>
+                </select>
+              </label>
+              <p>提案状態候補: {suggestedProposalStatus}（自動反映しません）</p>
+              <label>
+                決定元
+                <select
+                  value={outcome.decisionSource}
+                  onChange={(event) =>
+                    setOutcome((current) => ({
+                      ...current,
+                      decisionSource: event.target
+                        .value as typeof current.decisionSource,
+                    }))
+                  }
+                >
+                  <option value="customer">顧客</option>
+                  <option value="internal">社内</option>
+                  <option value="engineer">技術者</option>
+                  <option value="system">システム</option>
+                </select>
+              </label>
+              <label>
+                決定日時
+                <input
+                  type="datetime-local"
+                  required={outcome.outcome !== 'pending'}
+                  value={toDateTimeLocal(outcome.decidedAt)}
+                  onChange={(event) =>
+                    setOutcome((current) => ({
+                      ...current,
+                      decidedAt: event.target.value || null,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                結果理由
+                <textarea
+                  maxLength={2000}
+                  value={outcome.reason ?? ''}
+                  onChange={(event) =>
+                    setOutcome((current) => ({
+                      ...current,
+                      reason: event.target.value || null,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                次の対応
+                <textarea
+                  maxLength={2000}
+                  value={outcome.nextAction ?? ''}
+                  onChange={(event) =>
+                    setOutcome((current) => ({
+                      ...current,
+                      nextAction: event.target.value || null,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                次の対応期限
+                <input
+                  type="datetime-local"
+                  value={toDateTimeLocal(outcome.nextActionDueAt)}
+                  onChange={(event) =>
+                    setOutcome((current) => ({
+                      ...current,
+                      nextActionDueAt: event.target.value || null,
+                    }))
+                  }
+                />
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend>社内評価（任意）</legend>
+              {(
+                [
+                  ['overallRating', '総合評価'],
+                  ['technicalRating', '技術評価'],
+                  ['communicationRating', 'コミュニケーション評価'],
+                ] as const
+              ).map(([name, label]) => (
+                <label key={name}>
+                  {label}
+                  <select
+                    value={feedback[name] ?? ''}
+                    onChange={(event) =>
+                      setFeedback((current) => ({
+                        ...current,
+                        [name]: event.target.value
+                          ? Number(event.target.value)
+                          : null,
+                      }))
+                    }
+                  >
+                    <option value="">未評価</option>
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <option key={rating} value={rating}>
+                        {rating}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              <label>
+                推奨
+                <select
+                  value={feedback.recommendation ?? ''}
+                  onChange={(event) =>
+                    setFeedback((current) => ({
+                      ...current,
+                      recommendation:
+                        (event.target.value as typeof current.recommendation) ||
+                        null,
+                    }))
+                  }
+                >
+                  <option value="">未評価</option>
+                  <option value="strong_yes">強く推奨</option>
+                  <option value="yes">推奨</option>
+                  <option value="hold">保留</option>
+                  <option value="no">非推奨</option>
+                  <option value="strong_no">強く非推奨</option>
+                </select>
+              </label>
+              <label>
+                評価コメント
+                <textarea
+                  maxLength={5000}
+                  value={feedback.comments ?? ''}
+                  onChange={(event) =>
+                    setFeedback((current) => ({
+                      ...current,
+                      comments: event.target.value || null,
+                    }))
+                  }
+                />
+              </label>
+            </fieldset>
+          </>
+        ) : null}
+        <button className="primary-button" disabled={saving}>
+          {saving ? '保存中…' : '参加者・結果を保存'}
         </button>
       </form>
     </section>
@@ -1348,7 +1972,15 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           id={route.id}
           onBack={() => navigate('/interviews')}
           onEdit={() => navigate(`/interviews/${route.id}/edit`)}
+          onResult={() => navigate(`/interviews/${route.id}/result`)}
           onUnauthorized={signOut}
+        />
+      ) : route.page === 'interview-result' ? (
+        <InterviewResultForm
+          api={api}
+          id={route.id}
+          onCancel={() => navigate(`/interviews/${route.id}`)}
+          onSaved={() => navigate(`/interviews/${route.id}`)}
         />
       ) : route.page === 'interview-new' || route.page === 'interview-edit' ? (
         <InterviewForm

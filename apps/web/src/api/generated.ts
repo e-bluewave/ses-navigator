@@ -463,6 +463,10 @@ export interface Interview {
   meetingUrl: string | null;
   notes: string | null;
   scheduleCandidates: InterviewScheduleCandidate[];
+  participants: InterviewParticipant[];
+  feedback: InterviewFeedback[];
+  outcome: InterviewOutcome | null;
+  statusHistory: InterviewStatusHistory[];
   updatedAt: string;
   rowVersion: number;
 }
@@ -475,6 +479,83 @@ export interface InterviewScheduleCandidate {
 export interface InterviewScheduleCandidateInput {
   startAt: string;
   endAt: string;
+}
+export type InterviewParticipantType =
+  'engineer' | 'user' | 'company_contact' | 'other';
+export type InterviewAttendanceStatus =
+  'expected' | 'accepted' | 'declined' | 'attended' | 'absent';
+export interface InterviewParticipant {
+  id: string;
+  participantType: InterviewParticipantType;
+  engineerId: string | null;
+  userId: string | null;
+  companyContactId: string | null;
+  displayName: string | null;
+  email: string | null;
+  roleLabel: string | null;
+  attendanceStatus: InterviewAttendanceStatus;
+}
+export type InterviewParticipantInput = Omit<InterviewParticipant, 'id'>;
+export type InterviewRecommendation =
+  'strong_yes' | 'yes' | 'hold' | 'no' | 'strong_no';
+export interface InterviewFeedback {
+  id: string;
+  evaluatorUserId: string | null;
+  evaluatorContactId: string | null;
+  evaluationType: 'internal' | 'customer' | 'engineer';
+  overallRating: number | null;
+  technicalRating: number | null;
+  communicationRating: number | null;
+  recommendation: InterviewRecommendation | null;
+  comments: string | null;
+  submittedAt: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface InterviewFeedbackInput {
+  evaluationType: 'internal';
+  overallRating: number | null;
+  technicalRating: number | null;
+  communicationRating: number | null;
+  recommendation: InterviewRecommendation | null;
+  comments: string | null;
+}
+export type InterviewOutcomeCode =
+  'pass' | 'fail' | 'hold' | 'withdrawn' | 'pending';
+export type InterviewDecisionSource =
+  'customer' | 'internal' | 'engineer' | 'system';
+export interface InterviewOutcome {
+  id: string;
+  outcome: InterviewOutcomeCode;
+  decidedAt: string | null;
+  decisionSource: InterviewDecisionSource | null;
+  reason: string | null;
+  nextAction: string | null;
+  nextActionDueAt: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface InterviewOutcomeInput {
+  outcome: InterviewOutcomeCode;
+  decidedAt: string | null;
+  decisionSource: InterviewDecisionSource;
+  reason: string | null;
+  nextAction: string | null;
+  nextActionDueAt: string | null;
+}
+export interface InterviewStatusHistory {
+  id: string;
+  fromStatus: InterviewStatus | null;
+  toStatus: InterviewStatus;
+  changedAt: string;
+  reason: string | null;
+}
+export interface InterviewResultInput {
+  status: 'completed' | 'cancelled' | 'no_show';
+  reason: string | null;
+  participants: InterviewParticipantInput[];
+  feedback: InterviewFeedbackInput | null;
+  outcome: InterviewOutcomeInput | null;
 }
 export interface InterviewInput {
   proposalId: string;
