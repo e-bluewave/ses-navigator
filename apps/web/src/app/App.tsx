@@ -39,6 +39,10 @@ import type {
   InterviewParticipantInput,
   InterviewStatus,
   InterviewType,
+  Contract,
+  ContractSummary,
+  ContractStatus,
+  ContractType,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -104,7 +108,28 @@ const interviewTypeLabels = {
   other: 'その他',
 } as const;
 
+const contractStatusLabels: Record<ContractStatus, string> = {
+  draft: '下書き',
+  review: '確認中',
+  active: '契約中',
+  suspended: '停止中',
+  expired: '期間満了',
+  terminated: '終了',
+  cancelled: '取消',
+};
+
+const contractTypeLabels: Record<ContractType, string> = {
+  ses: 'SES',
+  dispatch: '派遣',
+  subcontract: '請負',
+  quasi_mandate: '準委任',
+  fixed_price: '一括請負',
+  other: 'その他',
+};
+
 type Route =
+  | { page: 'contracts' }
+  | { page: 'contract-detail'; id: string }
   | { page: 'interviews' }
   | { page: 'interview-detail'; id: string }
   | { page: 'interview-new' }
@@ -130,6 +155,10 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/contracts') return { page: 'contracts' };
+  const contract = window.location.pathname.match(/^\/contracts\/([^/]+)$/);
+  if (contract)
+    return { page: 'contract-detail', id: decodeURIComponent(contract[1]!) };
   if (window.location.pathname === '/interviews') return { page: 'interviews' };
   if (window.location.pathname === '/interviews/new')
     return { page: 'interview-new' };
@@ -206,6 +235,247 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
     <AuthProvider auth={auth}>
       <AuthenticatedApp {...(api === undefined ? {} : { api })} />
     </AuthProvider>
+  );
+}
+
+function ContractListView({
+  api,
+  onOpen,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<ContractSummary[]>([]);
+  const [status, setStatus] = useState<ContractStatus | ''>('');
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void api
+      .listContracts({
+        ...(query ? { q: query } : {}),
+        ...(status ? { status } : {}),
+      })
+      .then((result) => {
+        setItems(result.items);
+        setError('');
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '契約一覧を取得できませんでした。',
+          );
+      });
+  }, [api, onUnauthorized, query, status]);
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <h2>契約</h2>
+          <p>権限に応じた安全な契約概要を表示します。</p>
+        </div>
+      </div>
+      <div className="filter-row">
+        <input
+          aria-label="契約番号または件名で検索"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="契約番号・件名"
+        />
+        <select
+          aria-label="契約状態"
+          value={status}
+          onChange={(event) =>
+            setStatus(event.target.value as ContractStatus | '')
+          }
+        >
+          <option value="">すべての状態</option>
+          {Object.entries(contractStatusLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      <table>
+        <thead>
+          <tr>
+            <th>契約番号</th>
+            <th>件名</th>
+            <th>状態</th>
+            <th>契約形態</th>
+            <th>契約期間</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.id}>
+              <td>
+                <button className="link-button" onClick={() => onOpen(item.id)}>
+                  {item.contractNo}
+                </button>
+              </td>
+              <td>{item.title}</td>
+              <td>{contractStatusLabels[item.status]}</td>
+              <td>{contractTypeLabels[item.contractType]}</td>
+              <td>
+                {item.startDate} ～ {item.endDate ?? '未定'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {items.length === 0 && !error && <p>該当する契約はありません。</p>}
+    </section>
+  );
+}
+
+function ContractDetail({
+  api,
+  id,
+  onBack,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  id: string;
+  onBack: () => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [item, setItem] = useState<Contract | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void api
+      .getContract(id)
+      .then((result) => {
+        setItem(result);
+        setError('');
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '契約詳細を取得できませんでした。',
+          );
+      });
+  }, [api, id, onUnauthorized]);
+  if (error)
+    return (
+      <section className="content-panel">
+        <p role="alert">{error}</p>
+        <button className="secondary-button" onClick={onBack}>
+          契約一覧へ戻る
+        </button>
+      </section>
+    );
+  if (!item)
+    return (
+      <section className="content-panel" role="status">
+        契約を読み込んでいます…
+      </section>
+    );
+  const amount = (value: number | null) =>
+    value === null ? '未設定' : `${value.toLocaleString()} ${item.currency}`;
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{item.contractNo}</p>
+          <h2>{item.title}</h2>
+        </div>
+        <button className="secondary-button" onClick={onBack}>
+          契約一覧へ戻る
+        </button>
+      </div>
+      <dl className="detail-grid">
+        <dt>状態</dt>
+        <dd>{contractStatusLabels[item.status]}</dd>
+        <dt>契約形態</dt>
+        <dd>{contractTypeLabels[item.contractType]}</dd>
+        <dt>契約期間</dt>
+        <dd>
+          {item.startDate} ～ {item.endDate ?? '未定'}
+        </dd>
+        <dt>自動更新</dt>
+        <dd>{item.autoRenew ? 'あり' : 'なし'}</dd>
+        <dt>月額</dt>
+        <dd>{amount(item.monthlyAmount)}</dd>
+        <dt>時間単価</dt>
+        <dd>{amount(item.hourlyAmount)}</dd>
+        <dt>精算幅</dt>
+        <dd>
+          {item.settlementLowerHours ?? '未設定'} ～{' '}
+          {item.settlementUpperHours ?? '未設定'} 時間
+        </dd>
+        <dt>支払条件</dt>
+        <dd>{item.paymentTerms ?? '未設定'}</dd>
+        <dt>案件ID</dt>
+        <dd>{item.projectId ?? '未設定'}</dd>
+        <dt>提案ID</dt>
+        <dd>{item.proposalId ?? '未設定'}</dd>
+        <dt>技術者ID</dt>
+        <dd>{item.engineerId ?? '未設定'}</dd>
+        <dt>契約当事者</dt>
+        <dd>
+          {item.parties.length === 0 ? (
+            '未登録'
+          ) : (
+            <ul>
+              {item.parties.map((party) => (
+                <li key={party.id}>
+                  {party.companyId} / {party.partyRole}
+                  {party.billingRole ? ` / ${party.billingRole}` : ''}
+                  {party.isPrimary ? ' / 主契約先' : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+        </dd>
+        <dt>契約版</dt>
+        <dd>
+          {item.versions.length === 0 ? (
+            '未登録'
+          ) : (
+            <ol>
+              {item.versions.map((version) => (
+                <li key={version.id}>
+                  第{version.versionNo}版 / {version.effectiveFrom} ～{' '}
+                  {version.effectiveTo ?? '継続中'}
+                  {version.changeSummary ? ` / ${version.changeSummary}` : ''}
+                </li>
+              ))}
+            </ol>
+          )}
+        </dd>
+        <dt>月次稼働</dt>
+        <dd>
+          {item.workLogs.length === 0 ? (
+            '未登録'
+          ) : (
+            <ol>
+              {item.workLogs.map((workLog) => (
+                <li key={workLog.id}>
+                  {workLog.workMonth} / {workLog.status} / 実績{' '}
+                  {workLog.actualHours ?? '未入力'}時間
+                </li>
+              ))}
+            </ol>
+          )}
+        </dd>
+        <dt>備考</dt>
+        <dd>{item.notes ?? '未設定'}</dd>
+        <dt>版番号</dt>
+        <dd>{item.rowVersion}</dd>
+      </dl>
+    </section>
   );
 }
 
@@ -1924,6 +2194,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/contracts')}
+        >
+          契約
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/interviews')}
         >
           面談
@@ -1959,7 +2235,20 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'interviews' ? (
+      {route.page === 'contracts' ? (
+        <ContractListView
+          api={api}
+          onOpen={(id) => navigate(`/contracts/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'contract-detail' ? (
+        <ContractDetail
+          api={api}
+          id={route.id}
+          onBack={() => navigate('/contracts')}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'interviews' ? (
         <InterviewListView
           api={api}
           onOpen={(id) => navigate(`/interviews/${id}`)}

@@ -26,6 +26,9 @@ import { registerProposalRoutes } from './modules/proposals/proposal-routes.js';
 import { SupabaseInterviewRepository } from './modules/interviews/interview-repository.js';
 import type { InterviewRepository } from './modules/interviews/interview-repository.js';
 import { registerInterviewRoutes } from './modules/interviews/interview-routes.js';
+import { SupabaseContractRepository } from './modules/contracts/contract-repository.js';
+import type { ContractRepository } from './modules/contracts/contract-repository.js';
+import { registerContractRoutes } from './modules/contracts/contract-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -36,6 +39,7 @@ export interface AppDependencies {
   engineers?: EngineerRepository;
   proposals?: ProposalRepository;
   interviews?: InterviewRepository;
+  contracts?: ContractRepository;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -86,6 +90,10 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerInterviewRoutes(
     app,
     dependencies.interviews ?? new SupabaseInterviewRepository(),
+  );
+  registerContractRoutes(
+    app,
+    dependencies.contracts ?? new SupabaseContractRepository(),
   );
 
   return app;
