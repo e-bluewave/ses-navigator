@@ -18,6 +18,7 @@ import type {
   Proposal,
   Project,
   Contract,
+  ContractInput,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -124,6 +125,7 @@ const contract: Contract = {
     },
   ],
   workLogs: [],
+  approval: null,
   updatedAt: '2026-08-12T00:00:00Z',
   rowVersion: 1,
 };
@@ -213,6 +215,11 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
     getContract: vi.fn(() => Promise.reject(new Error('not configured'))),
+    createContract: vi.fn(() => Promise.reject(new Error('not configured'))),
+    updateContract: vi.fn(() => Promise.reject(new Error('not configured'))),
+    transitionContractStatus: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listInterviews: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -329,6 +336,68 @@ describe('App', () => {
     expect(screen.getByText('900,000 JPY')).toBeInTheDocument();
     expect(screen.getByText('月末締め翌月末払い')).toBeInTheDocument();
     expect(screen.getByText(/第1版/)).toBeInTheDocument();
+  });
+
+  it('creates a contract draft with commercial terms and a party', async () => {
+    window.history.replaceState({}, '', '/contracts/new');
+    const created = { ...contract, status: 'draft' as const };
+    const createContract = vi
+      .fn<(input: ContractInput) => Promise<Contract>>()
+      .mockResolvedValue(created);
+    render(<App auth={auth()} api={api({ createContract })} />);
+    fireEvent.change(await screen.findByLabelText('契約番号'), {
+      target: { value: contract.contractNo },
+    });
+    fireEvent.change(screen.getByLabelText('件名'), {
+      target: { value: contract.title },
+    });
+    fireEvent.change(screen.getByLabelText(/案件ID/), {
+      target: { value: project.id },
+    });
+    fireEvent.change(screen.getByLabelText('開始日'), {
+      target: { value: contract.startDate },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '契約当事者を追加' }));
+    fireEvent.change(screen.getByLabelText('会社ID'), {
+      target: { value: company.id },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '契約を登録' }));
+    await waitFor(() => expect(createContract).toHaveBeenCalledOnce());
+    const saved = createContract.mock.calls[0]![0];
+    expect(saved.projectId).toBe(project.id);
+    expect(saved.parties).toHaveLength(1);
+    expect(saved.parties[0]!.companyId).toBe(company.id);
+  });
+
+  it('submits a draft contract for approval with optimistic locking', async () => {
+    window.history.replaceState({}, '', `/contracts/${contract.id}`);
+    const draft = { ...contract, status: 'draft' as const };
+    const transitionContractStatus = vi.fn(() =>
+      Promise.resolve({ ...draft, status: 'review' as const, rowVersion: 2 }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getContract: vi.fn(() => Promise.resolve(draft)),
+          transitionContractStatus,
+        })}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('次の状態'), {
+      target: { value: 'review' },
+    });
+    fireEvent.change(screen.getByLabelText('依頼・判断理由'), {
+      target: { value: '条件確認をお願いします' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '承認状態を更新' }));
+    await waitFor(() =>
+      expect(transitionContractStatus).toHaveBeenCalledOnce(),
+    );
+    expect(transitionContractStatus).toHaveBeenCalledWith(contract.id, 1, {
+      status: 'review',
+      reason: '条件確認をお願いします',
+    });
   });
 
   it('lists interviews and opens interview detail', async () => {

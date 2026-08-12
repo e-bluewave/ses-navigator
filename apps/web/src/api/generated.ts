@@ -452,6 +452,18 @@ export interface ContractParty {
   billingRole: ContractBillingRole | null;
   isPrimary: boolean;
 }
+export type ContractPartyInput = Omit<ContractParty, 'id'>;
+export type ContractApprovalStatus =
+  'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired';
+export interface ContractApproval {
+  id: string;
+  status: ContractApprovalStatus;
+  requestedAt: string | null;
+  completedAt: string | null;
+  requestNote: string | null;
+  decisionNote: string | null;
+  rowVersion: number;
+}
 export interface ContractVersion {
   id: string;
   versionNo: number;
@@ -488,6 +500,31 @@ export interface Contract extends ContractSummary {
   parties: ContractParty[];
   versions: ContractVersion[];
   workLogs: ContractWorkLog[];
+  approval: ContractApproval | null;
+}
+export interface ContractInput {
+  contractNo: string;
+  projectId: string | null;
+  proposalId: string | null;
+  engineerId: string | null;
+  contractType: ContractType;
+  title: string;
+  startDate: string;
+  endDate: string | null;
+  autoRenew: boolean;
+  currency: string;
+  monthlyAmount: number | null;
+  hourlyAmount: number | null;
+  settlementLowerHours: number | null;
+  settlementUpperHours: number | null;
+  paymentTerms: string | null;
+  notes: string | null;
+  parties: ContractPartyInput[];
+  changeSummary: string | null;
+}
+export interface ContractStatusTransitionInput {
+  status: 'draft' | 'review' | 'active';
+  reason: string | null;
 }
 export interface ContractList {
   items: ContractSummary[];

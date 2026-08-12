@@ -52,7 +52,9 @@ import type {
   InterviewList,
   ListInterviewsQuery,
   Contract,
+  ContractInput,
   ContractList,
+  ContractStatusTransitionInput,
   ListContractsQuery,
 } from './generated.js';
 
@@ -60,6 +62,17 @@ export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
   listContracts(query?: ListContractsQuery): Promise<ContractList>;
   getContract(id: string): Promise<Contract>;
+  createContract(input: ContractInput): Promise<Contract>;
+  updateContract(
+    id: string,
+    rowVersion: number,
+    input: ContractInput,
+  ): Promise<Contract>;
+  transitionContractStatus(
+    id: string,
+    rowVersion: number,
+    input: ContractStatusTransitionInput,
+  ): Promise<Contract>;
   listInterviews(query?: ListInterviewsQuery): Promise<InterviewList>;
   getInterview(id: string): Promise<Interview>;
   createInterview(input: InterviewInput): Promise<Interview>;
@@ -267,6 +280,25 @@ export function createProjectsApi(options: {
     },
     getContract(id) {
       return get<Contract>(`/contracts/${encodeURIComponent(id)}`);
+    },
+    createContract(input) {
+      return send<Contract>('/contracts', 'POST', input);
+    },
+    updateContract(id, rowVersion, input) {
+      return send<Contract>(
+        `/contracts/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    transitionContractStatus(id, rowVersion, input) {
+      return send<Contract>(
+        `/contracts/${encodeURIComponent(id)}/status`,
+        'POST',
+        input,
+        rowVersion,
+      );
     },
     listInterviews(query = {}) {
       const params = new URLSearchParams();

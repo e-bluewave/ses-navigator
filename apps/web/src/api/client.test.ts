@@ -31,6 +31,63 @@ describe('generated projects API client', () => {
     });
   });
 
+  it('sends contract create, versioned update, and approval transitions', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ id: 'contract-1' }), { status: 200 }),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    const input = {
+      contractNo: 'CN-000001',
+      projectId: '22222222-2222-4222-8222-222222222222',
+      proposalId: null,
+      engineerId: null,
+      contractType: 'ses' as const,
+      title: '基幹システム刷新 SES契約',
+      startDate: '2026-09-01',
+      endDate: null,
+      autoRenew: false,
+      currency: 'JPY',
+      monthlyAmount: 900000,
+      hourlyAmount: null,
+      settlementLowerHours: 140,
+      settlementUpperHours: 180,
+      paymentTerms: '月末締め翌月末払い',
+      notes: null,
+      parties: [],
+      changeSummary: '初版',
+    };
+    await api.createContract(input);
+    await api.updateContract('contract-1', 2, input);
+    await api.transitionContractStatus('contract-1', 3, {
+      status: 'review',
+      reason: '承認をお願いします',
+    });
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/contracts',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(request.mock.calls[1]![0]).toBe('/api/v1/contracts/contract-1');
+    expect(request.mock.calls[1]![1]).toMatchObject({
+      method: 'PUT',
+      headers: { 'if-match': '"2"' },
+    });
+    expect(request.mock.calls[2]![0]).toBe(
+      '/api/v1/contracts/contract-1/status',
+    );
+    expect(request.mock.calls[2]![1]).toMatchObject({
+      method: 'POST',
+      headers: { 'if-match': '"3"' },
+    });
+  });
+
   it('lists and reads engineers with bearer authentication', async () => {
     const request = vi.fn().mockImplementation(() =>
       Promise.resolve(

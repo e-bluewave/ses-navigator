@@ -8,6 +8,23 @@ security:
   - bearerAuth: []
 paths:
   /contracts:
+    post:
+      operationId: createContract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContractInput' }
+      responses:
+        '201':
+          description: Draft contract created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contract' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
     get:
       operationId: listContracts
       parameters:
@@ -37,6 +54,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /contracts/{id}:
+    put:
+      operationId: updateContract
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContractInput' }
+      responses:
+        '200':
+          description: Draft contract updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contract' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     get:
       operationId: getContract
       parameters:
@@ -56,6 +104,39 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /contracts/{id}/status:
+    post:
+      operationId: transitionContractStatus
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: '#/components/schemas/ContractStatusTransitionInput' }
+      responses:
+        '200':
+          description: Contract approval status transitioned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contract' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /interviews:
     post:
       operationId: createInterview
@@ -2144,6 +2225,7 @@ components:
               parties,
               versions,
               workLogs,
+              approval,
             ]
           properties:
             monthlyAmount: { type: [number, 'null'], minimum: 0 }
@@ -2161,6 +2243,10 @@ components:
             workLogs:
               type: array
               items: { $ref: '#/components/schemas/ContractWorkLog' }
+            approval:
+              oneOf:
+                - { $ref: '#/components/schemas/ContractApproval' }
+                - { type: 'null' }
     ContractParty:
       type: object
       additionalProperties: false
@@ -2183,8 +2269,111 @@ components:
                 other,
               ],
           }
-        billingRole: { type: [string, 'null'], enum: [bill_to, pay_to, none, null] }
+        billingRole:
+          { type: [string, 'null'], enum: [bill_to, pay_to, none, null] }
         isPrimary: { type: boolean }
+    ContractPartyInput:
+      type: object
+      additionalProperties: false
+      required: [companyId, contactId, partyRole, billingRole, isPrimary]
+      properties:
+        companyId: { type: string, format: uuid }
+        contactId: { type: [string, 'null'], format: uuid }
+        partyRole:
+          {
+            type: string,
+            enum:
+              [
+                customer,
+                supplier,
+                employer,
+                end_client,
+                prime_contractor,
+                subcontractor,
+                other,
+              ],
+          }
+        billingRole:
+          { type: [string, 'null'], enum: [bill_to, pay_to, none, null] }
+        isPrimary: { type: boolean }
+    ContractApproval:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          status,
+          requestedAt,
+          completedAt,
+          requestNote,
+          decisionNote,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          {
+            type: string,
+            enum: [draft, pending, approved, rejected, cancelled, expired],
+          }
+        requestedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        requestNote: { type: [string, 'null'], maxLength: 1000 }
+        decisionNote: { type: [string, 'null'], maxLength: 1000 }
+        rowVersion: { type: integer, minimum: 1 }
+    ContractInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          contractNo,
+          projectId,
+          proposalId,
+          engineerId,
+          contractType,
+          title,
+          startDate,
+          endDate,
+          autoRenew,
+          currency,
+          monthlyAmount,
+          hourlyAmount,
+          settlementLowerHours,
+          settlementUpperHours,
+          paymentTerms,
+          notes,
+          parties,
+          changeSummary,
+        ]
+      properties:
+        contractNo: { type: string, minLength: 1, maxLength: 32 }
+        projectId: { type: [string, 'null'], format: uuid }
+        proposalId: { type: [string, 'null'], format: uuid }
+        engineerId: { type: [string, 'null'], format: uuid }
+        contractType: { $ref: '#/components/schemas/ContractType' }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        startDate: { type: string, format: date }
+        endDate: { type: [string, 'null'], format: date }
+        autoRenew: { type: boolean }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        monthlyAmount: { type: [number, 'null'], minimum: 0 }
+        hourlyAmount: { type: [number, 'null'], minimum: 0 }
+        settlementLowerHours: { type: [number, 'null'], minimum: 0 }
+        settlementUpperHours: { type: [number, 'null'], minimum: 0 }
+        paymentTerms: { type: [string, 'null'], maxLength: 1000 }
+        notes: { type: [string, 'null'], maxLength: 5000 }
+        parties:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/ContractPartyInput' }
+        changeSummary: { type: [string, 'null'], maxLength: 1000 }
+    ContractStatusTransitionInput:
+      type: object
+      additionalProperties: false
+      required: [status, reason]
+      properties:
+        status: { type: string, enum: [draft, review, active] }
+        reason: { type: [string, 'null'], maxLength: 1000 }
     ContractVersion:
       type: object
       additionalProperties: false
@@ -2229,7 +2418,8 @@ components:
         id: { type: string, format: uuid }
         engineerId: { type: string, format: uuid }
         workMonth: { type: string, format: date }
-        status: { type: string, enum: [draft, submitted, approved, rejected, locked] }
+        status:
+          { type: string, enum: [draft, submitted, approved, rejected, locked] }
         scheduledDays: { type: [number, 'null'], minimum: 0 }
         actualDays: { type: [number, 'null'], minimum: 0 }
         scheduledHours: { type: [number, 'null'], minimum: 0 }
@@ -2245,7 +2435,10 @@ components:
       required: [items, page]
       properties:
         items:
-          { type: array, items: { $ref: '#/components/schemas/ContractSummary' } }
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/ContractSummary' },
+          }
         page:
           type: object
           required: [limit, nextCursor]
