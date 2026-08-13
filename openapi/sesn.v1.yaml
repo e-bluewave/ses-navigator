@@ -7,6 +7,55 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /engagements:
+    get:
+      operationId: listEngagements
+      parameters:
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, minLength: 1, maxLength: 100 },
+          }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/EngagementStatus' },
+          }
+        - { name: cursor, in: query, schema: { type: string } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Authorized engagement summary list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EngagementList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /engagements/{id}:
+    get:
+      operationId: getEngagement
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Authorized engagement detail with conditions and history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Engagement' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /contracts:
     post:
       operationId: createContract
@@ -2478,6 +2527,123 @@ components:
           {
             type: array,
             items: { $ref: '#/components/schemas/ContractSummary' },
+          }
+        page:
+          type: object
+          required: [limit, nextCursor]
+          properties:
+            limit: { type: integer }
+            nextCursor: { type: ['string', 'null'] }
+    EngagementStatus:
+      type: string
+      enum: [draft, preparing, active, ending, ended, cancelled]
+    EngagementSummary:
+      type: object
+      required:
+        [
+          id,
+          engagementNo,
+          contractId,
+          proposalId,
+          engineerId,
+          engineerName,
+          contractTitle,
+          status,
+          plannedStartDate,
+          plannedEndDate,
+          actualStartDate,
+          actualEndDate,
+          roleName,
+          workLocation,
+          remoteFrequency,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        engagementNo: { type: string }
+        contractId: { type: string, format: uuid }
+        proposalId: { type: [string, 'null'], format: uuid }
+        engineerId: { type: string, format: uuid }
+        engineerName: { type: string }
+        contractTitle: { type: string }
+        status: { $ref: '#/components/schemas/EngagementStatus' }
+        plannedStartDate: { type: [string, 'null'], format: date }
+        plannedEndDate: { type: [string, 'null'], format: date }
+        actualStartDate: { type: [string, 'null'], format: date }
+        actualEndDate: { type: [string, 'null'], format: date }
+        roleName: { type: [string, 'null'] }
+        workLocation: { type: [string, 'null'] }
+        remoteFrequency: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    Engagement:
+      allOf:
+        - { $ref: '#/components/schemas/EngagementSummary' }
+        - type: object
+          required: [previousEngagementId, conditions, statusHistories]
+          properties:
+            previousEngagementId: { type: [string, 'null'], format: uuid }
+            conditions:
+              type: array
+              items: { $ref: '#/components/schemas/EngagementCondition' }
+            statusHistories:
+              type: array
+              items: { $ref: '#/components/schemas/EngagementStatusHistory' }
+    EngagementCondition:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          versionNo,
+          effectiveFrom,
+          effectiveTo,
+          monthlySalesAmount,
+          monthlyCostAmount,
+          currency,
+          settlementLowerHours,
+          settlementUpperHours,
+          workLocation,
+          remoteFrequency,
+          notes,
+          createdAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        versionNo: { type: integer, minimum: 1 }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: [string, 'null'], format: date }
+        monthlySalesAmount: { type: [number, 'null'], minimum: 0 }
+        monthlyCostAmount: { type: [number, 'null'], minimum: 0 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        settlementLowerHours: { type: [number, 'null'], minimum: 0 }
+        settlementUpperHours: { type: [number, 'null'], minimum: 0 }
+        workLocation: { type: [string, 'null'] }
+        remoteFrequency: { type: [string, 'null'] }
+        notes: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    EngagementStatusHistory:
+      type: object
+      additionalProperties: false
+      required: [id, fromStatus, toStatus, changeReason, changedAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus:
+          oneOf:
+            - { $ref: '#/components/schemas/EngagementStatus' }
+            - { type: 'null' }
+        toStatus: { $ref: '#/components/schemas/EngagementStatus' }
+        changeReason: { type: [string, 'null'] }
+        changedAt: { type: string, format: date-time }
+    EngagementList:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/EngagementSummary' },
           }
         page:
           type: object

@@ -5,6 +5,8 @@ const outputPath = new URL('../apps/web/src/api/generated.ts', import.meta.url);
 const contract = await readFile(contractPath, 'utf8');
 
 const requiredContractFragments = [
+  'operationId: listEngagements',
+  'operationId: getEngagement',
   'operationId: listContracts',
   'operationId: getContract',
   'operationId: createContract',
@@ -115,6 +117,8 @@ export type ContractStatus =
   | 'expired'
   | 'terminated'
   | 'cancelled';
+export type EngagementStatus =
+  'draft' | 'preparing' | 'active' | 'ending' | 'ended' | 'cancelled';
 
 export interface AuthContext {
   requiresMfa: boolean;
@@ -608,6 +612,63 @@ export interface ContractList {
 export interface ListContractsQuery {
   q?: string;
   status?: ContractStatus;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface EngagementSummary {
+  id: string;
+  engagementNo: string;
+  contractId: string;
+  proposalId: string | null;
+  engineerId: string;
+  engineerName: string;
+  contractTitle: string;
+  status: EngagementStatus;
+  plannedStartDate: string | null;
+  plannedEndDate: string | null;
+  actualStartDate: string | null;
+  actualEndDate: string | null;
+  roleName: string | null;
+  workLocation: string | null;
+  remoteFrequency: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface EngagementCondition {
+  id: string;
+  versionNo: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  monthlySalesAmount: number | null;
+  monthlyCostAmount: number | null;
+  currency: string;
+  settlementLowerHours: number | null;
+  settlementUpperHours: number | null;
+  workLocation: string | null;
+  remoteFrequency: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+export interface EngagementStatusHistory {
+  id: string;
+  fromStatus: EngagementStatus | null;
+  toStatus: EngagementStatus;
+  changeReason: string | null;
+  changedAt: string;
+}
+export interface Engagement extends EngagementSummary {
+  previousEngagementId: string | null;
+  conditions: EngagementCondition[];
+  statusHistories: EngagementStatusHistory[];
+}
+export interface EngagementList {
+  items: EngagementSummary[];
+  page: { limit: number; nextCursor: string | null };
+}
+export interface ListEngagementsQuery {
+  q?: string;
+  status?: EngagementStatus;
   cursor?: string;
   limit?: number;
 }

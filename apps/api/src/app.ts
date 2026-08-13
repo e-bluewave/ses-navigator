@@ -29,6 +29,9 @@ import { registerInterviewRoutes } from './modules/interviews/interview-routes.j
 import { SupabaseContractRepository } from './modules/contracts/contract-repository.js';
 import type { ContractRepository } from './modules/contracts/contract-repository.js';
 import { registerContractRoutes } from './modules/contracts/contract-routes.js';
+import { SupabaseEngagementRepository } from './modules/engagements/engagement-repository.js';
+import type { EngagementRepository } from './modules/engagements/engagement-repository.js';
+import { registerEngagementRoutes } from './modules/engagements/engagement-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -40,6 +43,7 @@ export interface AppDependencies {
   proposals?: ProposalRepository;
   interviews?: InterviewRepository;
   contracts?: ContractRepository;
+  engagements?: EngagementRepository;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -94,6 +98,10 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerContractRoutes(
     app,
     dependencies.contracts ?? new SupabaseContractRepository(),
+  );
+  registerEngagementRoutes(
+    app,
+    dependencies.engagements ?? new SupabaseEngagementRepository(),
   );
 
   return app;

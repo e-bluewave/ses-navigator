@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import { ApiClientError, createProjectsApi } from '../api/client.js';
@@ -46,6 +46,9 @@ import type {
   ContractSummary,
   ContractStatus,
   ContractType,
+  Engagement,
+  EngagementSummary,
+  EngagementStatus,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -130,7 +133,18 @@ const contractTypeLabels: Record<ContractType, string> = {
   other: 'その他',
 };
 
+const engagementStatusLabels: Record<EngagementStatus, string> = {
+  draft: '下書き',
+  preparing: '参画準備中',
+  active: '参画中',
+  ending: '終了手続中',
+  ended: '終了',
+  cancelled: '取消',
+};
+
 type Route =
+  | { page: 'engagements' }
+  | { page: 'engagement-detail'; id: string }
   | { page: 'contracts' }
   | { page: 'contract-detail'; id: string }
   | { page: 'contract-new' }
@@ -160,6 +174,14 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/engagements')
+    return { page: 'engagements' };
+  const engagement = window.location.pathname.match(/^\/engagements\/([^/]+)$/);
+  if (engagement)
+    return {
+      page: 'engagement-detail',
+      id: decodeURIComponent(engagement[1]!),
+    };
   if (window.location.pathname === '/contracts') return { page: 'contracts' };
   if (window.location.pathname === '/contracts/new')
     return { page: 'contract-new' };
@@ -250,6 +272,265 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
     <AuthProvider auth={auth}>
       <AuthenticatedApp {...(api === undefined ? {} : { api })} />
     </AuthProvider>
+  );
+}
+
+function EngagementListView({
+  api,
+  onOpen,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<EngagementSummary[]>([]);
+  const [status, setStatus] = useState<EngagementStatus | ''>('');
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState('');
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const load = useCallback(
+    async (cursor?: string, append = false) => {
+      try {
+        const result = await api.listEngagements({
+          ...(query ? { q: query } : {}),
+          ...(status ? { status } : {}),
+          ...(cursor ? { cursor } : {}),
+        });
+        setItems((current) =>
+          append ? [...current, ...result.items] : result.items,
+        );
+        setNextCursor(result.page.nextCursor);
+        setError('');
+      } catch (reason) {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          await onUnauthorized();
+        else
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '参画一覧を取得できませんでした。',
+          );
+      }
+    },
+    [api, onUnauthorized, query, status],
+  );
+  useEffect(() => {
+    void load();
+  }, [load]);
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <h2>参画</h2>
+          <p>契約の認可境界を引き継いだ参画情報を表示します。</p>
+        </div>
+      </div>
+      <div className="filter-row">
+        <input
+          aria-label="参画番号、契約件名または技術者名で検索"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="参画番号・契約件名・技術者名"
+        />
+        <select
+          aria-label="参画状態"
+          value={status}
+          onChange={(event) =>
+            setStatus(event.target.value as EngagementStatus | '')
+          }
+        >
+          <option value="">すべての状態</option>
+          {Object.entries(engagementStatusLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <table>
+        <thead>
+          <tr>
+            <th>参画番号</th>
+            <th>技術者</th>
+            <th>契約件名</th>
+            <th>状態</th>
+            <th>予定期間</th>
+            <th>役割</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.id}>
+              <td>
+                <button className="link-button" onClick={() => onOpen(item.id)}>
+                  {item.engagementNo}
+                </button>
+              </td>
+              <td>{item.engineerName}</td>
+              <td>{item.contractTitle}</td>
+              <td>{engagementStatusLabels[item.status]}</td>
+              <td>
+                {item.plannedStartDate ?? '未定'} ～{' '}
+                {item.plannedEndDate ?? '未定'}
+              </td>
+              <td>{item.roleName ?? '未設定'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {items.length === 0 && !error ? <p>該当する参画はありません。</p> : null}
+      {nextCursor ? (
+        <button
+          className="secondary-button"
+          disabled={loadingMore}
+          onClick={() => {
+            setLoadingMore(true);
+            void load(nextCursor, true).finally(() => setLoadingMore(false));
+          }}
+        >
+          {loadingMore ? '読み込み中…' : 'さらに表示'}
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+function EngagementDetail({
+  api,
+  id,
+  onBack,
+  onOpenContract,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  id: string;
+  onBack: () => void;
+  onOpenContract: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [item, setItem] = useState<Engagement | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void api
+      .getEngagement(id)
+      .then((result) => {
+        setItem(result);
+        setError('');
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+        else
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '参画詳細を取得できませんでした。',
+          );
+      });
+  }, [api, id, onUnauthorized]);
+  if (error)
+    return (
+      <section className="content-panel">
+        <p role="alert">{error}</p>
+        <button className="secondary-button" onClick={onBack}>
+          参画一覧へ戻る
+        </button>
+      </section>
+    );
+  if (!item)
+    return (
+      <section className="content-panel" role="status">
+        参画を読み込んでいます…
+      </section>
+    );
+  const amount = (value: number | null, currency: string) =>
+    value === null ? '未設定' : `${value.toLocaleString()} ${currency}`;
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{item.engagementNo}</p>
+          <h2>{item.engineerName}</h2>
+          <p>{item.contractTitle}</p>
+        </div>
+        <button className="secondary-button" onClick={onBack}>
+          参画一覧へ戻る
+        </button>
+      </div>
+      <dl className="detail-grid">
+        <dt>状態</dt>
+        <dd>{engagementStatusLabels[item.status]}</dd>
+        <dt>契約</dt>
+        <dd>
+          <button
+            className="link-button"
+            onClick={() => onOpenContract(item.contractId)}
+          >
+            {item.contractTitle}
+          </button>
+        </dd>
+        <dt>予定期間</dt>
+        <dd>
+          {item.plannedStartDate ?? '未定'} ～ {item.plannedEndDate ?? '未定'}
+        </dd>
+        <dt>実績期間</dt>
+        <dd>
+          {item.actualStartDate ?? '未開始'} ～ {item.actualEndDate ?? '継続中'}
+        </dd>
+        <dt>役割</dt>
+        <dd>{item.roleName ?? '未設定'}</dd>
+        <dt>勤務地</dt>
+        <dd>{item.workLocation ?? '未設定'}</dd>
+        <dt>リモート頻度</dt>
+        <dd>{item.remoteFrequency ?? '未設定'}</dd>
+        <dt>前回参画ID</dt>
+        <dd>{item.previousEngagementId ?? 'なし'}</dd>
+        <dt>版番号</dt>
+        <dd>{item.rowVersion}</dd>
+        <dt>条件履歴</dt>
+        <dd>
+          {item.conditions.length === 0 ? (
+            '未登録'
+          ) : (
+            <ol>
+              {item.conditions.map((condition) => (
+                <li key={condition.id}>
+                  第{condition.versionNo}版 / {condition.effectiveFrom} ～{' '}
+                  {condition.effectiveTo ?? '継続中'} / 売上{' '}
+                  {amount(condition.monthlySalesAmount, condition.currency)} /
+                  原価 {amount(condition.monthlyCostAmount, condition.currency)}{' '}
+                  / 精算 {condition.settlementLowerHours ?? '未設定'}～
+                  {condition.settlementUpperHours ?? '未設定'}時間
+                  {condition.notes ? ` / ${condition.notes}` : ''}
+                </li>
+              ))}
+            </ol>
+          )}
+        </dd>
+        <dt>状態履歴</dt>
+        <dd>
+          {item.statusHistories.length === 0 ? (
+            '未登録'
+          ) : (
+            <ol>
+              {item.statusHistories.map((history) => (
+                <li key={history.id}>
+                  {history.changedAt} /{' '}
+                  {history.fromStatus
+                    ? engagementStatusLabels[history.fromStatus]
+                    : '新規'}{' '}
+                  → {engagementStatusLabels[history.toStatus]}
+                  {history.changeReason ? ` / ${history.changeReason}` : ''}
+                </li>
+              ))}
+            </ol>
+          )}
+        </dd>
+      </dl>
+    </section>
   );
 }
 
@@ -2360,7 +2641,10 @@ function ProposalDetail({
           成約を登録し、契約・参画の下書きを生成しました。{' '}
           <a href={`/contracts/${winResult.contractId}`}>契約下書きを確認</a>
           <br />
-          参画下書きID: {winResult.engagementId}
+          {' / '}
+          <a href={`/engagements/${winResult.engagementId}`}>
+            参画下書きを確認
+          </a>
         </p>
       ) : null}
       {proposalTransitions[item.status].length > 0 ? (
@@ -2730,6 +3014,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/engagements')}
+        >
+          参画
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/contracts')}
         >
           契約
@@ -2771,7 +3061,21 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'contracts' ? (
+      {route.page === 'engagements' ? (
+        <EngagementListView
+          api={api}
+          onOpen={(id) => navigate(`/engagements/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'engagement-detail' ? (
+        <EngagementDetail
+          api={api}
+          id={route.id}
+          onBack={() => navigate('/engagements')}
+          onOpenContract={(id) => navigate(`/contracts/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'contracts' ? (
         <ContractListView
           api={api}
           onOpen={(id) => navigate(`/contracts/${id}`)}

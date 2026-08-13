@@ -57,10 +57,15 @@ import type {
   ContractList,
   ContractStatusTransitionInput,
   ListContractsQuery,
+  Engagement,
+  EngagementList,
+  ListEngagementsQuery,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
+  listEngagements(query?: ListEngagementsQuery): Promise<EngagementList>;
+  getEngagement(id: string): Promise<Engagement>;
   listContracts(query?: ListContractsQuery): Promise<ContractList>;
   getContract(id: string): Promise<Contract>;
   createContract(input: ContractInput): Promise<Contract>;
@@ -275,6 +280,18 @@ export function createProjectsApi(options: {
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
+    },
+    listEngagements(query = {}) {
+      const params = new URLSearchParams();
+      if (query.q) params.set('q', query.q);
+      if (query.status) params.set('status', query.status);
+      if (query.cursor) params.set('cursor', query.cursor);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return get<EngagementList>(`/engagements${suffix}`);
+    },
+    getEngagement(id) {
+      return get<Engagement>(`/engagements/${encodeURIComponent(id)}`);
     },
     listContracts(query = {}) {
       const params = new URLSearchParams();
