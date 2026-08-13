@@ -238,6 +238,7 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     transitionProposalStatus: vi.fn(() =>
       Promise.reject(new Error('not configured')),
     ),
+    winProposal: vi.fn(() => Promise.reject(new Error('not configured'))),
     listEngineerCareerHistories: vi.fn(() => Promise.resolve({ items: [] })),
     saveEngineerCareerHistory: vi.fn(() =>
       Promise.reject(new Error('not configured')),
@@ -556,6 +557,40 @@ describe('App', () => {
         reason: '条件不一致',
       }),
     );
+  });
+  it('wins an offered proposal and shows generated draft links', async () => {
+    const offered = { ...proposal, status: 'offered' as const };
+    window.history.replaceState({}, '', `/proposals/${offered.id}`);
+    const winProposal = vi.fn(() =>
+      Promise.resolve({
+        proposal: { ...offered, status: 'won' as const, rowVersion: 2 },
+        contractId: contract.id,
+        engagementId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        created: true,
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getProposal: () => Promise.resolve(offered),
+          winProposal,
+        })}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('次の状態'), {
+      target: { value: 'won' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '状態を更新' }));
+    await waitFor(() =>
+      expect(winProposal).toHaveBeenCalledWith(offered.id, 1),
+    );
+    expect(
+      await screen.findByText(/契約・参画の下書きを生成しました/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: '契約下書きを確認' }),
+    ).toHaveAttribute('href', `/contracts/${contract.id}`);
   });
   it('renders the engineer list and opens public detail', async () => {
     window.history.replaceState({}, '', '/engineers');

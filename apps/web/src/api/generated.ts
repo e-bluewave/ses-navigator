@@ -571,6 +571,12 @@ export interface ProposalStatusTransitionInput {
   status: ProposalStatus;
   reason: string | null;
 }
+export interface ProposalWinResult {
+  proposal: Proposal;
+  contractId: string;
+  engagementId: string;
+  created: boolean;
+}
 export interface ProposalList {
   items: Proposal[];
   page: { limit: number; nextCursor: string | null };

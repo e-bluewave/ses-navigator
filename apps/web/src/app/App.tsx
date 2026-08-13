@@ -33,6 +33,7 @@ import type {
   Proposal,
   ProposalInput,
   ProposalStatus,
+  ProposalWinResult,
   Interview,
   InterviewInput,
   InterviewResultInput,
@@ -2252,6 +2253,7 @@ function ProposalDetail({
   const [nextStatus, setNextStatus] = useState<ProposalStatus | ''>('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [winResult, setWinResult] = useState<ProposalWinResult | null>(null);
   useEffect(() => {
     void api
       .getProposal(id)
@@ -2272,16 +2274,20 @@ function ProposalDetail({
     if (!item || !nextStatus) return;
     setSaving(true);
     setActionError('');
+    setWinResult(null);
     try {
-      const updated = await api.transitionProposalStatus(
-        item.id,
-        item.rowVersion,
-        {
+      const won =
+        nextStatus === 'won'
+          ? await api.winProposal(item.id, item.rowVersion)
+          : null;
+      const updated =
+        won?.proposal ??
+        (await api.transitionProposalStatus(item.id, item.rowVersion, {
           status: nextStatus,
           reason: reason.trim() || null,
-        },
-      );
+        }));
       setItem(updated);
+      setWinResult(won);
       setNextStatus('');
       setReason('');
     } catch (failure) {
@@ -2349,6 +2355,14 @@ function ProposalDetail({
         <dt>要件版ID</dt>
         <dd>{item.requirementVersionId ?? '—'}</dd>
       </dl>
+      {winResult ? (
+        <p role="status">
+          成約を登録し、契約・参画の下書きを生成しました。{' '}
+          <a href={`/contracts/${winResult.contractId}`}>契約下書きを確認</a>
+          <br />
+          参画下書きID: {winResult.engagementId}
+        </p>
+      ) : null}
       {proposalTransitions[item.status].length > 0 ? (
         <form
           className="project-form"

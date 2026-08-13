@@ -392,6 +392,46 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /proposals/{id}/win:
+    post:
+      operationId: winProposal
+      description: Atomically marks an offered proposal as won and creates an editable contract draft and initial engagement draft.
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+        - {
+            name: Idempotency-Key,
+            in: header,
+            required: true,
+            schema:
+              {
+                type: string,
+                minLength: 1,
+                maxLength: 200,
+                pattern: '^[A-Za-z0-9._:-]+$',
+              },
+          }
+      responses:
+        '200':
+          description: Proposal won and draft identifiers returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProposalWinResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /companies:
     post:
       operationId: createCompany
@@ -2526,6 +2566,17 @@ components:
       properties:
         status: { $ref: '#/components/schemas/ProposalStatus' }
         reason: { type: [string, 'null'], maxLength: 500 }
+    ProposalWinResult:
+      type: object
+      additionalProperties: false
+      required: [proposal, contractId, engagementId, created]
+      properties:
+        proposal: { $ref: '#/components/schemas/Proposal' }
+        contractId: { type: string, format: uuid }
+        engagementId: { type: string, format: uuid }
+        created:
+          type: boolean
+          description: True when this request created drafts; false for an idempotent replay.
     ProposalList:
       type: object
       required: [items, page]

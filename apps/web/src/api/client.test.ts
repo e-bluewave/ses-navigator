@@ -88,6 +88,38 @@ describe('generated projects API client', () => {
     });
   });
 
+  it('wins a proposal with optimistic locking and an idempotency key', async () => {
+    const request = vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            proposal: { id: 'proposal-1' },
+            contractId: 'contract-1',
+            engagementId: 'engagement-1',
+            created: true,
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+      createIdempotencyKey: () => 'proposal-win-key-1',
+    });
+    await api.winProposal('proposal-1', 4);
+    expect(request).toHaveBeenCalledWith('/api/v1/proposals/proposal-1/win', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer access-token',
+        'if-match': '"4"',
+        'idempotency-key': 'proposal-win-key-1',
+      },
+      body: '{}',
+    });
+  });
+
   it('lists and reads engineers with bearer authentication', async () => {
     const request = vi.fn().mockImplementation(() =>
       Promise.resolve(

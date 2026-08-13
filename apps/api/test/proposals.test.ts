@@ -49,11 +49,20 @@ function repository(
     canRead: vi.fn(() => Promise.resolve(true)),
     canManage: vi.fn(() => Promise.resolve(true)),
     canSend: vi.fn(() => Promise.resolve(true)),
+    canManageContracts: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [proposal], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(proposal)),
     create: vi.fn(() => Promise.resolve({ ...proposal, status: 'draft' })),
     update: vi.fn(() => Promise.resolve({ ...proposal, status: 'draft' })),
     transitionStatus: vi.fn(() => Promise.resolve(proposal)),
+    win: vi.fn(() =>
+      Promise.resolve({
+        proposal: { ...proposal, status: 'won', rowVersion: 3 },
+        contractId: '55555555-5555-4555-8555-555555555555',
+        engagementId: '66666666-6666-4666-8666-666666666666',
+        created: true,
+      }),
+    ),
     ...overrides,
   };
 }
@@ -186,5 +195,74 @@ describe('proposal write API', () => {
       'Client selected another candidate',
       expect.any(String),
     );
+  });
+
+  it('wins an offered proposal and returns generated draft identifiers', async () => {
+    const win = vi.fn(() =>
+      Promise.resolve({
+        proposal: { ...proposal, status: 'won', rowVersion: 3 },
+        contractId: '55555555-5555-4555-8555-555555555555',
+        engagementId: '66666666-6666-4666-8666-666666666666',
+        created: true,
+      }),
+    );
+    const response = await app(repository({ win })).inject({
+      method: 'POST',
+      url: `/api/v1/proposals/${proposal.id}/win`,
+      headers: {
+        authorization: 'Bearer valid',
+        'if-match': '"2"',
+        'idempotency-key': 'proposal-win-test-1',
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers.etag).toBe('"3"');
+    expect(response.json()).toMatchObject({
+      contractId: '55555555-5555-4555-8555-555555555555',
+      engagementId: '66666666-6666-4666-8666-666666666666',
+      created: true,
+    });
+    expect(win).toHaveBeenCalledWith(
+      'valid',
+      proposal.id,
+      2,
+      'proposal-win-test-1',
+    );
+  });
+
+  it('requires contract.manage for proposal win draft generation', async () => {
+    const response = await app(
+      repository({
+        canManageContracts: vi.fn(() => Promise.resolve(false)),
+      }),
+    ).inject({
+      method: 'POST',
+      url: `/api/v1/proposals/${proposal.id}/win`,
+      headers: {
+        authorization: 'Bearer valid',
+        'if-match': '"2"',
+        'idempotency-key': 'proposal-win-test-2',
+      },
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('requires an idempotency key for proposal win draft generation', async () => {
+    const response = await app().inject({
+      method: 'POST',
+      url: `/api/v1/proposals/${proposal.id}/win`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('rejects won through the generic status endpoint', async () => {
+    const response = await app().inject({
+      method: 'POST',
+      url: `/api/v1/proposals/${proposal.id}/status`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: { status: 'won' },
+    });
+    expect(response.statusCode).toBe(400);
   });
 });

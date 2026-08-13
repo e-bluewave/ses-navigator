@@ -20,6 +20,7 @@ const requiredContractFragments = [
   'operationId: createProposal',
   'operationId: updateProposal',
   'operationId: transitionProposalStatus',
+  'operationId: winProposal',
   'operationId: listProjects',
   'operationId: getProject',
   'operationId: createProject',
@@ -644,6 +645,12 @@ export interface ProposalInput {
 export interface ProposalStatusTransitionInput {
   status: ProposalStatus;
   reason: string | null;
+}
+export interface ProposalWinResult {
+  proposal: Proposal;
+  contractId: string;
+  engagementId: string;
+  created: boolean;
 }
 export interface ProposalList {
   items: Proposal[];

@@ -45,6 +45,7 @@ import type {
   ProposalInput,
   ProposalList,
   ProposalStatusTransitionInput,
+  ProposalWinResult,
   ListProposalsQuery,
   Interview,
   InterviewInput,
@@ -99,6 +100,7 @@ export interface ProjectsApi {
     rowVersion: number,
     input: ProposalStatusTransitionInput,
   ): Promise<Proposal>;
+  winProposal(id: string, rowVersion: number): Promise<ProposalWinResult>;
   listEngineerCareerHistories(id: string): Promise<EngineerCareerHistoryList>;
   saveEngineerCareerHistory(
     id: string,
@@ -210,9 +212,12 @@ export function createProjectsApi(options: {
   getAccessToken: () => string | null;
   baseUrl?: string;
   fetch?: typeof fetch;
+  createIdempotencyKey?: () => string;
 }): ProjectsApi {
   const baseUrl = options.baseUrl ?? '/api/v1';
   const request = options.fetch ?? fetch;
+  const createIdempotencyKey =
+    options.createIdempotencyKey ?? (() => crypto.randomUUID());
 
   async function get<T>(path: string): Promise<T> {
     const token = options.getAccessToken();
@@ -238,6 +243,7 @@ export function createProjectsApi(options: {
     method: 'POST' | 'PUT' | 'DELETE',
     body: unknown,
     rowVersion?: number,
+    additionalHeaders: Record<string, string> = {},
   ): Promise<T> {
     const token = options.getAccessToken();
     const response = await request(`${baseUrl}${path}`, {
@@ -246,6 +252,7 @@ export function createProjectsApi(options: {
         'content-type': 'application/json',
         ...(token === null ? {} : { authorization: `Bearer ${token}` }),
         ...(rowVersion === undefined ? {} : { 'if-match': `"${rowVersion}"` }),
+        ...additionalHeaders,
       },
       body: JSON.stringify(body),
     });
@@ -360,6 +367,15 @@ export function createProjectsApi(options: {
         'POST',
         input,
         rowVersion,
+      );
+    },
+    winProposal(id, rowVersion) {
+      return send<ProposalWinResult>(
+        `/proposals/${encodeURIComponent(id)}/win`,
+        'POST',
+        {},
+        rowVersion,
+        { 'idempotency-key': createIdempotencyKey() },
       );
     },
     listEngineerCareerHistories(id) {
