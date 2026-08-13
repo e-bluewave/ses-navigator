@@ -17,6 +17,7 @@ import type {
   InterviewInput,
   Proposal,
   Project,
+  Contract,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -79,6 +80,51 @@ const interview: Interview = {
   outcome: null,
   statusHistory: [],
   updatedAt: '2026-08-11T00:00:00Z',
+  rowVersion: 1,
+};
+
+const contract: Contract = {
+  id: '99999999-9999-4999-8999-999999999999',
+  contractNo: 'CN-000001',
+  projectId: project.id,
+  proposalId: proposal.id,
+  engineerId: proposal.engineerId,
+  contractType: 'ses',
+  status: 'active',
+  title: '基幹システム刷新 SES契約',
+  startDate: '2026-09-01',
+  endDate: '2027-02-28',
+  autoRenew: true,
+  currency: 'JPY',
+  monthlyAmount: 900000,
+  hourlyAmount: null,
+  settlementLowerHours: 140,
+  settlementUpperHours: 180,
+  paymentTerms: '月末締め翌月末払い',
+  notes: '更新確認は終了日の30日前',
+  parties: [
+    {
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      companyId: '22222222-2222-4222-8222-222222222222',
+      contactId: null,
+      partyRole: 'customer',
+      billingRole: 'bill_to',
+      isPrimary: true,
+    },
+  ],
+  versions: [
+    {
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      versionNo: 1,
+      effectiveFrom: '2026-09-01',
+      effectiveTo: null,
+      changeSummary: '初版',
+      approvedAt: '2026-08-12T00:00:00Z',
+      createdAt: '2026-08-12T00:00:00Z',
+    },
+  ],
+  workLogs: [],
+  updatedAt: '2026-08-12T00:00:00Z',
   rowVersion: 1,
 };
 
@@ -163,6 +209,10 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    listContracts: vi.fn(() =>
+      Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
+    ),
+    getContract: vi.fn(() => Promise.reject(new Error('not configured'))),
     listInterviews: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -262,6 +312,25 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('lists safe contract summaries and opens restricted detail', async () => {
+    window.history.replaceState({}, '', '/contracts');
+    const client = api({
+      listContracts: vi.fn(() =>
+        Promise.resolve({
+          items: [contract],
+          page: { limit: 50, nextCursor: null },
+        }),
+      ),
+      getContract: vi.fn(() => Promise.resolve(contract)),
+    });
+    render(<App auth={auth()} api={client} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'CN-000001' }));
+    expect(await screen.findByText('月額')).toBeInTheDocument();
+    expect(screen.getByText('900,000 JPY')).toBeInTheDocument();
+    expect(screen.getByText('月末締め翌月末払い')).toBeInTheDocument();
+    expect(screen.getByText(/第1版/)).toBeInTheDocument();
+  });
+
   it('lists interviews and opens interview detail', async () => {
     window.history.replaceState({}, '', '/interviews');
     const client = api({

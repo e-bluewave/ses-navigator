@@ -7,6 +7,55 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /contracts:
+    get:
+      operationId: listContracts
+      parameters:
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, minLength: 1, maxLength: 100 },
+          }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/ContractStatus' },
+          }
+        - { name: cursor, in: query, schema: { type: string } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Safe contract summary list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContractList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /contracts/{id}:
+    get:
+      operationId: getContract
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Restricted reviewed contract detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contract' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /interviews:
     post:
       operationId: createInterview
@@ -2034,6 +2083,169 @@ components:
       required: [items, page]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Project' } }
+        page:
+          type: object
+          required: [limit, nextCursor]
+          properties:
+            limit: { type: integer }
+            nextCursor: { type: ['string', 'null'] }
+    ContractType:
+      type: string
+      enum: [ses, dispatch, subcontract, quasi_mandate, fixed_price, other]
+    ContractStatus:
+      type: string
+      enum: [draft, review, active, suspended, expired, terminated, cancelled]
+    ContractSummary:
+      type: object
+      required:
+        [
+          id,
+          contractNo,
+          projectId,
+          proposalId,
+          engineerId,
+          contractType,
+          status,
+          title,
+          startDate,
+          endDate,
+          autoRenew,
+          currency,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        contractNo: { type: string }
+        projectId: { type: [string, 'null'], format: uuid }
+        proposalId: { type: [string, 'null'], format: uuid }
+        engineerId: { type: [string, 'null'], format: uuid }
+        contractType: { $ref: '#/components/schemas/ContractType' }
+        status: { $ref: '#/components/schemas/ContractStatus' }
+        title: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: [string, 'null'], format: date }
+        autoRenew: { type: boolean }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    Contract:
+      allOf:
+        - { $ref: '#/components/schemas/ContractSummary' }
+        - type: object
+          required:
+            [
+              monthlyAmount,
+              hourlyAmount,
+              settlementLowerHours,
+              settlementUpperHours,
+              paymentTerms,
+              notes,
+              parties,
+              versions,
+              workLogs,
+            ]
+          properties:
+            monthlyAmount: { type: [number, 'null'], minimum: 0 }
+            hourlyAmount: { type: [number, 'null'], minimum: 0 }
+            settlementLowerHours: { type: [number, 'null'], minimum: 0 }
+            settlementUpperHours: { type: [number, 'null'], minimum: 0 }
+            paymentTerms: { type: [string, 'null'] }
+            notes: { type: [string, 'null'] }
+            parties:
+              type: array
+              items: { $ref: '#/components/schemas/ContractParty' }
+            versions:
+              type: array
+              items: { $ref: '#/components/schemas/ContractVersion' }
+            workLogs:
+              type: array
+              items: { $ref: '#/components/schemas/ContractWorkLog' }
+    ContractParty:
+      type: object
+      additionalProperties: false
+      required: [id, companyId, contactId, partyRole, billingRole, isPrimary]
+      properties:
+        id: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        contactId: { type: [string, 'null'], format: uuid }
+        partyRole:
+          {
+            type: string,
+            enum:
+              [
+                customer,
+                supplier,
+                employer,
+                end_client,
+                prime_contractor,
+                subcontractor,
+                other,
+              ],
+          }
+        billingRole: { type: [string, 'null'], enum: [bill_to, pay_to, none, null] }
+        isPrimary: { type: boolean }
+    ContractVersion:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          versionNo,
+          effectiveFrom,
+          effectiveTo,
+          changeSummary,
+          approvedAt,
+          createdAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        versionNo: { type: integer, minimum: 1 }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: [string, 'null'], format: date }
+        changeSummary: { type: [string, 'null'] }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    ContractWorkLog:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          engineerId,
+          workMonth,
+          status,
+          scheduledDays,
+          actualDays,
+          scheduledHours,
+          actualHours,
+          overtimeHours,
+          absenceHours,
+          customerApprovedAt,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        workMonth: { type: string, format: date }
+        status: { type: string, enum: [draft, submitted, approved, rejected, locked] }
+        scheduledDays: { type: [number, 'null'], minimum: 0 }
+        actualDays: { type: [number, 'null'], minimum: 0 }
+        scheduledHours: { type: [number, 'null'], minimum: 0 }
+        actualHours: { type: [number, 'null'], minimum: 0 }
+        overtimeHours: { type: number, minimum: 0 }
+        absenceHours: { type: number, minimum: 0 }
+        customerApprovedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    ContractList:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          { type: array, items: { $ref: '#/components/schemas/ContractSummary' } }
         page:
           type: object
           required: [limit, nextCursor]

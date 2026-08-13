@@ -5,6 +5,8 @@ const outputPath = new URL('../apps/web/src/api/generated.ts', import.meta.url);
 const contract = await readFile(contractPath, 'utf8');
 
 const requiredContractFragments = [
+  'operationId: listContracts',
+  'operationId: getContract',
   'operationId: listInterviews',
   'operationId: getInterview',
   'operationId: createInterview',
@@ -94,6 +96,21 @@ export type ProposalStatus =
 export type InterviewType = 'online' | 'onsite' | 'phone' | 'other';
 export type InterviewStatus =
   'tentative' | 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+export type ContractType =
+  | 'ses'
+  | 'dispatch'
+  | 'subcontract'
+  | 'quasi_mandate'
+  | 'fixed_price'
+  | 'other';
+export type ContractStatus =
+  | 'draft'
+  | 'review'
+  | 'active'
+  | 'suspended'
+  | 'expired'
+  | 'terminated'
+  | 'cancelled';
 
 export interface AuthContext {
   requiresMfa: boolean;
@@ -469,6 +486,87 @@ export interface ListProjectsQuery {
   q?: string;
   status?: ProjectStatus;
   recruitmentStatus?: RecruitmentStatus;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface ContractSummary {
+  id: string;
+  contractNo: string;
+  projectId: string | null;
+  proposalId: string | null;
+  engineerId: string | null;
+  contractType: ContractType;
+  status: ContractStatus;
+  title: string;
+  startDate: string;
+  endDate: string | null;
+  autoRenew: boolean;
+  currency: string;
+  updatedAt: string;
+  rowVersion: number;
+}
+export type ContractPartyRole =
+  | 'customer'
+  | 'supplier'
+  | 'employer'
+  | 'end_client'
+  | 'prime_contractor'
+  | 'subcontractor'
+  | 'other';
+export type ContractBillingRole = 'bill_to' | 'pay_to' | 'none';
+export interface ContractParty {
+  id: string;
+  companyId: string;
+  contactId: string | null;
+  partyRole: ContractPartyRole;
+  billingRole: ContractBillingRole | null;
+  isPrimary: boolean;
+}
+export interface ContractVersion {
+  id: string;
+  versionNo: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  changeSummary: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+}
+export type ContractWorkLogStatus =
+  'draft' | 'submitted' | 'approved' | 'rejected' | 'locked';
+export interface ContractWorkLog {
+  id: string;
+  engineerId: string;
+  workMonth: string;
+  status: ContractWorkLogStatus;
+  scheduledDays: number | null;
+  actualDays: number | null;
+  scheduledHours: number | null;
+  actualHours: number | null;
+  overtimeHours: number;
+  absenceHours: number;
+  customerApprovedAt: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface Contract extends ContractSummary {
+  monthlyAmount: number | null;
+  hourlyAmount: number | null;
+  settlementLowerHours: number | null;
+  settlementUpperHours: number | null;
+  paymentTerms: string | null;
+  notes: string | null;
+  parties: ContractParty[];
+  versions: ContractVersion[];
+  workLogs: ContractWorkLog[];
+}
+export interface ContractList {
+  items: ContractSummary[];
+  page: { limit: number; nextCursor: string | null };
+}
+export interface ListContractsQuery {
+  q?: string;
+  status?: ContractStatus;
   cursor?: string;
   limit?: number;
 }

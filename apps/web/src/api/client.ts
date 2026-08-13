@@ -51,10 +51,15 @@ import type {
   InterviewResultInput,
   InterviewList,
   ListInterviewsQuery,
+  Contract,
+  ContractList,
+  ListContractsQuery,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
+  listContracts(query?: ListContractsQuery): Promise<ContractList>;
+  getContract(id: string): Promise<Contract>;
   listInterviews(query?: ListInterviewsQuery): Promise<InterviewList>;
   getInterview(id: string): Promise<Interview>;
   createInterview(input: InterviewInput): Promise<Interview>;
@@ -250,6 +255,18 @@ export function createProjectsApi(options: {
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
+    },
+    listContracts(query = {}) {
+      const params = new URLSearchParams();
+      if (query.q) params.set('q', query.q);
+      if (query.status) params.set('status', query.status);
+      if (query.cursor) params.set('cursor', query.cursor);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return get<ContractList>(`/contracts${suffix}`);
+    },
+    getContract(id) {
+      return get<Contract>(`/contracts/${encodeURIComponent(id)}`);
     },
     listInterviews(query = {}) {
       const params = new URLSearchParams();
