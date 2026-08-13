@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app.js';
 import type {
   Contract,
+  ContractInput,
   ContractRepository,
   ContractSummary,
 } from '../src/modules/contracts/contract-repository.js';
@@ -54,6 +55,34 @@ const contract: Contract = {
     },
   ],
   workLogs: [],
+  approval: null,
+};
+
+const input: ContractInput = {
+  contractNo: contract.contractNo,
+  projectId: contract.projectId,
+  proposalId: contract.proposalId,
+  engineerId: contract.engineerId,
+  contractType: contract.contractType,
+  title: contract.title,
+  startDate: contract.startDate,
+  endDate: contract.endDate,
+  autoRenew: contract.autoRenew,
+  currency: contract.currency,
+  monthlyAmount: contract.monthlyAmount,
+  hourlyAmount: contract.hourlyAmount,
+  settlementLowerHours: contract.settlementLowerHours,
+  settlementUpperHours: contract.settlementUpperHours,
+  paymentTerms: contract.paymentTerms,
+  notes: contract.notes,
+  parties: contract.parties.map((party) => ({
+    companyId: party.companyId,
+    contactId: party.contactId,
+    partyRole: party.partyRole,
+    billingRole: party.billingRole,
+    isPrimary: party.isPrimary,
+  })),
+  changeSummary: 'Initial draft',
 };
 
 const authentication: AuthenticationService = {
@@ -68,8 +97,17 @@ function repository(
 ): ContractRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
+    canManage: vi.fn(() => Promise.resolve(true)),
+    canApprove: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [summary], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(contract)),
+    create: vi.fn(() =>
+      Promise.resolve({ ...contract, status: 'draft' as const }),
+    ),
+    update: vi.fn(() =>
+      Promise.resolve({ ...contract, status: 'draft' as const }),
+    ),
+    transitionStatus: vi.fn(() => Promise.resolve(contract)),
     ...overrides,
   };
 }
@@ -139,6 +177,102 @@ describe('contract read API', () => {
       method: 'GET',
       url: '/api/v1/contracts?status=unknown',
       headers: { authorization: 'Bearer valid' },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('contract write and approval API', () => {
+  it('creates a draft contract through the limited RPC repository path', async () => {
+    const create = vi.fn(() =>
+      Promise.resolve({ ...contract, status: 'draft' as const, rowVersion: 1 }),
+    );
+    const response = await app(repository({ create })).inject({
+      method: 'POST',
+      url: '/api/v1/contracts',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.headers.etag).toBe('"1"');
+    expect(create).toHaveBeenCalledWith('valid', input, expect.any(String));
+  });
+
+  it('requires contract.manage when creating a contract', async () => {
+    const response = await app(
+      repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: '/api/v1/contracts',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('uses If-Match when updating a draft contract', async () => {
+    const update = vi.fn(() =>
+      Promise.resolve({ ...contract, status: 'draft' as const, rowVersion: 3 }),
+    );
+    const response = await app(repository({ update })).inject({
+      method: 'PUT',
+      url: `/api/v1/contracts/${contract.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      'valid',
+      contract.id,
+      2,
+      input,
+      expect.any(String),
+    );
+  });
+
+  it('submits a draft contract for review with contract.manage', async () => {
+    const transitionStatus = vi.fn(() =>
+      Promise.resolve({
+        ...contract,
+        status: 'review' as const,
+        rowVersion: 3,
+      }),
+    );
+    const response = await app(repository({ transitionStatus })).inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${contract.id}/status`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: { status: 'review', reason: 'Please review the initial terms' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(transitionStatus).toHaveBeenCalledWith(
+      'valid',
+      contract.id,
+      2,
+      'review',
+      'Please review the initial terms',
+      expect.any(String),
+    );
+  });
+
+  it('requires contract.approve to activate a reviewed contract', async () => {
+    const response = await app(
+      repository({ canApprove: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${contract.id}/status`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: { status: 'active', reason: 'Terms confirmed' },
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('requires a reason when returning a reviewed contract to draft', async () => {
+    const response = await app().inject({
+      method: 'POST',
+      url: `/api/v1/contracts/${contract.id}/status`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: { status: 'draft' },
     });
     expect(response.statusCode).toBe(400);
   });

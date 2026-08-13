@@ -31,6 +31,13 @@ export interface ProposalListResult {
   nextCursor: { updatedAt: string; id: string } | null;
 }
 
+export interface ProposalWinResult {
+  proposal: Proposal;
+  contractId: string;
+  engagementId: string;
+  created: boolean;
+}
+
 export interface ProposalInput {
   managementNo: string;
   projectPositionId: string;
@@ -49,6 +56,7 @@ export interface ProposalRepository {
   canRead(accessToken: string): Promise<boolean>;
   canManage(accessToken: string): Promise<boolean>;
   canSend(accessToken: string): Promise<boolean>;
+  canManageContracts(accessToken: string): Promise<boolean>;
   list(
     accessToken: string,
     query: ProposalListQuery,
@@ -74,6 +82,12 @@ export interface ProposalRepository {
     reason: string | null,
     requestId: string,
   ): Promise<Proposal | null>;
+  win(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    idempotencyKey: string,
+  ): Promise<ProposalWinResult | null>;
 }
 
 type ProposalRow = {
@@ -94,6 +108,13 @@ type ProposalRow = {
   row_version: number;
 };
 
+type ProposalWinRow = {
+  proposal: ProposalRow;
+  contract_id: string;
+  engagement_id: string;
+  created: boolean;
+};
+
 const select =
   'id,management_no,project_position_id,engineer_id,destination_company_id,destination_contact_id,resume_version_id,requirement_version_id,proposed_unit_price,currency_code,status,proposed_start_date,validity_date,updated_at,row_version';
 
@@ -112,6 +133,10 @@ export class SupabaseProposalRepository implements ProposalRepository {
 
   async canSend(token: string): Promise<boolean> {
     return this.hasPermission(token, 'proposal.send');
+  }
+
+  async canManageContracts(token: string): Promise<boolean> {
+    return this.hasPermission(token, 'contract.manage');
   }
 
   async list(
@@ -206,6 +231,35 @@ export class SupabaseProposalRepository implements ProposalRepository {
     );
     const row = (await response.json()) as ProposalRow | null;
     return row ? toProposal(row) : null;
+  }
+
+  async win(
+    token: string,
+    id: string,
+    rowVersion: number,
+    idempotencyKey: string,
+  ): Promise<ProposalWinResult | null> {
+    const response = await this.request(
+      token,
+      '/rpc/win_proposal_and_create_drafts',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          p_proposal_id: id,
+          p_row_version: rowVersion,
+          p_request_id: idempotencyKey,
+        }),
+      },
+    );
+    const row = (await response.json()) as ProposalWinRow | null;
+    return row
+      ? {
+          proposal: toProposal(row.proposal),
+          contractId: row.contract_id,
+          engagementId: row.engagement_id,
+          created: row.created,
+        }
+      : null;
   }
 
   private async save(

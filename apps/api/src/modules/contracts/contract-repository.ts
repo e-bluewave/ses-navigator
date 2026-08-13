@@ -18,6 +18,17 @@ export type ContractStatus =
   | 'terminated'
   | 'cancelled';
 
+export type ContractPartyRole =
+  | 'customer'
+  | 'supplier'
+  | 'employer'
+  | 'end_client'
+  | 'prime_contractor'
+  | 'subcontractor'
+  | 'other';
+
+export type ContractBillingRole = 'bill_to' | 'pay_to' | 'none';
+
 export interface ContractSummary {
   id: string;
   contractNo: string;
@@ -39,9 +50,20 @@ export interface ContractParty {
   id: string;
   companyId: string;
   contactId: string | null;
-  partyRole: string;
-  billingRole: string | null;
+  partyRole: ContractPartyRole;
+  billingRole: ContractBillingRole | null;
   isPrimary: boolean;
+}
+
+export interface ContractApproval {
+  id: string;
+  status:
+    'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired';
+  requestedAt: string | null;
+  completedAt: string | null;
+  requestNote: string | null;
+  decisionNote: string | null;
+  rowVersion: number;
 }
 
 export interface ContractVersion {
@@ -80,6 +102,28 @@ export interface Contract extends ContractSummary {
   parties: ContractParty[];
   versions: ContractVersion[];
   workLogs: ContractWorkLog[];
+  approval: ContractApproval | null;
+}
+
+export interface ContractInput {
+  contractNo: string;
+  projectId: string | null;
+  proposalId: string | null;
+  engineerId: string | null;
+  contractType: ContractType;
+  title: string;
+  startDate: string;
+  endDate: string | null;
+  autoRenew: boolean;
+  currency: string;
+  monthlyAmount: number | null;
+  hourlyAmount: number | null;
+  settlementLowerHours: number | null;
+  settlementUpperHours: number | null;
+  paymentTerms: string | null;
+  notes: string | null;
+  parties: Array<Omit<ContractParty, 'id'>>;
+  changeSummary: string | null;
 }
 
 export interface ContractListQuery {
@@ -96,11 +140,33 @@ export interface ContractListResult {
 
 export interface ContractRepository {
   canRead(accessToken: string): Promise<boolean>;
+  canManage(accessToken: string): Promise<boolean>;
+  canApprove(accessToken: string): Promise<boolean>;
   list(
     accessToken: string,
     query: ContractListQuery,
   ): Promise<ContractListResult>;
   findById(accessToken: string, id: string): Promise<Contract | null>;
+  create(
+    accessToken: string,
+    input: ContractInput,
+    requestId: string,
+  ): Promise<Contract | null>;
+  update(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: ContractInput,
+    requestId: string,
+  ): Promise<Contract | null>;
+  transitionStatus(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    status: 'draft' | 'review' | 'active',
+    reason: string | null,
+    requestId: string,
+  ): Promise<Contract | null>;
 }
 
 type ContractSummaryRow = {
@@ -131,8 +197,8 @@ type ContractDetailRow = ContractSummaryRow & {
     id: string;
     company_id: string;
     contact_id: string | null;
-    party_role: string;
-    billing_role: string | null;
+    party_role: ContractPartyRole;
+    billing_role: ContractBillingRole | null;
     is_primary: boolean;
   }>;
   versions: Array<{
@@ -159,6 +225,15 @@ type ContractDetailRow = ContractSummaryRow & {
     updated_at: string;
     row_version: number;
   }>;
+  approval: {
+    id: string;
+    status: ContractApproval['status'];
+    requested_at: string | null;
+    completed_at: string | null;
+    request_note: string | null;
+    decision_note: string | null;
+    row_version: number;
+  } | null;
 };
 
 const summarySelect =
@@ -171,6 +246,14 @@ export class SupabaseContractRepository implements ContractRepository {
       body: JSON.stringify({ required_permission: 'contract.read' }),
     });
     return (await response.json()) === true;
+  }
+
+  async canManage(token: string): Promise<boolean> {
+    return this.hasPermission(token, 'contract.manage');
+  }
+
+  async canApprove(token: string): Promise<boolean> {
+    return this.hasPermission(token, 'contract.approve');
   }
 
   async list(
@@ -224,6 +307,103 @@ export class SupabaseContractRepository implements ContractRepository {
     if (response.status === 403) return null;
     const row = (await response.json()) as ContractDetailRow | null;
     return row ? toContract(row) : null;
+  }
+
+  async create(
+    token: string,
+    input: ContractInput,
+    requestId: string,
+  ): Promise<Contract | null> {
+    return this.save(token, null, 0, input, requestId);
+  }
+
+  async update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: ContractInput,
+    requestId: string,
+  ): Promise<Contract | null> {
+    return this.save(token, id, rowVersion, input, requestId);
+  }
+
+  async transitionStatus(
+    token: string,
+    id: string,
+    rowVersion: number,
+    status: 'draft' | 'review' | 'active',
+    reason: string | null,
+    requestId: string,
+  ): Promise<Contract | null> {
+    const response = await this.request(
+      token,
+      '/rpc/transition_contract_status',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          p_contract_id: id,
+          p_row_version: rowVersion,
+          p_to_status: status,
+          p_reason: reason,
+          p_request_id: requestId,
+        }),
+      },
+    );
+    const saved = (await response.json()) as { id: string } | null;
+    return saved ? this.findById(token, saved.id) : null;
+  }
+
+  private async save(
+    token: string,
+    id: string | null,
+    rowVersion: number,
+    input: ContractInput,
+    requestId: string,
+  ): Promise<Contract | null> {
+    const response = await this.request(token, '/rpc/save_contract', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_contract_id: id,
+        p_row_version: rowVersion,
+        p_contract: {
+          contract_no: input.contractNo,
+          project_id: input.projectId,
+          proposal_id: input.proposalId,
+          engineer_id: input.engineerId,
+          contract_type: input.contractType,
+          title: input.title,
+          start_date: input.startDate,
+          end_date: input.endDate,
+          auto_renew: input.autoRenew,
+          currency: input.currency,
+          monthly_amount: input.monthlyAmount,
+          hourly_amount: input.hourlyAmount,
+          settlement_lower_hours: input.settlementLowerHours,
+          settlement_upper_hours: input.settlementUpperHours,
+          payment_terms: input.paymentTerms,
+          notes: input.notes,
+        },
+        p_parties: input.parties.map((party) => ({
+          company_id: party.companyId,
+          contact_id: party.contactId,
+          party_role: party.partyRole,
+          billing_role: party.billingRole,
+          is_primary: party.isPrimary,
+        })),
+        p_change_summary: input.changeSummary,
+        p_request_id: requestId,
+      }),
+    });
+    const saved = (await response.json()) as { id: string } | null;
+    return saved ? this.findById(token, saved.id) : null;
+  }
+
+  private async hasPermission(token: string, permission: string) {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: permission }),
+    });
+    return (await response.json()) === true;
   }
 
   private async request(
@@ -315,6 +495,17 @@ function toContract(row: ContractDetailRow): Contract {
       updatedAt: workLog.updated_at,
       rowVersion: workLog.row_version,
     })),
+    approval: row.approval
+      ? {
+          id: row.approval.id,
+          status: row.approval.status,
+          requestedAt: row.approval.requested_at,
+          completedAt: row.approval.completed_at,
+          requestNote: row.approval.request_note,
+          decisionNote: row.approval.decision_note,
+          rowVersion: row.approval.row_version,
+        }
+      : null,
   };
 }
 

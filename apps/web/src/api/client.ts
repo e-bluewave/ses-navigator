@@ -45,6 +45,7 @@ import type {
   ProposalInput,
   ProposalList,
   ProposalStatusTransitionInput,
+  ProposalWinResult,
   ListProposalsQuery,
   Interview,
   InterviewInput,
@@ -52,7 +53,9 @@ import type {
   InterviewList,
   ListInterviewsQuery,
   Contract,
+  ContractInput,
   ContractList,
+  ContractStatusTransitionInput,
   ListContractsQuery,
 } from './generated.js';
 
@@ -60,6 +63,17 @@ export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
   listContracts(query?: ListContractsQuery): Promise<ContractList>;
   getContract(id: string): Promise<Contract>;
+  createContract(input: ContractInput): Promise<Contract>;
+  updateContract(
+    id: string,
+    rowVersion: number,
+    input: ContractInput,
+  ): Promise<Contract>;
+  transitionContractStatus(
+    id: string,
+    rowVersion: number,
+    input: ContractStatusTransitionInput,
+  ): Promise<Contract>;
   listInterviews(query?: ListInterviewsQuery): Promise<InterviewList>;
   getInterview(id: string): Promise<Interview>;
   createInterview(input: InterviewInput): Promise<Interview>;
@@ -86,6 +100,7 @@ export interface ProjectsApi {
     rowVersion: number,
     input: ProposalStatusTransitionInput,
   ): Promise<Proposal>;
+  winProposal(id: string, rowVersion: number): Promise<ProposalWinResult>;
   listEngineerCareerHistories(id: string): Promise<EngineerCareerHistoryList>;
   saveEngineerCareerHistory(
     id: string,
@@ -197,9 +212,12 @@ export function createProjectsApi(options: {
   getAccessToken: () => string | null;
   baseUrl?: string;
   fetch?: typeof fetch;
+  createIdempotencyKey?: () => string;
 }): ProjectsApi {
   const baseUrl = options.baseUrl ?? '/api/v1';
   const request = options.fetch ?? fetch;
+  const createIdempotencyKey =
+    options.createIdempotencyKey ?? (() => crypto.randomUUID());
 
   async function get<T>(path: string): Promise<T> {
     const token = options.getAccessToken();
@@ -225,6 +243,7 @@ export function createProjectsApi(options: {
     method: 'POST' | 'PUT' | 'DELETE',
     body: unknown,
     rowVersion?: number,
+    additionalHeaders: Record<string, string> = {},
   ): Promise<T> {
     const token = options.getAccessToken();
     const response = await request(`${baseUrl}${path}`, {
@@ -233,6 +252,7 @@ export function createProjectsApi(options: {
         'content-type': 'application/json',
         ...(token === null ? {} : { authorization: `Bearer ${token}` }),
         ...(rowVersion === undefined ? {} : { 'if-match': `"${rowVersion}"` }),
+        ...additionalHeaders,
       },
       body: JSON.stringify(body),
     });
@@ -267,6 +287,25 @@ export function createProjectsApi(options: {
     },
     getContract(id) {
       return get<Contract>(`/contracts/${encodeURIComponent(id)}`);
+    },
+    createContract(input) {
+      return send<Contract>('/contracts', 'POST', input);
+    },
+    updateContract(id, rowVersion, input) {
+      return send<Contract>(
+        `/contracts/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    transitionContractStatus(id, rowVersion, input) {
+      return send<Contract>(
+        `/contracts/${encodeURIComponent(id)}/status`,
+        'POST',
+        input,
+        rowVersion,
+      );
     },
     listInterviews(query = {}) {
       const params = new URLSearchParams();
@@ -328,6 +367,15 @@ export function createProjectsApi(options: {
         'POST',
         input,
         rowVersion,
+      );
+    },
+    winProposal(id, rowVersion) {
+      return send<ProposalWinResult>(
+        `/proposals/${encodeURIComponent(id)}/win`,
+        'POST',
+        {},
+        rowVersion,
+        { 'idempotency-key': createIdempotencyKey() },
       );
     },
     listEngineerCareerHistories(id) {

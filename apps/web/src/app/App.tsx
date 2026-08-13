@@ -33,6 +33,7 @@ import type {
   Proposal,
   ProposalInput,
   ProposalStatus,
+  ProposalWinResult,
   Interview,
   InterviewInput,
   InterviewResultInput,
@@ -40,6 +41,8 @@ import type {
   InterviewStatus,
   InterviewType,
   Contract,
+  ContractInput,
+  ContractPartyInput,
   ContractSummary,
   ContractStatus,
   ContractType,
@@ -130,6 +133,8 @@ const contractTypeLabels: Record<ContractType, string> = {
 type Route =
   | { page: 'contracts' }
   | { page: 'contract-detail'; id: string }
+  | { page: 'contract-new' }
+  | { page: 'contract-edit'; id: string }
   | { page: 'interviews' }
   | { page: 'interview-detail'; id: string }
   | { page: 'interview-new' }
@@ -156,6 +161,16 @@ type Route =
 
 function currentRoute(): Route {
   if (window.location.pathname === '/contracts') return { page: 'contracts' };
+  if (window.location.pathname === '/contracts/new')
+    return { page: 'contract-new' };
+  const contractEdit = window.location.pathname.match(
+    /^\/contracts\/([^/]+)\/edit$/,
+  );
+  if (contractEdit)
+    return {
+      page: 'contract-edit',
+      id: decodeURIComponent(contractEdit[1]!),
+    };
   const contract = window.location.pathname.match(/^\/contracts\/([^/]+)$/);
   if (contract)
     return { page: 'contract-detail', id: decodeURIComponent(contract[1]!) };
@@ -241,10 +256,12 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
 function ContractListView({
   api,
   onOpen,
+  onCreate,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   onOpen: (id: string) => void;
+  onCreate: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [items, setItems] = useState<ContractSummary[]>([]);
@@ -279,6 +296,9 @@ function ContractListView({
           <h2>契約</h2>
           <p>権限に応じた安全な契約概要を表示します。</p>
         </div>
+        <button className="primary-button" onClick={onCreate}>
+          契約を登録
+        </button>
       </div>
       <div className="filter-row">
         <input
@@ -340,15 +360,23 @@ function ContractDetail({
   api,
   id,
   onBack,
+  onEdit,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
+  onEdit: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [item, setItem] = useState<Contract | null>(null);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [nextStatus, setNextStatus] = useState<
+    'review' | 'active' | 'draft' | ''
+  >('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     void api
       .getContract(id)
@@ -367,6 +395,33 @@ function ContractDetail({
           );
       });
   }, [api, id, onUnauthorized]);
+  async function transition(event: FormEvent) {
+    event.preventDefault();
+    if (!item || !nextStatus) return;
+    setSaving(true);
+    setActionError('');
+    try {
+      const updated = await api.transitionContractStatus(
+        item.id,
+        item.rowVersion,
+        { status: nextStatus, reason: reason.trim() || null },
+      );
+      setItem(updated);
+      setNextStatus('');
+      setReason('');
+    } catch (failure) {
+      if (failure instanceof ApiClientError && failure.status === 401)
+        await onUnauthorized();
+      else
+        setActionError(
+          failure instanceof Error
+            ? failure.message
+            : '契約の承認状態を更新できませんでした。',
+        );
+    } finally {
+      setSaving(false);
+    }
+  }
   if (error)
     return (
       <section className="content-panel">
@@ -391,9 +446,16 @@ function ContractDetail({
           <p className="eyebrow">{item.contractNo}</p>
           <h2>{item.title}</h2>
         </div>
-        <button className="secondary-button" onClick={onBack}>
-          契約一覧へ戻る
-        </button>
+        <div className="filter-row">
+          {item.status === 'draft' ? (
+            <button className="primary-button" onClick={onEdit}>
+              編集
+            </button>
+          ) : null}
+          <button className="secondary-button" onClick={onBack}>
+            契約一覧へ戻る
+          </button>
+        </div>
       </div>
       <dl className="detail-grid">
         <dt>状態</dt>
@@ -472,9 +534,470 @@ function ContractDetail({
         </dd>
         <dt>備考</dt>
         <dd>{item.notes ?? '未設定'}</dd>
+        <dt>承認状況</dt>
+        <dd>
+          {item.approval
+            ? `${item.approval.status} / 依頼: ${item.approval.requestedAt ?? '未設定'} / 判断: ${item.approval.decisionNote ?? '未設定'}`
+            : '承認依頼なし'}
+        </dd>
         <dt>版番号</dt>
         <dd>{item.rowVersion}</dd>
       </dl>
+      {item.status === 'draft' || item.status === 'review' ? (
+        <form
+          className="project-form"
+          onSubmit={(event) => void transition(event)}
+        >
+          <h3>承認フロー</h3>
+          {actionError ? <p role="alert">{actionError}</p> : null}
+          <label>
+            次の状態
+            <select
+              required
+              value={nextStatus}
+              onChange={(event) =>
+                setNextStatus(
+                  event.target.value as 'review' | 'active' | 'draft' | '',
+                )
+              }
+            >
+              <option value="">選択してください</option>
+              {item.status === 'draft' ? (
+                <option value="review">承認依頼</option>
+              ) : (
+                <>
+                  <option value="active">承認して契約中へ</option>
+                  <option value="draft">差戻し</option>
+                </>
+              )}
+            </select>
+          </label>
+          <label>
+            依頼・判断理由
+            <textarea
+              maxLength={1000}
+              required={nextStatus === 'draft'}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </label>
+          <button className="primary-button" disabled={saving || !nextStatus}>
+            {saving ? '更新中…' : '承認状態を更新'}
+          </button>
+        </form>
+      ) : null}
+    </section>
+  );
+}
+
+function ContractForm({
+  api,
+  id,
+  onCancel,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  id?: string;
+  onCancel: () => void;
+  onSaved: (id: string) => void;
+}) {
+  const empty: ContractInput = {
+    contractNo: '',
+    projectId: null,
+    proposalId: null,
+    engineerId: null,
+    contractType: 'ses',
+    title: '',
+    startDate: '',
+    endDate: null,
+    autoRenew: false,
+    currency: 'JPY',
+    monthlyAmount: null,
+    hourlyAmount: null,
+    settlementLowerHours: null,
+    settlementUpperHours: null,
+    paymentTerms: null,
+    notes: null,
+    parties: [],
+    changeSummary: null,
+  };
+  const [input, setInput] = useState<ContractInput>(empty);
+  const [rowVersion, setRowVersion] = useState<number | null>(null);
+  const [loading, setLoading] = useState(id !== undefined);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!id) return;
+    void api
+      .getContract(id)
+      .then((contract) => {
+        setInput({
+          contractNo: contract.contractNo,
+          projectId: contract.projectId,
+          proposalId: contract.proposalId,
+          engineerId: contract.engineerId,
+          contractType: contract.contractType,
+          title: contract.title,
+          startDate: contract.startDate,
+          endDate: contract.endDate,
+          autoRenew: contract.autoRenew,
+          currency: contract.currency,
+          monthlyAmount: contract.monthlyAmount,
+          hourlyAmount: contract.hourlyAmount,
+          settlementLowerHours: contract.settlementLowerHours,
+          settlementUpperHours: contract.settlementUpperHours,
+          paymentTerms: contract.paymentTerms,
+          notes: contract.notes,
+          parties: contract.parties.map((party) => ({
+            companyId: party.companyId,
+            contactId: party.contactId,
+            partyRole: party.partyRole,
+            billingRole: party.billingRole,
+            isPrimary: party.isPrimary,
+          })),
+          changeSummary: null,
+        });
+        setRowVersion(contract.rowVersion);
+      })
+      .catch((failure: unknown) =>
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : '契約を読み込めませんでした。',
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [api, id]);
+  const set = <K extends keyof ContractInput>(
+    name: K,
+    value: ContractInput[K],
+  ) => setInput((current) => ({ ...current, [name]: value }));
+  const nullableText = (
+    name:
+      | 'projectId'
+      | 'proposalId'
+      | 'engineerId'
+      | 'paymentTerms'
+      | 'notes'
+      | 'changeSummary',
+    value: string,
+  ) => set(name, value.trim() === '' ? null : value);
+  const number = (
+    name:
+      | 'monthlyAmount'
+      | 'hourlyAmount'
+      | 'settlementLowerHours'
+      | 'settlementUpperHours',
+    value: string,
+  ) => set(name, value === '' ? null : Number(value));
+  const updateParty = <K extends keyof ContractPartyInput>(
+    index: number,
+    name: K,
+    value: ContractPartyInput[K],
+  ) =>
+    setInput((current) => ({
+      ...current,
+      parties: current.parties.map((party, partyIndex) =>
+        partyIndex === index ? { ...party, [name]: value } : party,
+      ),
+    }));
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const contract = id
+        ? await api.updateContract(id, rowVersion!, input)
+        : await api.createContract(input);
+      onSaved(contract.id);
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : '契約を保存できませんでした。',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  if (loading)
+    return (
+      <section className="content-panel" role="status">
+        契約を読み込んでいます…
+      </section>
+    );
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <h2>{id ? '契約を編集' : '契約を登録'}</h2>
+        <button className="secondary-button" onClick={onCancel}>
+          キャンセル
+        </button>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <form className="project-form" onSubmit={(event) => void submit(event)}>
+        <label>
+          契約番号
+          <input
+            required
+            maxLength={32}
+            value={input.contractNo}
+            onChange={(event) => set('contractNo', event.target.value)}
+          />
+        </label>
+        <label>
+          件名
+          <input
+            required
+            maxLength={300}
+            value={input.title}
+            onChange={(event) => set('title', event.target.value)}
+          />
+        </label>
+        <label>
+          案件ID（提案IDを指定しない場合は必須）
+          <input
+            value={input.projectId ?? ''}
+            onChange={(event) => nullableText('projectId', event.target.value)}
+          />
+        </label>
+        <label>
+          成約済み提案ID
+          <input
+            value={input.proposalId ?? ''}
+            onChange={(event) => nullableText('proposalId', event.target.value)}
+          />
+        </label>
+        <label>
+          技術者ID
+          <input
+            value={input.engineerId ?? ''}
+            onChange={(event) => nullableText('engineerId', event.target.value)}
+          />
+        </label>
+        <label>
+          契約形態
+          <select
+            value={input.contractType}
+            onChange={(event) =>
+              set('contractType', event.target.value as ContractType)
+            }
+          >
+            {Object.entries(contractTypeLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          開始日
+          <input
+            required
+            type="date"
+            value={input.startDate}
+            onChange={(event) => set('startDate', event.target.value)}
+          />
+        </label>
+        <label>
+          終了日
+          <input
+            type="date"
+            value={input.endDate ?? ''}
+            onChange={(event) =>
+              set(
+                'endDate',
+                event.target.value === '' ? null : event.target.value,
+              )
+            }
+          />
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={input.autoRenew}
+            onChange={(event) => set('autoRenew', event.target.checked)}
+          />
+          自動更新
+        </label>
+        <label>
+          通貨
+          <input
+            required
+            maxLength={3}
+            value={input.currency}
+            onChange={(event) =>
+              set('currency', event.target.value.toUpperCase())
+            }
+          />
+        </label>
+        {(
+          [
+            ['monthlyAmount', '月額'],
+            ['hourlyAmount', '時間単価'],
+            ['settlementLowerHours', '精算下限時間'],
+            ['settlementUpperHours', '精算上限時間'],
+          ] as const
+        ).map(([name, label]) => (
+          <label key={name}>
+            {label}
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={input[name] ?? ''}
+              onChange={(event) => number(name, event.target.value)}
+            />
+          </label>
+        ))}
+        <label>
+          支払条件
+          <textarea
+            maxLength={1000}
+            value={input.paymentTerms ?? ''}
+            onChange={(event) =>
+              nullableText('paymentTerms', event.target.value)
+            }
+          />
+        </label>
+        <label>
+          備考
+          <textarea
+            maxLength={5000}
+            value={input.notes ?? ''}
+            onChange={(event) => nullableText('notes', event.target.value)}
+          />
+        </label>
+        <fieldset>
+          <legend>契約当事者（承認依頼前に1件以上必要）</legend>
+          {input.parties.map((party, index) => (
+            <div className="filter-row" key={index}>
+              <label>
+                会社ID
+                <input
+                  required
+                  value={party.companyId}
+                  onChange={(event) =>
+                    updateParty(index, 'companyId', event.target.value)
+                  }
+                />
+              </label>
+              <label>
+                担当者ID
+                <input
+                  value={party.contactId ?? ''}
+                  onChange={(event) =>
+                    updateParty(
+                      index,
+                      'contactId',
+                      event.target.value === '' ? null : event.target.value,
+                    )
+                  }
+                />
+              </label>
+              <label>
+                役割
+                <select
+                  value={party.partyRole}
+                  onChange={(event) =>
+                    updateParty(
+                      index,
+                      'partyRole',
+                      event.target.value as ContractPartyInput['partyRole'],
+                    )
+                  }
+                >
+                  <option value="customer">顧客</option>
+                  <option value="supplier">仕入先</option>
+                  <option value="employer">雇用元</option>
+                  <option value="end_client">エンド顧客</option>
+                  <option value="prime_contractor">元請</option>
+                  <option value="subcontractor">下請</option>
+                  <option value="other">その他</option>
+                </select>
+              </label>
+              <label>
+                請求役割
+                <select
+                  value={party.billingRole ?? ''}
+                  onChange={(event) =>
+                    updateParty(
+                      index,
+                      'billingRole',
+                      (event.target.value ||
+                        null) as ContractPartyInput['billingRole'],
+                    )
+                  }
+                >
+                  <option value="">なし</option>
+                  <option value="bill_to">請求先</option>
+                  <option value="pay_to">支払先</option>
+                  <option value="none">対象外</option>
+                </select>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={party.isPrimary}
+                  onChange={(event) =>
+                    updateParty(index, 'isPrimary', event.target.checked)
+                  }
+                />
+                主契約先
+              </label>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  setInput((current) => ({
+                    ...current,
+                    parties: current.parties.filter(
+                      (_, partyIndex) => partyIndex !== index,
+                    ),
+                  }))
+                }
+              >
+                削除
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={input.parties.length >= 20}
+            onClick={() =>
+              setInput((current) => ({
+                ...current,
+                parties: [
+                  ...current.parties,
+                  {
+                    companyId: '',
+                    contactId: null,
+                    partyRole: 'customer',
+                    billingRole: 'bill_to',
+                    isPrimary: current.parties.length === 0,
+                  },
+                ],
+              }))
+            }
+          >
+            契約当事者を追加
+          </button>
+        </fieldset>
+        <label>
+          変更概要
+          <textarea
+            maxLength={1000}
+            value={input.changeSummary ?? ''}
+            onChange={(event) =>
+              nullableText('changeSummary', event.target.value)
+            }
+          />
+        </label>
+        <button className="primary-button" disabled={saving}>
+          {saving ? '保存中…' : id ? '契約を保存' : '契約を登録'}
+        </button>
+      </form>
     </section>
   );
 }
@@ -1730,6 +2253,7 @@ function ProposalDetail({
   const [nextStatus, setNextStatus] = useState<ProposalStatus | ''>('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [winResult, setWinResult] = useState<ProposalWinResult | null>(null);
   useEffect(() => {
     void api
       .getProposal(id)
@@ -1750,16 +2274,20 @@ function ProposalDetail({
     if (!item || !nextStatus) return;
     setSaving(true);
     setActionError('');
+    setWinResult(null);
     try {
-      const updated = await api.transitionProposalStatus(
-        item.id,
-        item.rowVersion,
-        {
+      const won =
+        nextStatus === 'won'
+          ? await api.winProposal(item.id, item.rowVersion)
+          : null;
+      const updated =
+        won?.proposal ??
+        (await api.transitionProposalStatus(item.id, item.rowVersion, {
           status: nextStatus,
           reason: reason.trim() || null,
-        },
-      );
+        }));
       setItem(updated);
+      setWinResult(won);
       setNextStatus('');
       setReason('');
     } catch (failure) {
@@ -1827,6 +2355,14 @@ function ProposalDetail({
         <dt>要件版ID</dt>
         <dd>{item.requirementVersionId ?? '—'}</dd>
       </dl>
+      {winResult ? (
+        <p role="status">
+          成約を登録し、契約・参画の下書きを生成しました。{' '}
+          <a href={`/contracts/${winResult.contractId}`}>契約下書きを確認</a>
+          <br />
+          参画下書きID: {winResult.engagementId}
+        </p>
+      ) : null}
       {proposalTransitions[item.status].length > 0 ? (
         <form
           className="project-form"
@@ -2239,6 +2775,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         <ContractListView
           api={api}
           onOpen={(id) => navigate(`/contracts/${id}`)}
+          onCreate={() => navigate('/contracts/new')}
           onUnauthorized={signOut}
         />
       ) : route.page === 'contract-detail' ? (
@@ -2246,7 +2783,21 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           api={api}
           id={route.id}
           onBack={() => navigate('/contracts')}
+          onEdit={() => navigate(`/contracts/${route.id}/edit`)}
           onUnauthorized={signOut}
+        />
+      ) : route.page === 'contract-new' || route.page === 'contract-edit' ? (
+        <ContractForm
+          api={api}
+          {...(route.page === 'contract-edit' ? { id: route.id } : {})}
+          onCancel={() =>
+            navigate(
+              route.page === 'contract-edit'
+                ? `/contracts/${route.id}`
+                : '/contracts',
+            )
+          }
+          onSaved={(id) => navigate(`/contracts/${id}`)}
         />
       ) : route.page === 'interviews' ? (
         <InterviewListView

@@ -81,6 +81,8 @@ export function registerProposalRoutes(
       if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
       const rowVersion = parseIfMatch(request.headers['if-match']);
       const transition = parseStatusTransition(request.body);
+      if (transition.status === 'won')
+        throw invalid('Use the proposal win endpoint to generate drafts');
       if (transition.status === 'sent')
         await requireSend(repository, request.user.accessToken);
       else await requireManage(repository, request.user.accessToken);
@@ -99,6 +101,36 @@ export function registerProposalRoutes(
           'Proposal was changed or is unavailable; reload and try again',
         );
       return reply.header('etag', `"${proposal.rowVersion}"`).send(proposal);
+    },
+  );
+
+  app.post(
+    '/api/v1/proposals/:id/win',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const idempotencyKey = parseIdempotencyKey(
+        request.headers['idempotency-key'],
+      );
+      await requireManage(repository, request.user.accessToken);
+      await requireContractManage(repository, request.user.accessToken);
+      const result = await repository.win(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        idempotencyKey,
+      );
+      if (!result)
+        throw new ApiError(
+          409,
+          'conflict',
+          'Proposal was changed, is not offered, or draft generation is unavailable',
+        );
+      return reply
+        .header('etag', `"${result.proposal.rowVersion}"`)
+        .send(result);
     },
   );
 
@@ -241,6 +273,21 @@ function parseIfMatch(value: string | undefined): number {
   return Number(match[1]);
 }
 
+function parseIdempotencyKey(value: string | string[] | undefined): string {
+  if (
+    typeof value !== 'string' ||
+    value.length < 1 ||
+    value.length > 200 ||
+    !/^[A-Za-z0-9._:-]+$/.test(value)
+  )
+    throw new ApiError(
+      400,
+      'invalid_request',
+      'Idempotency-Key is required and must be 1 to 200 safe characters',
+    );
+  return value;
+}
+
 async function requireManage(repository: ProposalRepository, token: string) {
   if (!(await repository.canManage(token)))
     throw new ApiError(
@@ -256,6 +303,18 @@ async function requireSend(repository: ProposalRepository, token: string) {
       403,
       'forbidden',
       'proposal.send permission is required',
+    );
+}
+
+async function requireContractManage(
+  repository: ProposalRepository,
+  token: string,
+) {
+  if (!(await repository.canManageContracts(token)))
+    throw new ApiError(
+      403,
+      'forbidden',
+      'contract.manage permission is required',
     );
 }
 
