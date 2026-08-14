@@ -85,10 +85,28 @@ import type {
   ListAccountingExportsQuery,
   AccountingExportGenerateInput,
   AccountingExportCompletionInput,
+  Expense,
+  ExpenseList,
+  ListExpensesQuery,
+  ExpenseInput,
+  ExpenseStatusTransitionInput,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
+  listExpenses(query?: ListExpensesQuery): Promise<ExpenseList>;
+  getExpense(id: string): Promise<Expense>;
+  createExpense(input: ExpenseInput): Promise<Expense>;
+  updateExpense(
+    id: string,
+    rowVersion: number,
+    input: ExpenseInput,
+  ): Promise<Expense>;
+  transitionExpenseStatus(
+    id: string,
+    rowVersion: number,
+    input: ExpenseStatusTransitionInput,
+  ): Promise<Expense>;
   listAccountingExports(
     query?: ListAccountingExportsQuery,
   ): Promise<AccountingExportList>;
@@ -378,6 +396,38 @@ export function createProjectsApi(options: {
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
+    },
+    listExpenses(query = {}) {
+      const params = new URLSearchParams();
+      if (query.q) params.set('q', query.q);
+      if (query.status) params.set('status', query.status);
+      if (query.dateFrom) params.set('dateFrom', query.dateFrom);
+      if (query.dateTo) params.set('dateTo', query.dateTo);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return get<ExpenseList>(`/expenses${suffix}`);
+    },
+    getExpense(id) {
+      return get<Expense>(`/expenses/${encodeURIComponent(id)}`);
+    },
+    createExpense(input) {
+      return send<Expense>('/expenses', 'POST', input);
+    },
+    updateExpense(id, rowVersion, input) {
+      return send<Expense>(
+        `/expenses/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    transitionExpenseStatus(id, rowVersion, input) {
+      return send<Expense>(
+        `/expenses/${encodeURIComponent(id)}/status`,
+        'POST',
+        input,
+        rowVersion,
+      );
     },
     listAccountingExports(query = {}) {
       const params = new URLSearchParams();
