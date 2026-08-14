@@ -645,6 +645,42 @@ export interface ListWorkLogsQuery {
   limit?: number;
 }
 
+export interface ProfitabilityMonth {
+  periodMonth: string;
+  revenue: number;
+  purchaseCost: number;
+  expenseCost: number;
+  grossProfit: number;
+  grossMarginRate: number | null;
+  cashIn: number;
+  cashOut: number;
+  receivableBalance: number;
+  payableBalance: number;
+  salesInvoiceCount: number;
+  purchaseInvoiceCount: number;
+  expenseCount: number;
+}
+export interface ProfitabilityDashboard {
+  fromMonth: string;
+  toMonth: string;
+  currency: string;
+  revenue: number;
+  purchaseCost: number;
+  expenseCost: number;
+  grossProfit: number;
+  grossMarginRate: number | null;
+  cashIn: number;
+  cashOut: number;
+  receivableBalance: number;
+  payableBalance: number;
+  monthly: ProfitabilityMonth[];
+}
+export interface ProfitabilityQuery {
+  fromMonth: string;
+  toMonth: string;
+  currency?: string;
+}
+
 export type ExpenseType =
   | 'transportation'
   | 'lodging'

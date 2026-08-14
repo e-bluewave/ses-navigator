@@ -470,6 +470,23 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    getProfitabilityDashboard: vi.fn(() =>
+      Promise.resolve({
+        fromMonth: '2026-01-01',
+        toMonth: '2026-08-01',
+        currency: 'JPY',
+        revenue: 0,
+        purchaseCost: 0,
+        expenseCost: 0,
+        grossProfit: 0,
+        grossMarginRate: null,
+        cashIn: 0,
+        cashOut: 0,
+        receivableBalance: 0,
+        payableBalance: 0,
+        monthly: [],
+      }),
+    ),
     listExpenses: vi.fn(() => Promise.resolve({ items: [] })),
     getExpense: vi.fn(() => Promise.reject(new Error('not configured'))),
     createExpense: vi.fn(() => Promise.reject(new Error('not configured'))),

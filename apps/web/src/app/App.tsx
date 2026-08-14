@@ -74,6 +74,7 @@ import type {
   ExpenseStatus,
   ExpenseSummary,
   ExpenseType,
+  ProfitabilityDashboard,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -200,6 +201,7 @@ const invoiceTypeLabels: Record<InvoiceType, string> = {
 };
 
 type Route =
+  | { page: 'profitability' }
   | { page: 'expenses' }
   | { page: 'accounting-exports' }
   | { page: 'accounting-periods' }
@@ -246,6 +248,8 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/profitability')
+    return { page: 'profitability' };
   if (window.location.pathname === '/expenses') return { page: 'expenses' };
   if (window.location.pathname === '/accounting-exports')
     return { page: 'accounting-exports' };
@@ -450,6 +454,182 @@ const emptyExpenseInput = (): ExpenseInput => ({
   receiptPath: null,
   notes: null,
 });
+
+function ProfitabilityView({
+  api,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const now = new Date();
+  const current = `${now.toISOString().slice(0, 7)}-01`;
+  const initial = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1),
+  )
+    .toISOString()
+    .slice(0, 10);
+  const [fromMonth, setFromMonth] = useState(initial);
+  const [toMonth, setToMonth] = useState(current);
+  const [currency, setCurrency] = useState('JPY');
+  const [data, setData] = useState<ProfitabilityDashboard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setData(
+        await api.getProfitabilityDashboard({ fromMonth, toMonth, currency }),
+      );
+    } catch (cause) {
+      if (cause instanceof ApiClientError && cause.status === 401)
+        await onUnauthorized();
+      else
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : '収支を読み込めませんでした。',
+        );
+    } finally {
+      setLoading(false);
+    }
+  }, [api, currency, fromMonth, onUnauthorized, toMonth]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Profitability</p>
+          <h2>粗利・収支ダッシュボード</h2>
+          <p>
+            通貨を混在させず、確定請求・承認済み経費・入出金を月別に集計します。
+          </p>
+        </div>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <form
+        className="filter-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void load();
+        }}
+      >
+        <label>
+          開始月
+          <input
+            aria-label="収支開始月"
+            type="month"
+            value={fromMonth.slice(0, 7)}
+            onChange={(event) => setFromMonth(`${event.target.value}-01`)}
+          />
+        </label>
+        <label>
+          終了月
+          <input
+            aria-label="収支終了月"
+            type="month"
+            value={toMonth.slice(0, 7)}
+            onChange={(event) => setToMonth(`${event.target.value}-01`)}
+          />
+        </label>
+        <label>
+          通貨
+          <input
+            aria-label="収支通貨"
+            maxLength={3}
+            value={currency}
+            onChange={(event) => setCurrency(event.target.value.toUpperCase())}
+          />
+        </label>
+        <button className="secondary-button">集計</button>
+      </form>
+      {loading ? (
+        <p role="status">収支を集計しています…</p>
+      ) : data ? (
+        <>
+          <dl className="detail-grid">
+            <div>
+              <dt>売上</dt>
+              <dd>{money(data.revenue, data.currency)}</dd>
+            </div>
+            <div>
+              <dt>仕入原価</dt>
+              <dd>{money(data.purchaseCost, data.currency)}</dd>
+            </div>
+            <div>
+              <dt>経費</dt>
+              <dd>{money(data.expenseCost, data.currency)}</dd>
+            </div>
+            <div>
+              <dt>粗利</dt>
+              <dd>{money(data.grossProfit, data.currency)}</dd>
+            </div>
+            <div>
+              <dt>粗利率</dt>
+              <dd>
+                {data.grossMarginRate === null
+                  ? '—'
+                  : `${data.grossMarginRate}%`}
+              </dd>
+            </div>
+            <div>
+              <dt>入金／出金</dt>
+              <dd>
+                {money(data.cashIn, data.currency)} /{' '}
+                {money(data.cashOut, data.currency)}
+              </dd>
+            </div>
+            <div>
+              <dt>売掛残高</dt>
+              <dd>{money(data.receivableBalance, data.currency)}</dd>
+            </div>
+            <div>
+              <dt>買掛残高</dt>
+              <dd>{money(data.payableBalance, data.currency)}</dd>
+            </div>
+          </dl>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>対象月</th>
+                  <th>売上</th>
+                  <th>仕入</th>
+                  <th>経費</th>
+                  <th>粗利</th>
+                  <th>粗利率</th>
+                  <th>入金</th>
+                  <th>出金</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.monthly.map((item) => (
+                  <tr key={item.periodMonth}>
+                    <td>{item.periodMonth.slice(0, 7)}</td>
+                    <td>{money(item.revenue, data.currency)}</td>
+                    <td>{money(item.purchaseCost, data.currency)}</td>
+                    <td>{money(item.expenseCost, data.currency)}</td>
+                    <td>{money(item.grossProfit, data.currency)}</td>
+                    <td>
+                      {item.grossMarginRate === null
+                        ? '—'
+                        : `${item.grossMarginRate}%`}
+                    </td>
+                    <td>{money(item.cashIn, data.currency)}</td>
+                    <td>{money(item.cashOut, data.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
 
 function ExpenseView({
   api,
@@ -6576,6 +6756,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/profitability')}
+        >
+          粗利・収支
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/expenses')}
         >
           経費
@@ -6659,7 +6845,9 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'expenses' ? (
+      {route.page === 'profitability' ? (
+        <ProfitabilityView api={api} onUnauthorized={signOut} />
+      ) : route.page === 'expenses' ? (
         <ExpenseView api={api} onUnauthorized={signOut} />
       ) : route.page === 'accounting-exports' ? (
         <AccountingExportView api={api} onUnauthorized={signOut} />

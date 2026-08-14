@@ -5,6 +5,7 @@ const outputPath = new URL('../apps/web/src/api/generated.ts', import.meta.url);
 const contract = await readFile(contractPath, 'utf8');
 
 const requiredContractFragments = [
+  'operationId: getProfitabilityDashboard',
   'operationId: listExpenses',
   'operationId: getExpense',
   'operationId: createExpense',
@@ -749,6 +750,42 @@ export interface ListWorkLogsQuery {
   workMonth?: string;
   cursor?: string;
   limit?: number;
+}
+
+export interface ProfitabilityMonth {
+  periodMonth: string;
+  revenue: number;
+  purchaseCost: number;
+  expenseCost: number;
+  grossProfit: number;
+  grossMarginRate: number | null;
+  cashIn: number;
+  cashOut: number;
+  receivableBalance: number;
+  payableBalance: number;
+  salesInvoiceCount: number;
+  purchaseInvoiceCount: number;
+  expenseCount: number;
+}
+export interface ProfitabilityDashboard {
+  fromMonth: string;
+  toMonth: string;
+  currency: string;
+  revenue: number;
+  purchaseCost: number;
+  expenseCost: number;
+  grossProfit: number;
+  grossMarginRate: number | null;
+  cashIn: number;
+  cashOut: number;
+  receivableBalance: number;
+  payableBalance: number;
+  monthly: ProfitabilityMonth[];
+}
+export interface ProfitabilityQuery {
+  fromMonth: string;
+  toMonth: string;
+  currency?: string;
 }
 
 export type ExpenseType =

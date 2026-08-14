@@ -90,10 +90,15 @@ import type {
   ListExpensesQuery,
   ExpenseInput,
   ExpenseStatusTransitionInput,
+  ProfitabilityDashboard,
+  ProfitabilityQuery,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
+  getProfitabilityDashboard(
+    query: ProfitabilityQuery,
+  ): Promise<ProfitabilityDashboard>;
   listExpenses(query?: ListExpensesQuery): Promise<ExpenseList>;
   getExpense(id: string): Promise<Expense>;
   createExpense(input: ExpenseInput): Promise<Expense>;
@@ -396,6 +401,14 @@ export function createProjectsApi(options: {
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
+    },
+    getProfitabilityDashboard(query) {
+      const params = new URLSearchParams({
+        fromMonth: query.fromMonth,
+        toMonth: query.toMonth,
+      });
+      if (query.currency) params.set('currency', query.currency);
+      return get<ProfitabilityDashboard>(`/profitability?${params.toString()}`);
     },
     listExpenses(query = {}) {
       const params = new URLSearchParams();

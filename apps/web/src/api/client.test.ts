@@ -3,6 +3,24 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('calls the profitability dashboard endpoint', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() => Promise.resolve(new Response(JSON.stringify({ monthly: [] }))));
+    const api = createProjectsApi({
+      getAccessToken: () => 'token',
+      fetch: request,
+    });
+    await api.getProfitabilityDashboard({
+      fromMonth: '2026-01-01',
+      toMonth: '2026-08-01',
+      currency: 'JPY',
+    });
+    expect(request.mock.calls[0]![0]).toBe(
+      '/api/v1/profitability?fromMonth=2026-01-01&toMonth=2026-08-01&currency=JPY',
+    );
+  });
+
   it('calls expense read, write, and transition endpoints', async () => {
     const request = vi.fn<
       (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
