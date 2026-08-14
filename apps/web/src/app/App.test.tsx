@@ -18,6 +18,7 @@ import type {
   Proposal,
   Project,
   ProjectExtraction,
+  ProjectEngineerMatch,
   Contract,
   ContractInput,
   Engagement,
@@ -103,6 +104,71 @@ const projectExtraction: ProjectExtraction = {
   reviewedAt: null,
   appliedAt: null,
   createdAt: '2026-08-14T01:00:00Z',
+};
+
+const projectEngineerMatch: ProjectEngineerMatch = {
+  id: '14141414-1414-4414-8414-141414141414',
+  projectId: project.id,
+  projectRequirementVersionId: null,
+  aiExecutionId: '15151515-1515-4515-8515-151515151515',
+  status: 'completed',
+  calculationVersion: 'match.v1',
+  criteria: { projectName: project.projectName },
+  candidateCount: 1,
+  overallSummary: '必須スキルと稼働条件が一致する候補です。',
+  errorMessage: null,
+  createdAt: '2026-08-14T02:00:00Z',
+  completedAt: '2026-08-14T02:01:00Z',
+  candidates: [
+    {
+      id: '16161616-1616-4616-8616-161616161616',
+      engineerId: '55555555-5555-4555-8555-555555555555',
+      resumeVersionId: null,
+      rank: 1,
+      overallScore: 88,
+      requiredSkillScore: 100,
+      preferredSkillScore: 50,
+      availabilityScore: 100,
+      rateScore: 100,
+      locationScore: 55,
+      requiredConditionsMet: true,
+      confidenceScore: 0.85,
+      matchedSkills: [
+        {
+          name: 'TypeScript',
+          requirementType: 'required',
+          requiredMonths: 36,
+          experienceMonths: 48,
+          reason: null,
+        },
+      ],
+      missingSkills: [],
+      warnings: ['勤務地希望が未確認です'],
+      facts: {
+        engineerManagementNo: 'EN-000001',
+        engineerName: '山田 太郎',
+        status: 'active',
+        availabilityStatus: 'available',
+        availableFrom: '2026-09-01',
+        nearestStation: '東京',
+        desiredRateMin: 700000,
+        desiredRateMax: 850000,
+        currencyCode: 'JPY',
+        remotePreference: 'hybrid',
+        preferredLocations: [],
+      },
+      explanation: {
+        matches: [{ text: '必須スキル一致', evidence: 'TypeScript 48か月' }],
+        mismatches: [],
+        missingInformation: [
+          { text: '勤務地希望未確認', evidence: '希望勤務地データなし' },
+        ],
+        warnings: ['勤務地条件を確認してください'],
+        recommendation: '提案前に勤務地希望を確認してください。',
+        questions: ['東京都内への出社は可能ですか？'],
+      },
+    },
+  ],
 };
 
 const proposal: Proposal = {
@@ -530,6 +596,10 @@ function auth(current: AuthSession | null = session): AuthService {
 
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
+    createProjectEngineerMatch: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    getLatestProjectEngineerMatch: vi.fn(() => Promise.resolve(null)),
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
     createProjectExtraction: vi.fn(() =>
       Promise.reject(new Error('not configured')),
@@ -2263,6 +2333,26 @@ describe('App', () => {
         },
       ),
     );
+  });
+
+  it('shows deterministic project-engineer scores with AI evidence', async () => {
+    window.history.replaceState({}, '', `/projects/${project.id}`);
+    const createProjectEngineerMatch = vi.fn(() =>
+      Promise.resolve(projectEngineerMatch),
+    );
+    render(<App auth={auth()} api={api({ createProjectEngineerMatch })} />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: '候補を再計算' }),
+    );
+    expect(
+      await screen.findByRole('heading', { name: '山田 太郎' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('88点')).toBeInTheDocument();
+    expect(screen.getByText(/必須条件:.*適合/)).toBeInTheDocument();
+    expect(screen.getByText('必須スキル一致')).toBeInTheDocument();
+    expect(screen.getByText('根拠: TypeScript 48か月')).toBeInTheDocument();
+    expect(createProjectEngineerMatch).toHaveBeenCalledWith(project.id, 5);
   });
 
   it('soft-deletes a project with a required reason', async () => {

@@ -3,6 +3,24 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('calls project-engineer matching endpoints', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() => Promise.resolve(new Response(JSON.stringify({ id: 'match-1' }))));
+    const api = createProjectsApi({
+      getAccessToken: () => 'token',
+      fetch: request,
+    });
+    await api.createProjectEngineerMatch('project-1', 5);
+    await api.getLatestProjectEngineerMatch('project-1');
+    expect(request.mock.calls[0]![0]).toBe(
+      '/api/v1/projects/project-1/ai/match-engineers',
+    );
+    expect(request.mock.calls[1]![0]).toBe(
+      '/api/v1/projects/project-1/ai/matches/latest',
+    );
+  });
+
   it('calls project extraction and review endpoints', async () => {
     const request = vi.fn<
       (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
