@@ -37,6 +37,7 @@ import type {
   ProposalInput,
   ProposalStatus,
   ProposalWinResult,
+  ProposalMessageDraft,
   Interview,
   InterviewInput,
   InterviewResultInput,
@@ -6462,6 +6463,264 @@ function ProposalListView({
   );
 }
 
+function ProposalMessageDraftPanel({
+  api,
+  proposalId,
+  canGenerate,
+}: {
+  api: ProjectsApi;
+  proposalId: string;
+  canGenerate: boolean;
+}) {
+  const [draft, setDraft] = useState<ProposalMessageDraft | null>(null);
+  const [tone, setTone] = useState<'formal' | 'standard' | 'concise'>(
+    'standard',
+  );
+  const [instructions, setInstructions] = useState('');
+  const [subject, setSubject] = useState('');
+  const [bodyText, setBodyText] = useState('');
+  const [reviewComment, setReviewComment] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .getLatestProposalMessageDraft(proposalId)
+      .then((result) => {
+        if (active) setDraft(result);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [api, proposalId]);
+
+  useEffect(() => {
+    setSubject(draft?.subject ?? '');
+    setBodyText(draft?.bodyText ?? '');
+  }, [draft]);
+
+  async function generate() {
+    setBusy(true);
+    setError(null);
+    try {
+      setDraft(
+        await api.createProposalMessageDraft(proposalId, {
+          tone,
+          additionalInstructions: instructions.trim() || null,
+        }),
+      );
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function save() {
+    if (!draft) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setDraft(
+        await api.updateProposalMessageDraft(
+          proposalId,
+          draft.id,
+          draft.rowVersion,
+          { subject, bodyText },
+        ),
+      );
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function review(decision: 'approve' | 'reject') {
+    if (!draft) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setDraft(
+        await api.reviewProposalMessageDraft(
+          proposalId,
+          draft.id,
+          draft.rowVersion,
+          {
+            decision,
+            reviewComment: reviewComment.trim() || null,
+          },
+        ),
+      );
+      setReviewComment('');
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const editable = draft?.status === 'draft' && draft.currentVersionId !== null;
+  return (
+    <section className="audit-panel" aria-labelledby="proposal-message-heading">
+      <h3 id="proposal-message-heading">AI提案メール下書き</h3>
+      <p>
+        AI生成版と営業編集版を不変履歴で保持します。承認しても自動送信されません。
+      </p>
+      {error ? <ErrorNotice error={error} /> : null}
+      {!canGenerate ? (
+        <p role="status">
+          生成するには、送信前の提案に経歴書版IDと要件版IDを設定してください。
+        </p>
+      ) : null}
+      <div className="filter-row">
+        <label>
+          文体
+          <select
+            aria-label="提案メール文体"
+            value={tone}
+            onChange={(event) => setTone(event.target.value as typeof tone)}
+          >
+            <option value="formal">丁寧</option>
+            <option value="standard">標準</option>
+            <option value="concise">簡潔</option>
+          </select>
+        </label>
+        <label>
+          追加指示
+          <textarea
+            aria-label="提案メール追加指示"
+            maxLength={2000}
+            value={instructions}
+            onChange={(event) => setInstructions(event.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={busy || !canGenerate}
+          onClick={() => void generate()}
+        >
+          {busy ? '処理中…' : draft ? '再生成' : '下書きを生成'}
+        </button>
+      </div>
+      {draft ? (
+        <section aria-label="AI提案メール下書き内容">
+          <p>
+            状態: {draft.status}／版: {draft.currentVersionNo ?? '生成中'}／
+            {draft.currentGenerationSource ?? '未生成'}
+          </p>
+          {draft.aiErrorMessage ? (
+            <p role="alert">AI生成エラー: {draft.aiErrorMessage}</p>
+          ) : null}
+          {draft.recipients.length ? (
+            <p>
+              宛先:{' '}
+              {draft.recipients
+                .map((recipient) =>
+                  [recipient.name, recipient.address].filter(Boolean).join(' '),
+                )
+                .join(', ')}
+            </p>
+          ) : (
+            <p role="status">宛先メールアドレスは未登録です。</p>
+          )}
+          {draft.generation?.confirmationItems.length ? (
+            <>
+              <h4>要確認事項</h4>
+              <ul>
+                {draft.generation.confirmationItems.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {draft.generation?.policyChecks.length ? (
+            <>
+              <h4>表現・公開範囲チェック</h4>
+              <ul>
+                {draft.generation.policyChecks.map((check, index) => (
+                  <li key={`${check.category}-${index}`}>
+                    <strong>{check.severity}</strong> {check.text} —{' '}
+                    {check.explanation}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          <label>
+            件名
+            <input
+              aria-label="提案メール件名"
+              maxLength={200}
+              disabled={!editable || busy}
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
+            />
+          </label>
+          <label>
+            本文
+            <textarea
+              aria-label="提案メール本文"
+              maxLength={20000}
+              disabled={!editable || busy}
+              value={bodyText}
+              onChange={(event) => setBodyText(event.target.value)}
+              rows={16}
+            />
+          </label>
+          {editable ? (
+            <>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={busy || !subject.trim() || !bodyText.trim()}
+                onClick={() => void save()}
+              >
+                編集版を保存
+              </button>
+              <label>
+                レビューコメント
+                <textarea
+                  aria-label="提案メールレビューコメント"
+                  maxLength={2000}
+                  value={reviewComment}
+                  onChange={(event) => setReviewComment(event.target.value)}
+                />
+              </label>
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={busy}
+                  onClick={() => void review('approve')}
+                >
+                  現在版を承認
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  disabled={busy || !reviewComment.trim()}
+                  onClick={() => void review('reject')}
+                >
+                  却下
+                </button>
+              </div>
+            </>
+          ) : null}
+          {draft.status === 'approved' ? (
+            <p role="status">
+              現在版を承認しました。送信処理はまだ実行されていません。
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+    </section>
+  );
+}
+
 function ProposalDetail({
   api,
   id,
@@ -6583,6 +6842,15 @@ function ProposalDetail({
         <dt>要件版ID</dt>
         <dd>{item.requirementVersionId ?? '—'}</dd>
       </dl>
+      <ProposalMessageDraftPanel
+        api={api}
+        proposalId={item.id}
+        canGenerate={
+          item.resumeVersionId !== null &&
+          item.requirementVersionId !== null &&
+          ['draft', 'pending_approval', 'approved'].includes(item.status)
+        }
+      />
       {winResult ? (
         <p role="status">
           成約を登録し、契約・参画の下書きを生成しました。{' '}

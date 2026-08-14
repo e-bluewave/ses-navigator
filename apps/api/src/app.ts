@@ -68,6 +68,11 @@ import type { ProjectMatchRepository } from './modules/project-matches/project-m
 import { OpenAIProjectMatchExplainer } from './modules/project-matches/project-match-service.js';
 import type { ProjectMatchExplainer } from './modules/project-matches/project-match-service.js';
 import { registerProjectMatchRoutes } from './modules/project-matches/project-match-routes.js';
+import { SupabaseProposalMessageDraftRepository } from './modules/proposal-message-drafts/proposal-message-draft-repository.js';
+import type { ProposalMessageDraftRepository } from './modules/proposal-message-drafts/proposal-message-draft-repository.js';
+import { registerProposalMessageDraftRoutes } from './modules/proposal-message-drafts/proposal-message-draft-routes.js';
+import { OpenAIProposalMessageComposer } from './modules/proposal-message-drafts/proposal-message-draft-service.js';
+import type { ProposalMessageComposer } from './modules/proposal-message-drafts/proposal-message-draft-service.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -93,6 +98,8 @@ export interface AppDependencies {
   projectExtractor?: ProjectExtractor;
   projectMatches?: ProjectMatchRepository;
   projectMatchExplainer?: ProjectMatchExplainer;
+  proposalMessageDrafts?: ProposalMessageDraftRepository;
+  proposalMessageComposer?: ProposalMessageComposer;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -195,6 +202,12 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
     app,
     dependencies.projectMatches ?? new SupabaseProjectMatchRepository(),
     dependencies.projectMatchExplainer ?? new OpenAIProjectMatchExplainer(),
+  );
+  registerProposalMessageDraftRoutes(
+    app,
+    dependencies.proposalMessageDrafts ??
+      new SupabaseProposalMessageDraftRepository(),
+    dependencies.proposalMessageComposer ?? new OpenAIProposalMessageComposer(),
   );
 
   return app;

@@ -1289,6 +1289,92 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /proposals/{id}/ai/message-drafts:
+    post:
+      operationId: createProposalMessageDraft
+      description: Creates an editable AI-assisted proposal email draft. It never sends the message.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProposalMessageDraftCreateInput' }
+      responses:
+        '201':
+          description: Generated draft awaiting human review
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProposalMessageDraft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /proposals/{id}/ai/message-drafts/latest:
+    get:
+      operationId: getLatestProposalMessageDraft
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Latest generated draft, or null when none exists
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/ProposalMessageDraft' }
+                  - { type: 'null' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /proposals/{proposalId}/ai/message-drafts/{messageId}:
+    put:
+      operationId: updateProposalMessageDraft
+      parameters:
+        - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: If-Match, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProposalMessageDraftEditInput' }
+      responses:
+        '200':
+          description: New immutable edited version saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProposalMessageDraft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /proposals/{proposalId}/ai/message-drafts/{messageId}/review:
+    post:
+      operationId: reviewProposalMessageDraft
+      description: Approves the current immutable version or rejects the draft. Sending remains separate.
+      parameters:
+        - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: If-Match, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProposalMessageDraftReviewInput' }
+      responses:
+        '200':
+          description: Human review recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProposalMessageDraft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /companies:
     post:
       operationId: createCompany
@@ -5020,6 +5106,109 @@ components:
         created:
           type: boolean
           description: True when this request created drafts; false for an idempotent replay.
+    ProposalMessageDraftCreateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        messageTemplateId: { type: [string, 'null'], format: uuid }
+        tone: { type: string, enum: [formal, standard, concise], default: standard }
+        additionalInstructions: { type: [string, 'null'], maxLength: 2000 }
+    ProposalMessageDraftEditInput:
+      type: object
+      additionalProperties: false
+      required: [subject, bodyText]
+      properties:
+        subject: { type: string, minLength: 1, maxLength: 200 }
+        bodyText: { type: string, minLength: 1, maxLength: 20000 }
+    ProposalMessageDraftReviewInput:
+      type: object
+      additionalProperties: false
+      required: [decision, reviewComment]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        reviewComment: { type: [string, 'null'], maxLength: 2000 }
+    ProposalMessageEvidence:
+      type: object
+      additionalProperties: false
+      required: [claim, source]
+      properties:
+        claim: { type: string }
+        source: { type: string }
+    ProposalMessagePolicyCheck:
+      type: object
+      additionalProperties: false
+      required: [category, severity, text, explanation]
+      properties:
+        category:
+          type: string
+          enum: [prohibited_expression, unverified_claim, privacy, template_requirement]
+        severity: { type: string, enum: [info, warning, error] }
+        text: { type: string }
+        explanation: { type: string }
+    ProposalMessageGeneration:
+      type: object
+      additionalProperties: false
+      required: [subject, bodyText, engineerIntroduction, confirmationItems, evidence, policyChecks]
+      properties:
+        subject: { type: string }
+        bodyText: { type: string }
+        engineerIntroduction: { type: string }
+        confirmationItems: { type: array, items: { type: string } }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/ProposalMessageEvidence' }
+        policyChecks:
+          type: array
+          items: { $ref: '#/components/schemas/ProposalMessagePolicyCheck' }
+    ProposalMessageRecipient:
+      type: object
+      additionalProperties: false
+      required: [type, name, address]
+      properties:
+        type: { type: string, enum: [to, cc, bcc] }
+        name: { type: [string, 'null'] }
+        address: { type: string }
+    ProposalMessageDraft:
+      type: object
+      additionalProperties: false
+      required: [id, proposalId, projectId, engineerId, channel, status, subject, bodyText, messageTemplateId, currentVersionId, currentVersionNo, currentGenerationSource, approvedVersionId, approvedAt, aiExecutionId, aiStatus, aiErrorCode, aiErrorMessage, promptVersion, modelProvider, modelName, reviewStatus, reviewComment, generation, recipients, createdAt, updatedAt, rowVersion]
+      properties:
+        id: { type: string, format: uuid }
+        proposalId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        channel: { type: string, enum: [email] }
+        status: { type: string, enum: [draft, approved, cancelled, queued, sent, failed] }
+        subject: { type: string }
+        bodyText: { type: string }
+        messageTemplateId: { type: [string, 'null'], format: uuid }
+        currentVersionId: { type: [string, 'null'], format: uuid }
+        currentVersionNo: { type: [integer, 'null'], minimum: 1 }
+        currentGenerationSource:
+          oneOf:
+            - { type: string, enum: [manual, template, ai, import] }
+            - { type: 'null' }
+        approvedVersionId: { type: [string, 'null'], format: uuid }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        aiExecutionId: { type: string, format: uuid }
+        aiStatus: { type: string }
+        aiErrorCode: { type: [string, 'null'] }
+        aiErrorMessage: { type: [string, 'null'] }
+        promptVersion: { type: string }
+        modelProvider: { type: string }
+        modelName: { type: string }
+        reviewStatus: { type: [string, 'null'] }
+        reviewComment: { type: [string, 'null'] }
+        generation:
+          oneOf:
+            - { $ref: '#/components/schemas/ProposalMessageGeneration' }
+            - { type: 'null' }
+        recipients:
+          type: array
+          items: { $ref: '#/components/schemas/ProposalMessageRecipient' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
     ProposalList:
       type: object
       required: [items, page]
