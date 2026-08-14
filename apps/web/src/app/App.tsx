@@ -188,6 +188,8 @@ const invoiceTypeLabels: Record<InvoiceType, string> = {
 };
 
 type Route =
+  | { page: 'supplier-payments' }
+  | { page: 'supplier-payment-detail'; id: string }
   | { page: 'invoices' }
   | { page: 'invoice-detail'; id: string }
   | { page: 'invoice-new' }
@@ -229,6 +231,16 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/supplier-payments')
+    return { page: 'supplier-payments' };
+  const supplierPayment = window.location.pathname.match(
+    /^\/supplier-payments\/([^/]+)$/,
+  );
+  if (supplierPayment)
+    return {
+      page: 'supplier-payment-detail',
+      id: decodeURIComponent(supplierPayment[1]!),
+    };
   if (window.location.pathname === '/invoices') return { page: 'invoices' };
   if (window.location.pathname === '/invoices/new')
     return { page: 'invoice-new' };
@@ -374,6 +386,197 @@ function money(value: number, currency: string) {
     currency,
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function SupplierPaymentListView({
+  api,
+  onOpen,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<InvoiceSummary[]>([]);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<InvoiceStatus | ''>('');
+  const [dueFrom, setDueFrom] = useState('');
+  const [dueTo, setDueTo] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api.listInvoices({
+        invoiceType: 'purchase',
+        ...(query.trim() ? { q: query.trim() } : {}),
+        ...(status ? { status } : {}),
+        ...(dueFrom ? { dueFrom } : {}),
+        ...(dueTo ? { dueTo } : {}),
+        limit: 100,
+      });
+      setItems(result.items);
+    } catch (reason) {
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
+      else
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : 'BP支払予定を取得できませんでした。',
+        );
+    } finally {
+      setLoading(false);
+    }
+  }, [api, dueFrom, dueTo, onUnauthorized, query, status]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const totalsByCurrency = useMemo(() => {
+    const summaries = new Map<
+      string,
+      { total: number; paid: number; balance: number; overdue: number }
+    >();
+    for (const item of items) {
+      const current = summaries.get(item.currency) ?? {
+        total: 0,
+        paid: 0,
+        balance: 0,
+        overdue: 0,
+      };
+      summaries.set(item.currency, {
+        total: current.total + item.totalAmount,
+        paid: current.paid + item.paidAmount,
+        balance: current.balance + item.balanceAmount,
+        overdue:
+          current.overdue +
+          (item.status === 'overdue' ? item.balanceAmount : 0),
+      });
+    }
+    return summaries.size > 0
+      ? [...summaries].map(([currency, summary]) => ({
+          currency,
+          ...summary,
+        }))
+      : [{ currency: 'JPY', total: 0, paid: 0, balance: 0, overdue: 0 }];
+  }, [items]);
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Accounts Payable</p>
+          <h2>BP支払</h2>
+          <p>仕入請求と支払・返金・相殺を一元管理します。</p>
+        </div>
+      </div>
+      {totalsByCurrency.map((summary) => (
+        <dl className="detail-grid" key={summary.currency}>
+          <div>
+            <dt>支払予定総額</dt>
+            <dd>{money(summary.total, summary.currency)}</dd>
+          </div>
+          <div>
+            <dt>支払済み</dt>
+            <dd>{money(summary.paid, summary.currency)}</dd>
+          </div>
+          <div>
+            <dt>支払残高</dt>
+            <dd>{money(summary.balance, summary.currency)}</dd>
+          </div>
+          <div>
+            <dt>期限超過</dt>
+            <dd>{money(summary.overdue, summary.currency)}</dd>
+          </div>
+        </dl>
+      ))}
+      <div className="filter-row">
+        <input
+          aria-label="BP支払検索"
+          placeholder="仕入請求番号・BP名・契約名"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <select
+          aria-label="BP支払状態"
+          value={status}
+          onChange={(event) =>
+            setStatus(event.target.value as InvoiceStatus | '')
+          }
+        >
+          <option value="">すべての状態</option>
+          {Object.entries(invoiceStatusLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <label>
+          支払期限（開始）
+          <input
+            type="date"
+            value={dueFrom}
+            onChange={(event) => setDueFrom(event.target.value)}
+          />
+        </label>
+        <label>
+          支払期限（終了）
+          <input
+            type="date"
+            value={dueTo}
+            onChange={(event) => setDueTo(event.target.value)}
+          />
+        </label>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      {loading ? (
+        <p role="status">BP支払予定を読み込んでいます…</p>
+      ) : items.length === 0 ? (
+        <p>該当するBP支払予定はありません。</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>仕入請求番号</th>
+                <th>BP</th>
+                <th>対象期間</th>
+                <th>支払期限</th>
+                <th>状態</th>
+                <th>支払予定額</th>
+                <th>支払済み</th>
+                <th>残高</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <button
+                      className="link-button"
+                      onClick={() => onOpen(item.id)}
+                    >
+                      {item.invoiceNo}
+                    </button>
+                  </td>
+                  <td>{item.billingCompanyName}</td>
+                  <td>
+                    {item.billingPeriodStart ?? '―'} 〜{' '}
+                    {item.billingPeriodEnd ?? '―'}
+                  </td>
+                  <td>{item.dueDate}</td>
+                  <td>{invoiceStatusLabels[item.status]}</td>
+                  <td>{money(item.totalAmount, item.currency)}</td>
+                  <td>{money(item.paidAmount, item.currency)}</td>
+                  <td>{money(item.balanceAmount, item.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function InvoiceListView({
@@ -535,6 +738,7 @@ function InvoiceDetailView({
   api,
   id,
   onBack,
+  backLabel = '請求一覧へ戻る',
   onOpenContract,
   onEdit,
   onUnauthorized,
@@ -542,6 +746,7 @@ function InvoiceDetailView({
   api: ProjectsApi;
   id: string;
   onBack: () => void;
+  backLabel?: string;
   onOpenContract: (id: string) => void;
   onEdit: () => void;
   onUnauthorized: () => Promise<void>;
@@ -669,7 +874,7 @@ function InvoiceDetailView({
     return (
       <section className="content-panel">
         <button className="secondary-button" onClick={onBack}>
-          請求一覧へ戻る
+          {backLabel}
         </button>
         <p role="alert">{error}</p>
       </section>
@@ -694,7 +899,7 @@ function InvoiceDetailView({
             </button>
           )}
           <button className="secondary-button" onClick={onBack}>
-            請求一覧へ戻る
+            {backLabel}
           </button>
         </div>
       </div>
@@ -833,7 +1038,7 @@ function InvoiceDetailView({
           </tbody>
         </table>
       </div>
-      <h3>入金履歴</h3>
+      <h3>{item.invoiceType === 'sales' ? '入金履歴' : '支払履歴'}</h3>
       {(
         [
           'issued',
@@ -847,12 +1052,14 @@ function InvoiceDetailView({
           className="stacked-form"
           onSubmit={(event) => void registerPayment(event)}
         >
-          <h3>入金・支払を登録</h3>
+          <h3>{item.invoiceType === 'sales' ? '入金を登録' : '支払を登録'}</h3>
           <div className="form-grid">
             <label>
-              入金種別
+              {item.invoiceType === 'sales' ? '入金種別' : '支払種別'}
               <select
-                aria-label="入金種別"
+                aria-label={
+                  item.invoiceType === 'sales' ? '入金種別' : '支払種別'
+                }
                 value={paymentInput.paymentType}
                 onChange={(event) =>
                   setPaymentInput((current) => ({
@@ -878,9 +1085,9 @@ function InvoiceDetailView({
               </select>
             </label>
             <label>
-              入金日
+              {item.invoiceType === 'sales' ? '入金日' : '支払日'}
               <input
-                aria-label="入金日"
+                aria-label={item.invoiceType === 'sales' ? '入金日' : '支払日'}
                 type="date"
                 value={paymentInput.paymentDate}
                 onChange={(event) =>
@@ -895,7 +1102,7 @@ function InvoiceDetailView({
             <label>
               金額
               <input
-                aria-label="入金額"
+                aria-label={item.invoiceType === 'sales' ? '入金額' : '支払額'}
                 type="number"
                 min="0.01"
                 step="0.01"
@@ -912,7 +1119,9 @@ function InvoiceDetailView({
             <label>
               方法
               <select
-                aria-label="入金方法"
+                aria-label={
+                  item.invoiceType === 'sales' ? '入金方法' : '支払方法'
+                }
                 value={paymentInput.paymentMethod ?? ''}
                 onChange={(event) =>
                   setPaymentInput((current) => ({
@@ -951,18 +1160,26 @@ function InvoiceDetailView({
             className="primary-button"
             disabled={paymentSaving || paymentInput.amount <= 0}
           >
-            {paymentSaving ? '登録中…' : '入金を登録して消込'}
+            {paymentSaving
+              ? '登録中…'
+              : item.invoiceType === 'sales'
+                ? '入金を登録して消込'
+                : '支払を登録して消込'}
           </button>
         </form>
       )}
       {item.payments.length === 0 ? (
-        <p>入金履歴はありません。</p>
+        <p>
+          {item.invoiceType === 'sales'
+            ? '入金履歴はありません。'
+            : '支払履歴はありません。'}
+        </p>
       ) : (
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
-                <th>入金日</th>
+                <th>{item.invoiceType === 'sales' ? '入金日' : '支払日'}</th>
                 <th>種別</th>
                 <th>方法</th>
                 <th>金額</th>
@@ -982,7 +1199,9 @@ function InvoiceDetailView({
                       disabled={paymentSaving || !reversalReason.trim()}
                       onClick={() => void reversePayment(payment.id)}
                     >
-                      入金を取消
+                      {item.invoiceType === 'sales'
+                        ? '入金を取消'
+                        : '支払を取消'}
                     </button>
                   </td>
                 </tr>
@@ -993,9 +1212,11 @@ function InvoiceDetailView({
       )}
       {item.payments.length > 0 && (
         <label>
-          入金取消理由
+          {item.invoiceType === 'sales' ? '入金取消理由' : '支払取消理由'}
           <textarea
-            aria-label="入金取消理由"
+            aria-label={
+              item.invoiceType === 'sales' ? '入金取消理由' : '支払取消理由'
+            }
             value={reversalReason}
             onChange={(event) => setReversalReason(event.target.value)}
             maxLength={1000}
@@ -5341,6 +5562,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/supplier-payments')}
+        >
+          BP支払
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/invoices')}
         >
           請求
@@ -5400,7 +5627,23 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'invoices' ? (
+      {route.page === 'supplier-payments' ? (
+        <SupplierPaymentListView
+          api={api}
+          onOpen={(id) => navigate(`/supplier-payments/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'supplier-payment-detail' ? (
+        <InvoiceDetailView
+          api={api}
+          id={route.id}
+          backLabel="BP支払一覧へ戻る"
+          onBack={() => navigate('/supplier-payments')}
+          onOpenContract={(id) => navigate(`/contracts/${id}`)}
+          onEdit={() => navigate(`/invoices/${route.id}/edit`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'invoices' ? (
         <InvoiceListView
           api={api}
           onOpen={(id) => navigate(`/invoices/${id}`)}

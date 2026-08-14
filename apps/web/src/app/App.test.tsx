@@ -298,6 +298,22 @@ const invoice: Invoice = {
   statusHistories: [],
 };
 
+const supplierInvoice: Invoice = {
+  ...invoice,
+  id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  invoiceNo: 'PINV-2026-0001',
+  invoiceType: 'purchase',
+  billingCompanyName: 'BPパートナー株式会社',
+  status: 'overdue',
+  billingAccount: {
+    ...invoice.billingAccount,
+    id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    accountType: 'payable',
+    accountName: '本社支払先',
+  },
+  payments: [],
+};
+
 const company: Company = {
   id: '22222222-2222-4222-8222-222222222222',
   managementNo: 'CO-000001',
@@ -539,6 +555,93 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('lists supplier payment plans and registers a purchase payment', async () => {
+    window.history.replaceState({}, '', '/supplier-payments');
+    const listInvoices = vi.fn(() =>
+      Promise.resolve({
+        items: [supplierInvoice],
+        page: { limit: 100, nextCursor: null },
+      }),
+    );
+    const registerInvoicePayment = vi.fn(() =>
+      Promise.resolve({
+        ...supplierInvoice,
+        status: 'paid' as const,
+        paidAmount: supplierInvoice.totalAmount,
+        balanceAmount: 0,
+        rowVersion: supplierInvoice.rowVersion + 1,
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          listInvoices,
+          getInvoice: vi.fn(() => Promise.resolve(supplierInvoice)),
+          registerInvoicePayment,
+        })}
+      />,
+    );
+
+    expect(await screen.findByText('BPパートナー株式会社')).toBeInTheDocument();
+    expect(listInvoices).toHaveBeenCalledWith({
+      invoiceType: 'purchase',
+      limit: 100,
+    });
+    expect(screen.getByText('期限超過')).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: supplierInvoice.invoiceNo }),
+    );
+    expect(await screen.findByText('支払履歴')).toBeInTheDocument();
+    expect(screen.getByLabelText('支払種別')).toHaveValue('payment');
+    fireEvent.click(screen.getByRole('button', { name: '支払を登録して消込' }));
+    await waitFor(() =>
+      expect(registerInvoicePayment).toHaveBeenCalledWith(
+        supplierInvoice.id,
+        supplierInvoice.rowVersion,
+        expect.objectContaining({
+          paymentType: 'payment',
+          amount: supplierInvoice.balanceAmount,
+          currency: 'JPY',
+        }),
+      ),
+    );
+  });
+
+  it('filters supplier payment plans while keeping purchase invoices scoped', async () => {
+    window.history.replaceState({}, '', '/supplier-payments');
+    const listInvoices = vi.fn(() =>
+      Promise.resolve({ items: [], page: { limit: 100, nextCursor: null } }),
+    );
+    render(<App auth={auth()} api={api({ listInvoices })} />);
+    await screen.findByText('該当するBP支払予定はありません。');
+
+    fireEvent.change(screen.getByLabelText('BP支払検索'), {
+      target: { value: 'パートナー' },
+    });
+    fireEvent.change(screen.getByLabelText('BP支払状態'), {
+      target: { value: 'overdue' },
+    });
+    fireEvent.change(screen.getByLabelText('支払期限（開始）'), {
+      target: { value: '2026-08-01' },
+    });
+    fireEvent.change(screen.getByLabelText('支払期限（終了）'), {
+      target: { value: '2026-08-31' },
+    });
+
+    await waitFor(() =>
+      expect(listInvoices).toHaveBeenLastCalledWith({
+        invoiceType: 'purchase',
+        q: 'パートナー',
+        status: 'overdue',
+        dueFrom: '2026-08-01',
+        dueTo: '2026-08-31',
+        limit: 100,
+      }),
+    );
+  });
+
   it('lists invoices and opens line and payment detail', async () => {
     window.history.replaceState({}, '', '/invoices');
     const client = api({
