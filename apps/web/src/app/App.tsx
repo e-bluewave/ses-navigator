@@ -59,6 +59,8 @@ import type {
   InvoiceSummary,
   InvoiceStatus,
   InvoiceType,
+  InvoiceInput,
+  InvoiceBillingOption,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -187,6 +189,8 @@ const invoiceTypeLabels: Record<InvoiceType, string> = {
 type Route =
   | { page: 'invoices' }
   | { page: 'invoice-detail'; id: string }
+  | { page: 'invoice-new' }
+  | { page: 'invoice-edit'; id: string }
   | { page: 'work-logs' }
   | { page: 'work-log-detail'; id: string }
   | { page: 'work-log-new' }
@@ -225,6 +229,13 @@ type Route =
 
 function currentRoute(): Route {
   if (window.location.pathname === '/invoices') return { page: 'invoices' };
+  if (window.location.pathname === '/invoices/new')
+    return { page: 'invoice-new' };
+  const invoiceEdit = window.location.pathname.match(
+    /^\/invoices\/([^/]+)\/edit$/,
+  );
+  if (invoiceEdit)
+    return { page: 'invoice-edit', id: decodeURIComponent(invoiceEdit[1]!) };
   const invoice = window.location.pathname.match(/^\/invoices\/([^/]+)$/);
   if (invoice)
     return { page: 'invoice-detail', id: decodeURIComponent(invoice[1]!) };
@@ -367,10 +378,12 @@ function money(value: number, currency: string) {
 function InvoiceListView({
   api,
   onOpen,
+  onCreate,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   onOpen: (id: string) => void;
+  onCreate: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [items, setItems] = useState<InvoiceSummary[]>([]);
@@ -417,6 +430,9 @@ function InvoiceListView({
           <p className="eyebrow">Finance</p>
           <h2>請求</h2>
         </div>
+        <button className="primary-button" onClick={onCreate}>
+          請求を登録
+        </button>
       </div>
       <div className="filter-row">
         <input
@@ -519,16 +535,23 @@ function InvoiceDetailView({
   id,
   onBack,
   onOpenContract,
+  onEdit,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
   onOpenContract: (id: string) => void;
+  onEdit: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [item, setItem] = useState<Invoice | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [transition, setTransition] = useState<
+    'issued' | 'sent' | 'cancelled' | 'void' | ''
+  >('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     let active = true;
     api
@@ -550,6 +573,30 @@ function InvoiceDetailView({
       active = false;
     };
   }, [api, id, onUnauthorized]);
+  async function changeStatus(event: FormEvent) {
+    event.preventDefault();
+    if (!item || !transition) return;
+    setSaving(true);
+    setError(null);
+    try {
+      setItem(
+        await api.transitionInvoiceStatus(item.id, item.rowVersion, {
+          status: transition,
+          reason: reason.trim() || null,
+        }),
+      );
+      setTransition('');
+      setReason('');
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : '請求状態を更新できませんでした。',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
   if (error)
     return (
       <section className="content-panel">
@@ -572,9 +619,16 @@ function InvoiceDetailView({
           <p className="eyebrow">{invoiceTypeLabels[item.invoiceType]}</p>
           <h2>{item.invoiceNo}</h2>
         </div>
-        <button className="secondary-button" onClick={onBack}>
-          請求一覧へ戻る
-        </button>
+        <div className="account-actions">
+          {item.status === 'draft' && (
+            <button className="primary-button" onClick={onEdit}>
+              請求を編集
+            </button>
+          )}
+          <button className="secondary-button" onClick={onBack}>
+            請求一覧へ戻る
+          </button>
+        </div>
       </div>
       <dl className="detail-grid">
         <div>
@@ -631,6 +685,57 @@ function InvoiceDetailView({
           </dd>
         </div>
       </dl>
+      {(['draft', 'issued', 'sent', 'overdue'] as InvoiceStatus[]).includes(
+        item.status,
+      ) && (
+        <form
+          className="stacked-form"
+          onSubmit={(event) => void changeStatus(event)}
+        >
+          <h3>発行・送付状態</h3>
+          <label>
+            次の請求状態
+            <select
+              aria-label="次の請求状態"
+              value={transition}
+              onChange={(event) =>
+                setTransition(event.target.value as typeof transition)
+              }
+              required
+            >
+              <option value="">選択してください</option>
+              {item.status === 'draft' && (
+                <>
+                  <option value="issued">請求書を発行</option>
+                  <option value="cancelled">下書きを取消</option>
+                </>
+              )}
+              {item.status === 'issued' && (
+                <>
+                  <option value="sent">請求書を送付</option>
+                  <option value="void">発行を無効化</option>
+                </>
+              )}
+              {(['sent', 'overdue'] as InvoiceStatus[]).includes(
+                item.status,
+              ) && <option value="void">請求書を無効化</option>}
+            </select>
+          </label>
+          <label>
+            理由
+            <textarea
+              aria-label="請求状態変更理由"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              maxLength={1000}
+              placeholder="取消・無効化では必須"
+            />
+          </label>
+          <button className="primary-button" disabled={saving || !transition}>
+            {saving ? '更新中…' : '請求状態を更新'}
+          </button>
+        </form>
+      )}
       <h3>請求明細</h3>
       <div className="table-scroll">
         <table>
@@ -687,6 +792,454 @@ function InvoiceDetailView({
           </table>
         </div>
       )}
+      <h3>状態履歴</h3>
+      {item.statusHistories.length === 0 ? (
+        <p>状態履歴はありません。</p>
+      ) : (
+        <ul className="timeline-list">
+          {item.statusHistories.map((history) => (
+            <li key={history.id}>
+              {new Date(history.changedAt).toLocaleString('ja-JP')}：
+              {history.fromStatus
+                ? `${invoiceStatusLabels[history.fromStatus]} → `
+                : ''}
+              {invoiceStatusLabels[history.toStatus]}
+              {history.changeReason ? `（${history.changeReason}）` : ''}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function InvoiceForm({
+  api,
+  id,
+  onCancel,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  id?: string;
+  onCancel: () => void;
+  onSaved: (id: string) => void;
+}) {
+  const emptyLine: InvoiceInput['items'][number] = {
+    itemType: 'service',
+    description: '',
+    quantity: 1,
+    unit: '式',
+    unitPrice: 0,
+    taxRate: 10,
+    amount: 0,
+    taxAmount: 0,
+    workLogId: null,
+  };
+  const today = new Date().toISOString().slice(0, 10);
+  const [input, setInput] = useState<InvoiceInput>({
+    invoiceNo: '',
+    invoiceType: 'sales',
+    contractId: null,
+    billingAccountId: '',
+    billingPeriodStart: null,
+    billingPeriodEnd: null,
+    issueDate: today,
+    dueDate: today,
+    currency: 'JPY',
+    items: [{ ...emptyLine }],
+  });
+  const [options, setOptions] = useState<InvoiceBillingOption[]>([]);
+  const [contracts, setContracts] = useState<ContractSummary[]>([]);
+  const [rowVersion, setRowVersion] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      api.getInvoiceOptions(),
+      api.listContracts({ limit: 200 }),
+      ...(id ? [api.getInvoice(id)] : []),
+    ])
+      .then(([formOptions, contractList, invoice]) => {
+        if (!active) return;
+        setOptions(formOptions.billingAccounts);
+        setContracts(contractList.items);
+        if (invoice) {
+          setRowVersion(invoice.rowVersion);
+          setInput({
+            invoiceNo: invoice.invoiceNo,
+            invoiceType: invoice.invoiceType,
+            contractId: invoice.contractId,
+            billingAccountId: invoice.billingAccount.id,
+            billingPeriodStart: invoice.billingPeriodStart,
+            billingPeriodEnd: invoice.billingPeriodEnd,
+            issueDate: invoice.issueDate,
+            dueDate: invoice.dueDate,
+            currency: invoice.currency,
+            items: invoice.items.map((line) => ({
+              itemType: line.itemType,
+              description: line.description,
+              quantity: line.quantity,
+              unit: line.unit,
+              unitPrice: line.unitPrice,
+              taxRate: line.taxRate,
+              amount: line.amount,
+              taxAmount: line.taxAmount,
+              workLogId: line.workLogId,
+            })),
+          });
+        }
+      })
+      .catch((reason) => {
+        if (active)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '請求入力情報を取得できませんでした。',
+          );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, id]);
+
+  const set = <K extends keyof InvoiceInput>(key: K, value: InvoiceInput[K]) =>
+    setInput((current) => ({ ...current, [key]: value }));
+  const setLine = <K extends keyof InvoiceInput['items'][number]>(
+    index: number,
+    key: K,
+    value: InvoiceInput['items'][number][K],
+  ) =>
+    setInput((current) => ({
+      ...current,
+      items: current.items.map((line, position) =>
+        position === index ? { ...line, [key]: value } : line,
+      ),
+    }));
+  function recalculate(
+    index: number,
+    quantity: number,
+    unitPrice: number,
+    taxRate: number,
+  ) {
+    const amount = Math.round(quantity * unitPrice * 100) / 100;
+    const taxAmount = amount < 0 ? 0 : Math.round(amount * taxRate) / 100;
+    setInput((current) => ({
+      ...current,
+      items: current.items.map((line, position) =>
+        position === index
+          ? { ...line, quantity, unitPrice, taxRate, amount, taxAmount }
+          : line,
+      ),
+    }));
+  }
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = id
+        ? await api.updateInvoice(id, rowVersion, input)
+        : await api.createInvoice(input);
+      onSaved(saved.id);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : '請求を保存できませんでした。',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  if (loading)
+    return (
+      <section className="content-panel">
+        <p role="status">請求入力情報を読み込んでいます…</p>
+      </section>
+    );
+  const compatibleOptions = options.filter((option) =>
+    input.invoiceType === 'sales'
+      ? option.accountType !== 'payable'
+      : option.accountType !== 'receivable',
+  );
+  return (
+    <section className="content-panel">
+      <h2>{id ? '請求を編集' : '請求を登録'}</h2>
+      {error && <p role="alert">{error}</p>}
+      <form className="stacked-form" onSubmit={(event) => void submit(event)}>
+        <div className="form-grid">
+          <label>
+            請求番号
+            <input
+              aria-label="請求番号"
+              value={input.invoiceNo}
+              onChange={(event) => set('invoiceNo', event.target.value)}
+              maxLength={40}
+              required
+            />
+          </label>
+          <label>
+            請求種別
+            <select
+              aria-label="入力請求種別"
+              value={input.invoiceType}
+              onChange={(event) => {
+                set('invoiceType', event.target.value as InvoiceType);
+                set('billingAccountId', '');
+              }}
+            >
+              <option value="sales">売上請求</option>
+              <option value="purchase">仕入請求</option>
+            </select>
+          </label>
+          <label>
+            請求先設定
+            <select
+              aria-label="請求先設定"
+              value={input.billingAccountId}
+              onChange={(event) => set('billingAccountId', event.target.value)}
+              required
+            >
+              <option value="">選択してください</option>
+              {compatibleOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.companyName} / {option.accountName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            契約
+            <select
+              aria-label="請求対象契約"
+              value={input.contractId ?? ''}
+              onChange={(event) =>
+                set('contractId', event.target.value || null)
+              }
+            >
+              <option value="">契約なし</option>
+              {contracts.map((contract) => (
+                <option key={contract.id} value={contract.id}>
+                  {contract.contractNo} / {contract.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            対象期間開始
+            <input
+              type="date"
+              value={input.billingPeriodStart ?? ''}
+              onChange={(event) =>
+                set('billingPeriodStart', event.target.value || null)
+              }
+            />
+          </label>
+          <label>
+            対象期間終了
+            <input
+              type="date"
+              value={input.billingPeriodEnd ?? ''}
+              onChange={(event) =>
+                set('billingPeriodEnd', event.target.value || null)
+              }
+            />
+          </label>
+          <label>
+            発行日
+            <input
+              type="date"
+              value={input.issueDate}
+              onChange={(event) => set('issueDate', event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            支払期限
+            <input
+              type="date"
+              value={input.dueDate}
+              onChange={(event) => set('dueDate', event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            通貨
+            <input
+              value={input.currency}
+              onChange={(event) =>
+                set('currency', event.target.value.toUpperCase())
+              }
+              maxLength={3}
+              required
+            />
+          </label>
+        </div>
+        <div className="section-heading">
+          <h3>請求明細</h3>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => set('items', [...input.items, { ...emptyLine }])}
+          >
+            明細を追加
+          </button>
+        </div>
+        {input.items.map((line, index) => (
+          <fieldset key={index}>
+            <legend>明細 {index + 1}</legend>
+            <div className="form-grid">
+              <label>
+                種別
+                <select
+                  value={line.itemType}
+                  onChange={(event) =>
+                    setLine(
+                      index,
+                      'itemType',
+                      event.target.value as typeof line.itemType,
+                    )
+                  }
+                >
+                  <option value="service">サービス</option>
+                  <option value="expense">経費</option>
+                  <option value="adjustment">調整</option>
+                  <option value="discount">値引</option>
+                  <option value="tax_exempt">非課税</option>
+                  <option value="other">その他</option>
+                </select>
+              </label>
+              <label>
+                内容
+                <input
+                  aria-label={`明細${index + 1}内容`}
+                  value={line.description}
+                  onChange={(event) =>
+                    setLine(index, 'description', event.target.value)
+                  }
+                  required
+                />
+              </label>
+              <label>
+                数量
+                <input
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  value={line.quantity}
+                  onChange={(event) =>
+                    recalculate(
+                      index,
+                      Number(event.target.value),
+                      line.unitPrice,
+                      line.taxRate,
+                    )
+                  }
+                  required
+                />
+              </label>
+              <label>
+                単位
+                <input
+                  value={line.unit ?? ''}
+                  onChange={(event) =>
+                    setLine(index, 'unit', event.target.value || null)
+                  }
+                />
+              </label>
+              <label>
+                単価
+                <input
+                  type="number"
+                  step="0.01"
+                  value={line.unitPrice}
+                  onChange={(event) =>
+                    recalculate(
+                      index,
+                      line.quantity,
+                      Number(event.target.value),
+                      line.taxRate,
+                    )
+                  }
+                  required
+                />
+              </label>
+              <label>
+                税率
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={line.taxRate}
+                  onChange={(event) =>
+                    recalculate(
+                      index,
+                      line.quantity,
+                      line.unitPrice,
+                      Number(event.target.value),
+                    )
+                  }
+                  required
+                />
+              </label>
+              <label>
+                金額
+                <input
+                  type="number"
+                  step="0.01"
+                  value={line.amount}
+                  onChange={(event) =>
+                    setLine(index, 'amount', Number(event.target.value))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                税額
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={line.taxAmount}
+                  onChange={(event) =>
+                    setLine(index, 'taxAmount', Number(event.target.value))
+                  }
+                  required
+                />
+              </label>
+            </div>
+            {input.items.length > 1 && (
+              <button
+                type="button"
+                className="danger-button"
+                onClick={() =>
+                  set(
+                    'items',
+                    input.items.filter((_, position) => position !== index),
+                  )
+                }
+              >
+                明細を削除
+              </button>
+            )}
+          </fieldset>
+        ))}
+        <div className="form-actions">
+          <button type="button" className="secondary-button" onClick={onCancel}>
+            キャンセル
+          </button>
+          <button className="primary-button" disabled={saving}>
+            {saving ? '保存中…' : id ? '請求を保存' : '請求を登録'}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }
@@ -4640,6 +5193,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         <InvoiceListView
           api={api}
           onOpen={(id) => navigate(`/invoices/${id}`)}
+          onCreate={() => navigate('/invoices/new')}
           onUnauthorized={signOut}
         />
       ) : route.page === 'invoice-detail' ? (
@@ -4648,7 +5202,21 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           id={route.id}
           onBack={() => navigate('/invoices')}
           onOpenContract={(id) => navigate(`/contracts/${id}`)}
+          onEdit={() => navigate(`/invoices/${route.id}/edit`)}
           onUnauthorized={signOut}
+        />
+      ) : route.page === 'invoice-new' || route.page === 'invoice-edit' ? (
+        <InvoiceForm
+          api={api}
+          {...(route.page === 'invoice-edit' ? { id: route.id } : {})}
+          onCancel={() =>
+            navigate(
+              route.page === 'invoice-edit'
+                ? `/invoices/${route.id}`
+                : '/invoices',
+            )
+          }
+          onSaved={(id) => navigate(`/invoices/${id}`)}
         />
       ) : route.page === 'work-logs' ? (
         <WorkLogListView

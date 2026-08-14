@@ -70,6 +70,31 @@ const invoice: Invoice = {
       bankFeeAmount: 0,
     },
   ],
+  statusHistories: [],
+};
+const input = {
+  invoiceNo: 'INV-2026-0002',
+  invoiceType: 'sales' as const,
+  contractId: summary.contractId,
+  billingAccountId: invoice.billingAccount.id,
+  billingPeriodStart: '2026-08-01',
+  billingPeriodEnd: '2026-08-31',
+  issueDate: '2026-09-01',
+  dueDate: '2026-09-30',
+  currency: 'JPY',
+  items: [
+    {
+      itemType: 'service' as const,
+      description: '8月分技術支援',
+      quantity: 1,
+      unit: '式',
+      unitPrice: 1000000,
+      taxRate: 10,
+      amount: 1000000,
+      taxAmount: 100000,
+      workLogId: null,
+    },
+  ],
 };
 const authentication: AuthenticationService = {
   authenticate: (accessToken) => Promise.resolve({ id: 'user-a', accessToken }),
@@ -81,8 +106,24 @@ function repository(
 ): InvoiceRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
+    canManage: vi.fn(() => Promise.resolve(true)),
+    listBillingOptions: vi.fn(() =>
+      Promise.resolve([
+        {
+          ...invoice.billingAccount,
+          companyName: summary.billingCompanyName,
+        },
+      ]),
+    ),
     list: vi.fn(() => Promise.resolve({ items: [summary], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(invoice)),
+    create: vi.fn(() =>
+      Promise.resolve({ ...invoice, status: 'draft' as const }),
+    ),
+    update: vi.fn(() =>
+      Promise.resolve({ ...invoice, status: 'draft' as const }),
+    ),
+    transitionStatus: vi.fn(() => Promise.resolve(invoice)),
     ...overrides,
   };
 }
@@ -184,5 +225,97 @@ describe('invoice read API', () => {
       headers: { authorization: 'Bearer valid' },
     });
     expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('invoice write API', () => {
+  it('creates and updates an invoice draft with optimistic locking', async () => {
+    const create = vi.fn(() =>
+      Promise.resolve({ ...invoice, status: 'draft' as const }),
+    );
+    const update = vi.fn(() =>
+      Promise.resolve({ ...invoice, status: 'draft' as const }),
+    );
+    const created = await app(repository({ create, update })).inject({
+      method: 'POST',
+      url: '/api/v1/invoices',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(created.statusCode).toBe(201);
+    expect(create).toHaveBeenCalledWith('valid', input, expect.any(String));
+    const updated = await app(repository({ create, update })).inject({
+      method: 'PUT',
+      url: `/api/v1/invoices/${summary.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: input,
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      'valid',
+      summary.id,
+      2,
+      input,
+      expect.any(String),
+    );
+  });
+
+  it('returns billing-account form options', async () => {
+    const response = await app().inject({
+      method: 'GET',
+      url: '/api/v1/invoices/options',
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(
+      response.json<{ billingAccounts: Array<{ accountName: string }> }>()
+        .billingAccounts[0]?.accountName,
+    ).toBe('本社請求先');
+  });
+
+  it('issues and sends an invoice and requires a reason to void', async () => {
+    const transitionStatus = vi.fn(() =>
+      Promise.resolve({ ...invoice, status: 'issued' as const }),
+    );
+    const issued = await app(repository({ transitionStatus })).inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${summary.id}/status`,
+      headers: { authorization: 'Bearer valid', 'if-match': '2' },
+      payload: { status: 'issued', reason: null },
+    });
+    expect(issued.statusCode).toBe(200);
+    expect(transitionStatus).toHaveBeenCalledWith(
+      'valid',
+      summary.id,
+      2,
+      { status: 'issued', reason: null },
+      expect.any(String),
+    );
+    const invalidVoid = await app().inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${summary.id}/status`,
+      headers: { authorization: 'Bearer valid', 'if-match': '2' },
+      payload: { status: 'void', reason: null },
+    });
+    expect(invalidVoid.statusCode).toBe(400);
+  });
+
+  it('requires finance.manage and If-Match', async () => {
+    const forbidden = await app(
+      repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: '/api/v1/invoices',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(forbidden.statusCode).toBe(403);
+    const missingVersion = await app().inject({
+      method: 'PUT',
+      url: `/api/v1/invoices/${summary.id}`,
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(missingVersion.statusCode).toBe(428);
   });
 });

@@ -8,6 +8,23 @@ security:
   - bearerAuth: []
 paths:
   /invoices:
+    post:
+      operationId: createInvoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InvoiceInput' }
+      responses:
+        '201':
+          description: Invoice draft created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invoice' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
     get:
       operationId: listInvoices
       parameters:
@@ -44,6 +61,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /invoices/{id}:
+    put:
+      operationId: updateInvoice
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InvoiceInput' }
+      responses:
+        '200':
+          description: Invoice draft updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invoice' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     get:
       operationId: getInvoice
       parameters:
@@ -63,6 +111,50 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /invoices/options:
+    get:
+      operationId: getInvoiceOptions
+      responses:
+        '200':
+          description: Authorized billing-account form options
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceOptions' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /invoices/{id}/status:
+    post:
+      operationId: transitionInvoiceStatus
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: '#/components/schemas/InvoiceStatusTransitionInput' }
+      responses:
+        '200':
+          description: Invoice lifecycle status transitioned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invoice' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /work-logs:
     post:
       operationId: createWorkLog
@@ -3050,7 +3142,7 @@ components:
       allOf:
         - { $ref: '#/components/schemas/InvoiceSummary' }
         - type: object
-          required: [billingAccount, items, payments]
+          required: [billingAccount, items, payments, statusHistories]
           properties:
             billingAccount:
               type: object
@@ -3083,6 +3175,9 @@ components:
             payments:
               type: array
               items: { $ref: '#/components/schemas/InvoicePayment' }
+            statusHistories:
+              type: array
+              items: { $ref: '#/components/schemas/InvoiceStatusHistory' }
     InvoiceItem:
       type: object
       required:
@@ -3152,6 +3247,118 @@ components:
           properties:
             limit: { type: integer }
             nextCursor: { type: ['string', 'null'] }
+    InvoiceStatusHistory:
+      type: object
+      required: [id, fromStatus, toStatus, changeReason, changedAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus:
+          oneOf:
+            - { $ref: '#/components/schemas/InvoiceStatus' }
+            - { type: 'null' }
+        toStatus: { $ref: '#/components/schemas/InvoiceStatus' }
+        changeReason: { type: [string, 'null'] }
+        changedAt: { type: string, format: date-time }
+    InvoiceBillingOption:
+      type: object
+      required:
+        [
+          id,
+          companyId,
+          companyName,
+          accountType,
+          accountName,
+          closingDay,
+          paymentMonthOffset,
+          paymentDay,
+          invoiceDeliveryMethod,
+          isDefault,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        companyName: { type: string }
+        accountType: { type: string, enum: [receivable, payable, both] }
+        accountName: { type: string }
+        closingDay: { type: [integer, 'null'] }
+        paymentMonthOffset: { type: integer }
+        paymentDay: { type: [integer, 'null'] }
+        invoiceDeliveryMethod:
+          { type: string, enum: [email, postal, portal, edi, other] }
+        isDefault: { type: boolean }
+    InvoiceOptions:
+      type: object
+      required: [billingAccounts]
+      properties:
+        billingAccounts:
+          type: array
+          items: { $ref: '#/components/schemas/InvoiceBillingOption' }
+    InvoiceInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          invoiceNo,
+          invoiceType,
+          contractId,
+          billingAccountId,
+          billingPeriodStart,
+          billingPeriodEnd,
+          issueDate,
+          dueDate,
+          currency,
+          items,
+        ]
+      properties:
+        invoiceNo: { type: string, minLength: 1, maxLength: 40 }
+        invoiceType: { $ref: '#/components/schemas/InvoiceType' }
+        contractId: { type: [string, 'null'], format: uuid }
+        billingAccountId: { type: string, format: uuid }
+        billingPeriodStart: { type: [string, 'null'], format: date }
+        billingPeriodEnd: { type: [string, 'null'], format: date }
+        issueDate: { type: string, format: date }
+        dueDate: { type: string, format: date }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        items:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/InvoiceItemInput' }
+    InvoiceItemInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          itemType,
+          description,
+          quantity,
+          unit,
+          unitPrice,
+          taxRate,
+          amount,
+          taxAmount,
+          workLogId,
+        ]
+      properties:
+        itemType:
+          {
+            type: string,
+            enum: [service, expense, adjustment, discount, tax_exempt, other],
+          }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        quantity: { type: number, minimum: 0 }
+        unit: { type: [string, 'null'], maxLength: 40 }
+        unitPrice: { type: number }
+        taxRate: { type: number, minimum: 0, maximum: 100 }
+        amount: { type: number }
+        taxAmount: { type: number, minimum: 0 }
+        workLogId: { type: [string, 'null'], format: uuid }
+    InvoiceStatusTransitionInput:
+      type: object
+      additionalProperties: false
+      required: [status, reason]
+      properties:
+        status: { type: string, enum: [issued, sent, cancelled, void] }
+        reason: { type: [string, 'null'], maxLength: 1000 }
     EngagementStatus:
       type: string
       enum: [draft, preparing, active, ending, ended, cancelled]

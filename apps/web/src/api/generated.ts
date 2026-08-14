@@ -707,6 +707,56 @@ export interface Invoice extends InvoiceSummary {
     paymentMethod: string | null;
     bankFeeAmount: number;
   }>;
+  statusHistories: InvoiceStatusHistory[];
+}
+export interface InvoiceStatusHistory {
+  id: string;
+  fromStatus: InvoiceStatus | null;
+  toStatus: InvoiceStatus;
+  changeReason: string | null;
+  changedAt: string;
+}
+export interface InvoiceBillingOption {
+  id: string;
+  companyId: string;
+  companyName: string;
+  accountType: 'receivable' | 'payable' | 'both';
+  accountName: string;
+  closingDay: number | null;
+  paymentMonthOffset: number;
+  paymentDay: number | null;
+  invoiceDeliveryMethod: 'email' | 'postal' | 'portal' | 'edi' | 'other';
+  isDefault: boolean;
+}
+export interface InvoiceOptions {
+  billingAccounts: InvoiceBillingOption[];
+}
+export interface InvoiceItemInput {
+  itemType: Invoice['items'][number]['itemType'];
+  description: string;
+  quantity: number;
+  unit: string | null;
+  unitPrice: number;
+  taxRate: number;
+  amount: number;
+  taxAmount: number;
+  workLogId: string | null;
+}
+export interface InvoiceInput {
+  invoiceNo: string;
+  invoiceType: InvoiceType;
+  contractId: string | null;
+  billingAccountId: string;
+  billingPeriodStart: string | null;
+  billingPeriodEnd: string | null;
+  issueDate: string;
+  dueDate: string;
+  currency: string;
+  items: InvoiceItemInput[];
+}
+export interface InvoiceStatusTransitionInput {
+  status: 'issued' | 'sent' | 'cancelled' | 'void';
+  reason: string | null;
 }
 export interface InvoiceList {
   items: InvoiceSummary[];

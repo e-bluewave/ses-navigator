@@ -70,12 +70,27 @@ import type {
   Invoice,
   InvoiceList,
   ListInvoicesQuery,
+  InvoiceOptions,
+  InvoiceInput,
+  InvoiceStatusTransitionInput,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
   listInvoices(query?: ListInvoicesQuery): Promise<InvoiceList>;
   getInvoice(id: string): Promise<Invoice>;
+  getInvoiceOptions(): Promise<InvoiceOptions>;
+  createInvoice(input: InvoiceInput): Promise<Invoice>;
+  updateInvoice(
+    id: string,
+    rowVersion: number,
+    input: InvoiceInput,
+  ): Promise<Invoice>;
+  transitionInvoiceStatus(
+    id: string,
+    rowVersion: number,
+    input: InvoiceStatusTransitionInput,
+  ): Promise<Invoice>;
   listWorkLogs(query?: ListWorkLogsQuery): Promise<WorkLogList>;
   getWorkLog(id: string): Promise<WorkLog>;
   createWorkLog(input: WorkLogInput): Promise<WorkLog>;
@@ -331,6 +346,28 @@ export function createProjectsApi(options: {
     },
     getInvoice(id) {
       return get<Invoice>(`/invoices/${encodeURIComponent(id)}`);
+    },
+    getInvoiceOptions() {
+      return get<InvoiceOptions>('/invoices/options');
+    },
+    createInvoice(input) {
+      return send<Invoice>('/invoices', 'POST', input);
+    },
+    updateInvoice(id, rowVersion, input) {
+      return send<Invoice>(
+        `/invoices/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    transitionInvoiceStatus(id, rowVersion, input) {
+      return send<Invoice>(
+        `/invoices/${encodeURIComponent(id)}/status`,
+        'POST',
+        input,
+        rowVersion,
+      );
     },
     listWorkLogs(query = {}) {
       const params = new URLSearchParams();

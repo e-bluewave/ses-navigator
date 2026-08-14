@@ -37,6 +37,50 @@ describe('generated projects API client', () => {
     });
   });
 
+  it('sends invoice draft writes and status transitions with If-Match', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ id: 'invoice-1' }), { status: 200 }),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    const input = {
+      invoiceNo: 'INV-1',
+      invoiceType: 'sales' as const,
+      contractId: null,
+      billingAccountId: '11111111-1111-4111-8111-111111111111',
+      billingPeriodStart: null,
+      billingPeriodEnd: null,
+      issueDate: '2026-08-14',
+      dueDate: '2026-08-31',
+      currency: 'JPY',
+      items: [],
+    };
+    await api.getInvoiceOptions();
+    await api.createInvoice(input);
+    await api.updateInvoice('invoice-1', 2, input);
+    await api.transitionInvoiceStatus('invoice-1', 3, {
+      status: 'issued',
+      reason: null,
+    });
+    expect(request.mock.calls[0]![0]).toBe('/api/v1/invoices/options');
+    expect(request.mock.calls[1]![0]).toBe('/api/v1/invoices');
+    expect(request.mock.calls[2]![1]).toMatchObject({
+      method: 'PUT',
+      headers: { 'if-match': '"2"' },
+    });
+    expect(request.mock.calls[3]![0]).toBe('/api/v1/invoices/invoice-1/status');
+    expect(request.mock.calls[3]![1]).toMatchObject({
+      method: 'POST',
+      headers: { 'if-match': '"3"' },
+    });
+  });
+
   it('lists and reads monthly work logs with filters', async () => {
     const request = vi
       .fn()
