@@ -92,9 +92,12 @@ import type {
   ExpenseStatusTransitionInput,
   ProfitabilityDashboard,
   ProfitabilityQuery,
+  SalesKpiDashboard,
+  SalesKpiQuery,
 } from './generated.js';
 
 export interface ProjectsApi {
+  getSalesKpiDashboard(query: SalesKpiQuery): Promise<SalesKpiDashboard>;
   getAuthContext(): Promise<AuthContext>;
   getProfitabilityDashboard(
     query: ProfitabilityQuery,
@@ -399,6 +402,15 @@ export function createProjectsApi(options: {
   }
 
   return {
+    getSalesKpiDashboard(query) {
+      const params = new URLSearchParams({
+        fromDate: query.fromDate,
+        toDate: query.toDate,
+      });
+      if (query.contractExpiryDays !== undefined)
+        params.set('contractExpiryDays', String(query.contractExpiryDays));
+      return get<SalesKpiDashboard>(`/sales-kpi?${params.toString()}`);
+    },
     getAuthContext() {
       return get<AuthContext>('/auth/context');
     },

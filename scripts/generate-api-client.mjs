@@ -5,6 +5,7 @@ const outputPath = new URL('../apps/web/src/api/generated.ts', import.meta.url);
 const contract = await readFile(contractPath, 'utf8');
 
 const requiredContractFragments = [
+  'operationId: getSalesKpiDashboard',
   'operationId: getProfitabilityDashboard',
   'operationId: listExpenses',
   'operationId: getExpense',
@@ -750,6 +751,46 @@ export interface ListWorkLogsQuery {
   workMonth?: string;
   cursor?: string;
   limit?: number;
+}
+
+export interface SalesKpiMonth {
+  periodMonth: string;
+  proposalCount: number;
+  interviewProposalCount: number;
+  interviewRate: number | null;
+  wonCount: number;
+  winRate: number | null;
+}
+export interface ExpiringContract {
+  id: string;
+  contractNo: string;
+  title: string;
+  endDate: string;
+  daysRemaining: number;
+  status: string;
+}
+export interface SalesKpiDashboard {
+  fromDate: string;
+  toDate: string;
+  contractExpiryDays: number;
+  proposalCount: number;
+  interviewProposalCount: number;
+  interviewRate: number | null;
+  wonCount: number;
+  winRate: number | null;
+  averageProposalDays: number | null;
+  averageInterviewCount: number | null;
+  activeProposalCount: number;
+  pendingApprovalCount: number;
+  scheduledInterviewCount: number;
+  expiringContractCount: number;
+  monthly: SalesKpiMonth[];
+  expiringContracts: ExpiringContract[];
+}
+export interface SalesKpiQuery {
+  fromDate: string;
+  toDate: string;
+  contractExpiryDays?: number;
 }
 
 export interface ProfitabilityMonth {

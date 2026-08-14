@@ -50,6 +50,9 @@ import { registerExpenseRoutes } from './modules/expenses/expense-routes.js';
 import { SupabaseProfitabilityRepository } from './modules/profitability/profitability-repository.js';
 import type { ProfitabilityRepository } from './modules/profitability/profitability-repository.js';
 import { registerProfitabilityRoutes } from './modules/profitability/profitability-routes.js';
+import { SupabaseSalesKpiRepository } from './modules/sales-kpi/sales-kpi-repository.js';
+import type { SalesKpiRepository } from './modules/sales-kpi/sales-kpi-repository.js';
+import { registerSalesKpiRoutes } from './modules/sales-kpi/sales-kpi-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -68,6 +71,7 @@ export interface AppDependencies {
   accountingExports?: AccountingExportRepository;
   expenses?: ExpenseRepository;
   profitability?: ProfitabilityRepository;
+  salesKpi?: SalesKpiRepository;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -150,6 +154,10 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerProfitabilityRoutes(
     app,
     dependencies.profitability ?? new SupabaseProfitabilityRepository(),
+  );
+  registerSalesKpiRoutes(
+    app,
+    dependencies.salesKpi ?? new SupabaseSalesKpiRepository(),
   );
 
   return app;
