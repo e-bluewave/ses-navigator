@@ -7,6 +7,96 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /accounting-periods:
+    get:
+      operationId: listAccountingPeriods
+      parameters:
+        - { name: fromMonth, in: query, schema: { type: string, format: date } }
+        - { name: toMonth, in: query, schema: { type: string, format: date } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 120, default: 24 },
+          }
+      responses:
+        '200':
+          description: Authorized accounting period list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingPeriodList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createAccountingPeriod
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountingPeriodInput' }
+      responses:
+        '201':
+          description: Accounting period created or returned idempotently
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingPeriod' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /accounting-periods/{id}:
+    get:
+      operationId: getAccountingPeriod
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Accounting period with close history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingPeriod' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /accounting-periods/{id}/status:
+    post:
+      operationId: transitionAccountingPeriodStatus
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: '#/components/schemas/AccountingPeriodTransitionInput' }
+      responses:
+        '200':
+          description: Accounting close status transitioned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingPeriod' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /invoices:
     post:
       operationId: createInvoice
@@ -1974,6 +2064,95 @@ components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
+    AccountingCloseStatus:
+      type: string
+      enum: [open, closed]
+    AccountingCloseType:
+      type: string
+      enum: [sales, invoice, payment]
+    AccountingPeriodSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          periodMonth,
+          salesStatus,
+          invoiceStatus,
+          paymentStatus,
+          salesClosedAt,
+          invoiceClosedAt,
+          paymentClosedAt,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        periodMonth: { type: string, format: date }
+        salesStatus: { $ref: '#/components/schemas/AccountingCloseStatus' }
+        invoiceStatus: { $ref: '#/components/schemas/AccountingCloseStatus' }
+        paymentStatus: { $ref: '#/components/schemas/AccountingCloseStatus' }
+        salesClosedAt: { type: [string, 'null'], format: date-time }
+        invoiceClosedAt: { type: [string, 'null'], format: date-time }
+        paymentClosedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    AccountingPeriod:
+      allOf:
+        - { $ref: '#/components/schemas/AccountingPeriodSummary' }
+        - type: object
+          required: [statusHistories]
+          properties:
+            statusHistories:
+              type: array
+              items:
+                { $ref: '#/components/schemas/AccountingPeriodStatusHistory' }
+    AccountingPeriodStatusHistory:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          closeType,
+          fromStatus,
+          toStatus,
+          changeReason,
+          impactConfirmed,
+          changedAt,
+          changedBy,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        closeType: { $ref: '#/components/schemas/AccountingCloseType' }
+        fromStatus: { $ref: '#/components/schemas/AccountingCloseStatus' }
+        toStatus: { $ref: '#/components/schemas/AccountingCloseStatus' }
+        changeReason: { type: [string, 'null'], maxLength: 1000 }
+        impactConfirmed: { type: boolean }
+        changedAt: { type: string, format: date-time }
+        changedBy: { type: [string, 'null'], format: uuid }
+    AccountingPeriodList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AccountingPeriodSummary' }
+    AccountingPeriodInput:
+      type: object
+      additionalProperties: false
+      required: [periodMonth]
+      properties:
+        periodMonth: { type: string, format: date }
+    AccountingPeriodTransitionInput:
+      type: object
+      additionalProperties: false
+      required: [closeType, status, reason, impactConfirmed]
+      properties:
+        closeType: { $ref: '#/components/schemas/AccountingCloseType' }
+        status: { $ref: '#/components/schemas/AccountingCloseStatus' }
+        reason: { type: [string, 'null'], maxLength: 1000 }
+        impactConfirmed: { type: boolean }
     EngineerStatus:
       { type: string, enum: [candidate, active, inactive, retired, blocked] }
     AvailabilityStatus:

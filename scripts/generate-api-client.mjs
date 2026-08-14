@@ -5,6 +5,10 @@ const outputPath = new URL('../apps/web/src/api/generated.ts', import.meta.url);
 const contract = await readFile(contractPath, 'utf8');
 
 const requiredContractFragments = [
+  'operationId: listAccountingPeriods',
+  'operationId: getAccountingPeriod',
+  'operationId: createAccountingPeriod',
+  'operationId: transitionAccountingPeriodStatus',
   'operationId: registerInvoicePayment',
   'operationId: reverseInvoicePayment',
   'operationId: createInvoice',
@@ -149,6 +153,8 @@ export type InvoiceStatus =
   | 'cancelled'
   | 'void';
 export type InvoiceType = 'sales' | 'purchase';
+export type AccountingCloseStatus = 'open' | 'closed';
+export type AccountingCloseType = 'sales' | 'invoice' | 'payment';
 
 export interface AuthContext {
   requiresMfa: boolean;
@@ -734,6 +740,49 @@ export interface ListWorkLogsQuery {
   workMonth?: string;
   cursor?: string;
   limit?: number;
+}
+
+export interface AccountingPeriodSummary {
+  id: string;
+  periodMonth: string;
+  salesStatus: AccountingCloseStatus;
+  invoiceStatus: AccountingCloseStatus;
+  paymentStatus: AccountingCloseStatus;
+  salesClosedAt: string | null;
+  invoiceClosedAt: string | null;
+  paymentClosedAt: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface AccountingPeriod extends AccountingPeriodSummary {
+  statusHistories: AccountingPeriodStatusHistory[];
+}
+export interface AccountingPeriodStatusHistory {
+  id: string;
+  closeType: AccountingCloseType;
+  fromStatus: AccountingCloseStatus;
+  toStatus: AccountingCloseStatus;
+  changeReason: string | null;
+  impactConfirmed: boolean;
+  changedAt: string;
+  changedBy: string | null;
+}
+export interface AccountingPeriodList {
+  items: AccountingPeriodSummary[];
+}
+export interface ListAccountingPeriodsQuery {
+  fromMonth?: string;
+  toMonth?: string;
+  limit?: number;
+}
+export interface AccountingPeriodInput {
+  periodMonth: string;
+}
+export interface AccountingPeriodTransitionInput {
+  closeType: AccountingCloseType;
+  status: AccountingCloseStatus;
+  reason: string | null;
+  impactConfirmed: boolean;
 }
 
 export interface InvoiceSummary {

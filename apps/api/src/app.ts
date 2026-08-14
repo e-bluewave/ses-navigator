@@ -38,6 +38,9 @@ import { registerWorkLogRoutes } from './modules/work-logs/work-log-routes.js';
 import { SupabaseInvoiceRepository } from './modules/invoices/invoice-repository.js';
 import type { InvoiceRepository } from './modules/invoices/invoice-repository.js';
 import { registerInvoiceRoutes } from './modules/invoices/invoice-routes.js';
+import { SupabaseAccountingPeriodRepository } from './modules/accounting-periods/accounting-period-repository.js';
+import type { AccountingPeriodRepository } from './modules/accounting-periods/accounting-period-repository.js';
+import { registerAccountingPeriodRoutes } from './modules/accounting-periods/accounting-period-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -52,6 +55,7 @@ export interface AppDependencies {
   engagements?: EngagementRepository;
   workLogs?: WorkLogRepository;
   invoices?: InvoiceRepository;
+  accountingPeriods?: AccountingPeriodRepository;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -118,6 +122,10 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerInvoiceRoutes(
     app,
     dependencies.invoices ?? new SupabaseInvoiceRepository(),
+  );
+  registerAccountingPeriodRoutes(
+    app,
+    dependencies.accountingPeriods ?? new SupabaseAccountingPeriodRepository(),
   );
 
   return app;
