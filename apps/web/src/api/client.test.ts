@@ -3,6 +3,38 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('lists and reads monthly work logs with filters', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ items: [], page: { limit: 50, nextCursor: null } }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'work-log-1' }), { status: 200 }),
+      );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    await api.listWorkLogs({
+      q: '山田',
+      status: 'approved',
+      workMonth: '2026-08-01',
+    });
+    await api.getWorkLog('work-log-1');
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/work-logs?q=%E5%B1%B1%E7%94%B0&status=approved&workMonth=2026-08-01',
+      { headers: { authorization: 'Bearer access-token' } },
+    );
+    expect(request).toHaveBeenNthCalledWith(2, '/api/v1/work-logs/work-log-1', {
+      headers: { authorization: 'Bearer access-token' },
+    });
+  });
+
   it('lists and reads engagements with bearer authentication', async () => {
     const request = vi
       .fn()

@@ -7,6 +7,56 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /work-logs:
+    get:
+      operationId: listWorkLogs
+      parameters:
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, minLength: 1, maxLength: 100 },
+          }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/WorkLogStatus' },
+          }
+        - { name: workMonth, in: query, schema: { type: string, format: date } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Authorized monthly work-log summary list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkLogList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /work-logs/{id}:
+    get:
+      operationId: getWorkLog
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Authorized monthly work-log detail with daily records
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkLog' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /engagements:
     post:
       operationId: createEngagement
@@ -2609,6 +2659,105 @@ components:
             type: array,
             items: { $ref: '#/components/schemas/ContractSummary' },
           }
+        page:
+          type: object
+          required: [limit, nextCursor]
+          properties:
+            limit: { type: integer }
+            nextCursor: { type: ['string', 'null'] }
+    WorkLogStatus:
+      type: string
+      enum: [draft, submitted, approved, rejected, locked]
+    WorkType:
+      type: string
+      enum: [work, paid_leave, absence, holiday, training, other]
+    WorkLogSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          contractId,
+          engineerId,
+          contractTitle,
+          engineerName,
+          workMonth,
+          status,
+          scheduledDays,
+          actualDays,
+          scheduledHours,
+          actualHours,
+          overtimeHours,
+          absenceHours,
+          customerApprovedAt,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        contractId: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        contractTitle: { type: string }
+        engineerName: { type: string }
+        workMonth: { type: string, format: date }
+        status: { $ref: '#/components/schemas/WorkLogStatus' }
+        scheduledDays: { type: [number, 'null'], minimum: 0 }
+        actualDays: { type: [number, 'null'], minimum: 0 }
+        scheduledHours: { type: [number, 'null'], minimum: 0 }
+        actualHours: { type: [number, 'null'], minimum: 0 }
+        overtimeHours: { type: number, minimum: 0 }
+        absenceHours: { type: number, minimum: 0 }
+        customerApprovedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    WorkLogDetailItem:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          workDate,
+          workType,
+          startTime,
+          endTime,
+          breakMinutes,
+          workHours,
+          overtimeHours,
+          description,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workDate: { type: string, format: date }
+        workType: { $ref: '#/components/schemas/WorkType' }
+        startTime: { type: [string, 'null'], format: time }
+        endTime: { type: [string, 'null'], format: time }
+        breakMinutes: { type: integer, minimum: 0 }
+        workHours: { type: number, minimum: 0 }
+        overtimeHours: { type: number, minimum: 0 }
+        description: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    WorkLog:
+      allOf:
+        - { $ref: '#/components/schemas/WorkLogSummary' }
+        - type: object
+          required: [approvedByName, notes, details]
+          properties:
+            approvedByName: { type: [string, 'null'] }
+            notes: { type: [string, 'null'] }
+            details:
+              type: array
+              items: { $ref: '#/components/schemas/WorkLogDetailItem' }
+    WorkLogList:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/WorkLogSummary' }
         page:
           type: object
           required: [limit, nextCursor]

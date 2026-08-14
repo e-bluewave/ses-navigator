@@ -50,6 +50,10 @@ import type {
   EngagementInput,
   EngagementSummary,
   EngagementStatus,
+  WorkLog,
+  WorkLogSummary,
+  WorkLogStatus,
+  WorkType,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -143,7 +147,26 @@ const engagementStatusLabels: Record<EngagementStatus, string> = {
   cancelled: '取消',
 };
 
+const workLogStatusLabels: Record<WorkLogStatus, string> = {
+  draft: '下書き',
+  submitted: '提出済み',
+  approved: '承認済み',
+  rejected: '差戻し',
+  locked: '締め済み',
+};
+
+const workTypeLabels: Record<WorkType, string> = {
+  work: '勤務',
+  paid_leave: '有給休暇',
+  absence: '欠勤',
+  holiday: '休日',
+  training: '研修',
+  other: 'その他',
+};
+
 type Route =
+  | { page: 'work-logs' }
+  | { page: 'work-log-detail'; id: string }
   | { page: 'engagements' }
   | { page: 'engagement-detail'; id: string }
   | { page: 'engagement-new' }
@@ -177,6 +200,13 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/work-logs') return { page: 'work-logs' };
+  const workLog = window.location.pathname.match(/^\/work-logs\/([^/]+)$/);
+  if (workLog)
+    return {
+      page: 'work-log-detail',
+      id: decodeURIComponent(workLog[1]!),
+    };
   if (window.location.pathname === '/engagements')
     return { page: 'engagements' };
   if (window.location.pathname === '/engagements/new')
@@ -285,6 +315,259 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
     <AuthProvider auth={auth}>
       <AuthenticatedApp {...(api === undefined ? {} : { api })} />
     </AuthProvider>
+  );
+}
+
+function WorkLogListView({
+  api,
+  onOpen,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<WorkLogSummary[]>([]);
+  const [status, setStatus] = useState<WorkLogStatus | ''>('');
+  const [query, setQuery] = useState('');
+  const [workMonth, setWorkMonth] = useState('');
+  const [error, setError] = useState('');
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const load = useCallback(
+    async (cursor?: string, append = false) => {
+      try {
+        const result = await api.listWorkLogs({
+          ...(query ? { q: query } : {}),
+          ...(status ? { status } : {}),
+          ...(workMonth ? { workMonth: `${workMonth}-01` } : {}),
+          ...(cursor ? { cursor } : {}),
+        });
+        setItems((current) =>
+          append ? [...current, ...result.items] : result.items,
+        );
+        setNextCursor(result.page.nextCursor);
+        setError('');
+      } catch (reason) {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          await onUnauthorized();
+        else
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '月次実績一覧を取得できませんでした。',
+          );
+      }
+    },
+    [api, onUnauthorized, query, status, workMonth],
+  );
+  useEffect(() => {
+    void load();
+  }, [load]);
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <h2>月次実績</h2>
+          <p>契約の認可境界を引き継いだ勤務実績を表示します。</p>
+        </div>
+      </div>
+      <div className="filter-row">
+        <input
+          aria-label="契約番号、契約件名または技術者名で検索"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="契約番号・契約件名・技術者名"
+        />
+        <select
+          aria-label="月次実績状態"
+          value={status}
+          onChange={(event) =>
+            setStatus(event.target.value as WorkLogStatus | '')
+          }
+        >
+          <option value="">すべての状態</option>
+          {Object.entries(workLogStatusLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <input
+          aria-label="対象月"
+          type="month"
+          value={workMonth}
+          onChange={(event) => setWorkMonth(event.target.value)}
+        />
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <table>
+        <thead>
+          <tr>
+            <th>対象月</th>
+            <th>技術者</th>
+            <th>契約件名</th>
+            <th>状態</th>
+            <th>実績日数</th>
+            <th>実績時間</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.id}>
+              <td>
+                <button className="link-button" onClick={() => onOpen(item.id)}>
+                  {item.workMonth.slice(0, 7)}
+                </button>
+              </td>
+              <td>{item.engineerName}</td>
+              <td>{item.contractTitle}</td>
+              <td>{workLogStatusLabels[item.status]}</td>
+              <td>{item.actualDays ?? '未入力'}</td>
+              <td>{item.actualHours ?? '未入力'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {items.length === 0 && !error ? (
+        <p>該当する月次実績はありません。</p>
+      ) : null}
+      {nextCursor ? (
+        <button
+          className="secondary-button"
+          disabled={loadingMore}
+          onClick={() => {
+            setLoadingMore(true);
+            void load(nextCursor, true).finally(() => setLoadingMore(false));
+          }}
+        >
+          {loadingMore ? '読み込み中…' : 'さらに表示'}
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+function WorkLogDetail({
+  api,
+  id,
+  onBack,
+  onOpenContract,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  id: string;
+  onBack: () => void;
+  onOpenContract: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [item, setItem] = useState<WorkLog | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void api
+      .getWorkLog(id)
+      .then(setItem)
+      .catch(async (reason: unknown) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          await onUnauthorized();
+        else
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '月次実績を取得できませんでした。',
+          );
+      });
+  }, [api, id, onUnauthorized]);
+  if (error)
+    return (
+      <section className="content-panel">
+        <p role="alert">{error}</p>
+        <button className="secondary-button" onClick={onBack}>
+          月次実績一覧へ戻る
+        </button>
+      </section>
+    );
+  if (!item)
+    return (
+      <section className="content-panel" role="status">
+        月次実績を読み込んでいます…
+      </section>
+    );
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <h2>{item.workMonth.slice(0, 7)} 月次実績</h2>
+          <p>{item.engineerName}</p>
+        </div>
+        <button className="secondary-button" onClick={onBack}>
+          月次実績一覧へ戻る
+        </button>
+      </div>
+      <dl className="detail-grid">
+        <dt>契約</dt>
+        <dd>
+          <button
+            className="link-button"
+            onClick={() => onOpenContract(item.contractId)}
+          >
+            {item.contractTitle}
+          </button>
+        </dd>
+        <dt>状態</dt>
+        <dd>{workLogStatusLabels[item.status]}</dd>
+        <dt>予定</dt>
+        <dd>
+          {item.scheduledDays ?? '未設定'}日 / {item.scheduledHours ?? '未設定'}
+          時間
+        </dd>
+        <dt>実績</dt>
+        <dd>
+          {item.actualDays ?? '未設定'}日 / {item.actualHours ?? '未設定'}時間
+        </dd>
+        <dt>時間内訳</dt>
+        <dd>
+          残業 {item.overtimeHours}時間 / 欠勤 {item.absenceHours}時間
+        </dd>
+        <dt>顧客承認</dt>
+        <dd>
+          {item.customerApprovedAt ?? '未承認'}
+          {item.approvedByName ? `（${item.approvedByName}）` : ''}
+        </dd>
+        <dt>備考</dt>
+        <dd>{item.notes ?? 'なし'}</dd>
+      </dl>
+      <h3>日次実績</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>区分</th>
+            <th>開始</th>
+            <th>終了</th>
+            <th>休憩</th>
+            <th>勤務時間</th>
+            <th>残業</th>
+            <th>内容</th>
+          </tr>
+        </thead>
+        <tbody>
+          {item.details.map((detail) => (
+            <tr key={detail.id}>
+              <td>{detail.workDate}</td>
+              <td>{workTypeLabels[detail.workType]}</td>
+              <td>{detail.startTime ?? '—'}</td>
+              <td>{detail.endTime ?? '—'}</td>
+              <td>{detail.breakMinutes}分</td>
+              <td>{detail.workHours}時間</td>
+              <td>{detail.overtimeHours}時間</td>
+              <td>{detail.description ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {item.details.length === 0 ? <p>日次実績はありません。</p> : null}
+    </section>
   );
 }
 
@@ -3456,6 +3739,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/work-logs')}
+        >
+          月次実績
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/engagements')}
         >
           参画
@@ -3503,7 +3792,21 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'engagements' ? (
+      {route.page === 'work-logs' ? (
+        <WorkLogListView
+          api={api}
+          onOpen={(id) => navigate(`/work-logs/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'work-log-detail' ? (
+        <WorkLogDetail
+          api={api}
+          id={route.id}
+          onBack={() => navigate('/work-logs')}
+          onOpenContract={(id) => navigate(`/contracts/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'engagements' ? (
         <EngagementListView
           api={api}
           onOpen={(id) => navigate(`/engagements/${id}`)}

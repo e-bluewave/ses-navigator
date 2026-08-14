@@ -32,6 +32,9 @@ import { registerContractRoutes } from './modules/contracts/contract-routes.js';
 import { SupabaseEngagementRepository } from './modules/engagements/engagement-repository.js';
 import type { EngagementRepository } from './modules/engagements/engagement-repository.js';
 import { registerEngagementRoutes } from './modules/engagements/engagement-routes.js';
+import { SupabaseWorkLogRepository } from './modules/work-logs/work-log-repository.js';
+import type { WorkLogRepository } from './modules/work-logs/work-log-repository.js';
+import { registerWorkLogRoutes } from './modules/work-logs/work-log-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -44,6 +47,7 @@ export interface AppDependencies {
   interviews?: InterviewRepository;
   contracts?: ContractRepository;
   engagements?: EngagementRepository;
+  workLogs?: WorkLogRepository;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -102,6 +106,10 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerEngagementRoutes(
     app,
     dependencies.engagements ?? new SupabaseEngagementRepository(),
+  );
+  registerWorkLogRoutes(
+    app,
+    dependencies.workLogs ?? new SupabaseWorkLogRepository(),
   );
 
   return app;

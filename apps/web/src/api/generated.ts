@@ -42,6 +42,10 @@ export type ContractStatus =
   | 'cancelled';
 export type EngagementStatus =
   'draft' | 'preparing' | 'active' | 'ending' | 'ended' | 'cancelled';
+export type WorkLogStatus =
+  'draft' | 'submitted' | 'approved' | 'rejected' | 'locked';
+export type WorkType =
+  'work' | 'paid_leave' | 'absence' | 'holiday' | 'training' | 'other';
 
 export interface AuthContext {
   requiresMfa: boolean;
@@ -535,6 +539,54 @@ export interface ContractList {
 export interface ListContractsQuery {
   q?: string;
   status?: ContractStatus;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface WorkLogSummary {
+  id: string;
+  contractId: string;
+  engineerId: string;
+  contractTitle: string;
+  engineerName: string;
+  workMonth: string;
+  status: WorkLogStatus;
+  scheduledDays: number | null;
+  actualDays: number | null;
+  scheduledHours: number | null;
+  actualHours: number | null;
+  overtimeHours: number;
+  absenceHours: number;
+  customerApprovedAt: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface WorkLogDetailItem {
+  id: string;
+  workDate: string;
+  workType: WorkType;
+  startTime: string | null;
+  endTime: string | null;
+  breakMinutes: number;
+  workHours: number;
+  overtimeHours: number;
+  description: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface WorkLog extends WorkLogSummary {
+  approvedByName: string | null;
+  notes: string | null;
+  details: WorkLogDetailItem[];
+}
+export interface WorkLogList {
+  items: WorkLogSummary[];
+  page: { limit: number; nextCursor: string | null };
+}
+export interface ListWorkLogsQuery {
+  q?: string;
+  status?: WorkLogStatus;
+  workMonth?: string;
   cursor?: string;
   limit?: number;
 }
