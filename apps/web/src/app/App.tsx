@@ -69,6 +69,11 @@ import type {
   AccountingExportBatch,
   AccountingExportBatchSummary,
   AccountingExportFormat,
+  Expense,
+  ExpenseInput,
+  ExpenseStatus,
+  ExpenseSummary,
+  ExpenseType,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -195,6 +200,7 @@ const invoiceTypeLabels: Record<InvoiceType, string> = {
 };
 
 type Route =
+  | { page: 'expenses' }
   | { page: 'accounting-exports' }
   | { page: 'accounting-periods' }
   | { page: 'supplier-payments' }
@@ -240,6 +246,7 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/expenses') return { page: 'expenses' };
   if (window.location.pathname === '/accounting-exports')
     return { page: 'accounting-exports' };
   if (window.location.pathname === '/accounting-periods')
@@ -411,6 +418,442 @@ const accountingCloseStatusLabels: Record<AccountingCloseStatus, string> = {
   open: '未締め',
   closed: '締め済み',
 };
+
+const expenseTypeLabels: Record<ExpenseType, string> = {
+  transportation: '交通費',
+  lodging: '宿泊費',
+  communication: '通信費',
+  equipment: '備品費',
+  meal: '飲食費',
+  other: 'その他',
+};
+const expenseStatusLabels: Record<ExpenseStatus, string> = {
+  draft: '下書き',
+  submitted: '承認待ち',
+  approved: '承認済み',
+  rejected: '差戻し',
+  invoiced: '請求計上済み',
+  reimbursed: '精算済み',
+  cancelled: '取消',
+};
+const emptyExpenseInput = (): ExpenseInput => ({
+  contractId: null,
+  workLogId: null,
+  engineerId: null,
+  expenseDate: new Date().toISOString().slice(0, 10),
+  expenseType: 'transportation',
+  description: '',
+  amount: 0,
+  taxAmount: 0,
+  currency: 'JPY',
+  billable: false,
+  receiptPath: null,
+  notes: null,
+});
+
+function ExpenseView({
+  api,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<ExpenseSummary[]>([]);
+  const [selected, setSelected] = useState<Expense | null>(null);
+  const [form, setForm] = useState<ExpenseInput>(emptyExpenseInput);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState<ExpenseStatus | ''>('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const handleError = useCallback(
+    async (cause: unknown, fallback: string) => {
+      if (cause instanceof ApiClientError && cause.status === 401)
+        await onUnauthorized();
+      else setError(cause instanceof Error ? cause.message : fallback);
+    },
+    [onUnauthorized],
+  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await api.listExpenses({
+        ...(q.trim() ? { q: q.trim() } : {}),
+        ...(status ? { status } : {}),
+        ...(dateFrom ? { dateFrom } : {}),
+        ...(dateTo ? { dateTo } : {}),
+        limit: 100,
+      });
+      setItems(result.items);
+    } catch (cause) {
+      await handleError(cause, '経費一覧を読み込めませんでした。');
+    } finally {
+      setLoading(false);
+    }
+  }, [api, dateFrom, dateTo, handleError, q, status]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  async function open(id: string) {
+    setError('');
+    try {
+      const detail = await api.getExpense(id);
+      setSelected(detail);
+      setForm({
+        contractId: detail.contractId,
+        workLogId: detail.workLogId,
+        engineerId: detail.engineerId,
+        expenseDate: detail.expenseDate,
+        expenseType: detail.expenseType,
+        description: detail.description,
+        amount: detail.amount,
+        taxAmount: detail.taxAmount,
+        currency: detail.currency,
+        billable: detail.billable,
+        receiptPath: detail.receiptPath,
+        notes: detail.notes,
+      });
+    } catch (cause) {
+      await handleError(cause, '経費詳細を読み込めませんでした。');
+    }
+  }
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const saved = selected
+        ? await api.updateExpense(selected.id, selected.rowVersion, form)
+        : await api.createExpense(form);
+      setSelected(saved);
+      await load();
+    } catch (cause) {
+      await handleError(cause, '経費を保存できませんでした。');
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function transition(next: ExpenseStatus) {
+    if (!selected) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await api.transitionExpenseStatus(
+        selected.id,
+        selected.rowVersion,
+        { status: next, reason: reason.trim() || null },
+      );
+      setSelected(updated);
+      setReason('');
+      await load();
+    } catch (cause) {
+      await handleError(cause, '経費状態を更新できませんでした。');
+    } finally {
+      setSaving(false);
+    }
+  }
+  const transitions: ExpenseStatus[] =
+    selected?.status === 'draft' || selected?.status === 'rejected'
+      ? ['submitted', 'cancelled']
+      : selected?.status === 'submitted'
+        ? ['approved', 'rejected', 'cancelled']
+        : selected?.status === 'approved'
+          ? ['invoiced', 'reimbursed']
+          : [];
+  const editable = !selected || ['draft', 'rejected'].includes(selected.status);
+  function field<K extends keyof ExpenseInput>(
+    name: K,
+    value: ExpenseInput[K],
+  ) {
+    setForm((current) => ({ ...current, [name]: value }));
+  }
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Expense Approval</p>
+          <h2>経費申請・承認</h2>
+          <p>
+            領収書情報を含む経費の下書き、申請、承認・差戻し、請求計上・精算を管理します。
+          </p>
+        </div>
+        <button
+          className="primary-button"
+          onClick={() => {
+            setSelected(null);
+            setForm(emptyExpenseInput());
+            setReason('');
+          }}
+        >
+          経費を登録
+        </button>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <form
+        className="filter-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void load();
+        }}
+      >
+        <label>
+          検索
+          <input
+            aria-label="経費検索"
+            value={q}
+            onChange={(event) => setQ(event.target.value)}
+          />
+        </label>
+        <label>
+          状態
+          <select
+            aria-label="経費状態"
+            value={status}
+            onChange={(event) =>
+              setStatus(event.target.value as ExpenseStatus | '')
+            }
+          >
+            <option value="">すべて</option>
+            {Object.entries(expenseStatusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          開始日
+          <input
+            aria-label="経費開始日"
+            type="date"
+            value={dateFrom}
+            onChange={(event) => setDateFrom(event.target.value)}
+          />
+        </label>
+        <label>
+          終了日
+          <input
+            aria-label="経費終了日"
+            type="date"
+            value={dateTo}
+            onChange={(event) => setDateTo(event.target.value)}
+          />
+        </label>
+        <button className="secondary-button">絞り込む</button>
+      </form>
+      {loading ? (
+        <p role="status">経費を読み込んでいます…</p>
+      ) : items.length === 0 ? (
+        <p>経費はまだありません。</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>区分</th>
+                <th>内容</th>
+                <th>金額</th>
+                <th>状態</th>
+                <th>請求対象</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <button
+                      className="link-button"
+                      onClick={() => void open(item.id)}
+                    >
+                      {item.expenseDate}
+                    </button>
+                  </td>
+                  <td>{expenseTypeLabels[item.expenseType]}</td>
+                  <td>{item.description}</td>
+                  <td>{money(item.amount, item.currency)}</td>
+                  <td>{expenseStatusLabels[item.status]}</td>
+                  <td>{item.billable ? '対象' : '対象外'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <h3>
+        {selected
+          ? `経費詳細（${expenseStatusLabels[selected.status]}）`
+          : '経費登録'}
+      </h3>
+      <form className="stacked-form" onSubmit={(event) => void save(event)}>
+        <div className="form-grid">
+          <label>
+            利用日
+            <input
+              aria-label="経費利用日"
+              type="date"
+              disabled={!editable}
+              value={form.expenseDate}
+              onChange={(event) => field('expenseDate', event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            経費区分
+            <select
+              aria-label="経費区分"
+              disabled={!editable}
+              value={form.expenseType}
+              onChange={(event) =>
+                field('expenseType', event.target.value as ExpenseType)
+              }
+            >
+              {Object.entries(expenseTypeLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            内容
+            <input
+              aria-label="経費内容"
+              disabled={!editable}
+              maxLength={1000}
+              value={form.description}
+              onChange={(event) => field('description', event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            金額
+            <input
+              aria-label="経費金額"
+              type="number"
+              min="0.01"
+              step="0.01"
+              disabled={!editable}
+              value={form.amount}
+              onChange={(event) => field('amount', Number(event.target.value))}
+              required
+            />
+          </label>
+          <label>
+            消費税
+            <input
+              aria-label="経費消費税"
+              type="number"
+              min="0"
+              step="0.01"
+              disabled={!editable}
+              value={form.taxAmount}
+              onChange={(event) =>
+                field('taxAmount', Number(event.target.value))
+              }
+            />
+          </label>
+          <label>
+            契約ID
+            <input
+              aria-label="経費契約ID"
+              disabled={!editable}
+              value={form.contractId ?? ''}
+              onChange={(event) =>
+                field('contractId', event.target.value || null)
+              }
+            />
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              disabled={!editable}
+              checked={form.billable}
+              onChange={(event) => field('billable', event.target.checked)}
+            />
+            顧客への請求対象
+          </label>
+          <label>
+            領収書パス
+            <input
+              aria-label="領収書パス"
+              disabled={!editable}
+              maxLength={2000}
+              value={form.receiptPath ?? ''}
+              onChange={(event) =>
+                field('receiptPath', event.target.value || null)
+              }
+            />
+          </label>
+          <label>
+            備考
+            <textarea
+              aria-label="経費備考"
+              disabled={!editable}
+              maxLength={5000}
+              value={form.notes ?? ''}
+              onChange={(event) => field('notes', event.target.value || null)}
+            />
+          </label>
+        </div>
+        {editable ? (
+          <button className="primary-button" disabled={saving}>
+            下書きを保存
+          </button>
+        ) : null}
+      </form>
+      {selected && transitions.length > 0 ? (
+        <div>
+          <label>
+            申請・判断理由
+            <textarea
+              aria-label="経費状態変更理由"
+              maxLength={1000}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </label>
+          <div className="button-row">
+            {transitions.map((next) => (
+              <button
+                key={next}
+                className="secondary-button"
+                disabled={
+                  saving ||
+                  (['rejected', 'cancelled'].includes(next) && !reason.trim())
+                }
+                onClick={() => void transition(next)}
+              >
+                {expenseStatusLabels[next]}にする
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {selected?.statusHistories.length ? (
+        <div>
+          <h3>状態履歴</h3>
+          <ul className="timeline-list">
+            {selected.statusHistories.map((history) => (
+              <li key={history.id}>
+                {new Date(history.changedAt).toLocaleString('ja-JP')}：
+                {history.fromStatus
+                  ? expenseStatusLabels[history.fromStatus]
+                  : '新規'}{' '}
+                → {expenseStatusLabels[history.toStatus]}
+                {history.changeReason ? `（${history.changeReason}）` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 const accountingExportFormatLabels: Record<AccountingExportFormat, string> = {
   generic_csv: '汎用CSV',
@@ -6133,6 +6576,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/expenses')}
+        >
+          経費
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/accounting-exports')}
         >
           会計出力
@@ -6210,7 +6659,9 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'accounting-exports' ? (
+      {route.page === 'expenses' ? (
+        <ExpenseView api={api} onUnauthorized={signOut} />
+      ) : route.page === 'accounting-exports' ? (
         <AccountingExportView api={api} onUnauthorized={signOut} />
       ) : route.page === 'accounting-periods' ? (
         <AccountingPeriodView api={api} onUnauthorized={signOut} />

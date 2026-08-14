@@ -3,6 +3,54 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('calls expense read, write, and transition endpoints', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() => Promise.resolve(new Response(JSON.stringify({ items: [] }))));
+    const api = createProjectsApi({
+      getAccessToken: () => 'token',
+      fetch: request,
+    });
+    const input = {
+      contractId: null,
+      workLogId: null,
+      engineerId: null,
+      expenseDate: '2026-08-14',
+      expenseType: 'transportation' as const,
+      description: '交通費',
+      amount: 1000,
+      taxAmount: 91,
+      currency: 'JPY',
+      billable: false,
+      receiptPath: null,
+      notes: null,
+    };
+    await api.listExpenses({
+      status: 'draft',
+      dateFrom: '2026-08-01',
+      limit: 20,
+    });
+    await api.getExpense('expense-1');
+    await api.createExpense(input);
+    await api.updateExpense('expense-1', 2, input);
+    await api.transitionExpenseStatus('expense-1', 3, {
+      status: 'submitted',
+      reason: null,
+    });
+    expect(request.mock.calls[0]![0]).toBe(
+      '/api/v1/expenses?status=draft&dateFrom=2026-08-01&limit=20',
+    );
+    expect(request.mock.calls[1]![0]).toBe('/api/v1/expenses/expense-1');
+    expect(request.mock.calls[2]![0]).toBe('/api/v1/expenses');
+    expect(request.mock.calls[3]![0]).toBe('/api/v1/expenses/expense-1');
+    expect(request.mock.calls[4]![0]).toBe('/api/v1/expenses/expense-1/status');
+    expect(
+      (request.mock.calls[4]![1]!.headers as Record<string, string>)[
+        'if-match'
+      ],
+    ).toBe('"3"');
+  });
+
   it('calls accounting export endpoints with filters and row versions', async () => {
     const request = vi.fn<
       (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>

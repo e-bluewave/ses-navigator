@@ -26,6 +26,7 @@ import type {
   Invoice,
   AccountingPeriod,
   AccountingExportBatch,
+  Expense,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -362,6 +363,32 @@ const accountingExport: AccountingExportBatch = {
   ],
 };
 
+const expense: Expense = {
+  id: 'dededede-dede-4ded-8ded-dededededede',
+  contractId: null,
+  workLogId: null,
+  engineerId: null,
+  contractNo: null,
+  contractTitle: null,
+  engineerName: null,
+  expenseDate: '2026-08-14',
+  expenseType: 'transportation',
+  description: '顧客訪問交通費',
+  amount: 1200,
+  taxAmount: 109,
+  currency: 'JPY',
+  status: 'draft',
+  billable: false,
+  invoiceId: null,
+  approvedAt: null,
+  updatedAt: '2026-08-14T03:00:00Z',
+  rowVersion: 1,
+  receiptPath: null,
+  notes: null,
+  statusHistories: [],
+  approval: null,
+};
+
 const company: Company = {
   id: '22222222-2222-4222-8222-222222222222',
   managementNo: 'CO-000001',
@@ -443,6 +470,13 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    listExpenses: vi.fn(() => Promise.resolve({ items: [] })),
+    getExpense: vi.fn(() => Promise.reject(new Error('not configured'))),
+    createExpense: vi.fn(() => Promise.reject(new Error('not configured'))),
+    updateExpense: vi.fn(() => Promise.reject(new Error('not configured'))),
+    transitionExpenseStatus: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listAccountingExports: vi.fn(() => Promise.resolve({ items: [] })),
     getAccountingExport: vi.fn(() =>
       Promise.reject(new Error('not configured')),
@@ -623,6 +657,50 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('creates and submits an expense', async () => {
+    window.history.replaceState({}, '', '/expenses');
+    const createExpense = vi.fn(() => Promise.resolve(expense));
+    const transitionExpenseStatus = vi.fn(() =>
+      Promise.resolve({
+        ...expense,
+        status: 'submitted' as const,
+        rowVersion: 2,
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          listExpenses: vi.fn(() => Promise.resolve({ items: [expense] })),
+          getExpense: vi.fn(() => Promise.resolve(expense)),
+          createExpense,
+          transitionExpenseStatus,
+        })}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('経費内容'), {
+      target: { value: '新幹線代' },
+    });
+    fireEvent.change(screen.getByLabelText('経費金額'), {
+      target: { value: '12000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
+    await waitFor(() =>
+      expect(createExpense).toHaveBeenCalledWith(
+        expect.objectContaining({ description: '新幹線代', amount: 12000 }),
+      ),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: '承認待ちにする' }),
+    );
+    await waitFor(() =>
+      expect(transitionExpenseStatus).toHaveBeenCalledWith(expense.id, 1, {
+        status: 'submitted',
+        reason: null,
+      }),
+    );
+  });
+
   it('generates, opens, and marks an accounting export as exported', async () => {
     window.history.replaceState({}, '', '/accounting-exports');
     const generateAccountingExport = vi.fn(() =>

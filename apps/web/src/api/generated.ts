@@ -645,6 +645,93 @@ export interface ListWorkLogsQuery {
   limit?: number;
 }
 
+export type ExpenseType =
+  | 'transportation'
+  | 'lodging'
+  | 'communication'
+  | 'equipment'
+  | 'meal'
+  | 'other';
+export type ExpenseStatus =
+  | 'draft'
+  | 'submitted'
+  | 'approved'
+  | 'rejected'
+  | 'invoiced'
+  | 'reimbursed'
+  | 'cancelled';
+export interface ExpenseSummary {
+  id: string;
+  contractId: string | null;
+  workLogId: string | null;
+  engineerId: string | null;
+  contractNo: string | null;
+  contractTitle: string | null;
+  engineerName: string | null;
+  expenseDate: string;
+  expenseType: ExpenseType;
+  description: string;
+  amount: number;
+  taxAmount: number;
+  currency: string;
+  status: ExpenseStatus;
+  billable: boolean;
+  invoiceId: string | null;
+  approvedAt: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface ExpenseStatusHistory {
+  id: string;
+  fromStatus: ExpenseStatus | null;
+  toStatus: ExpenseStatus;
+  changeReason: string | null;
+  changedAt: string;
+}
+export interface ExpenseApproval {
+  id: string;
+  status:
+    'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired';
+  requestedAt: string | null;
+  completedAt: string | null;
+  requestNote: string | null;
+  decisionNote: string | null;
+}
+export interface Expense extends ExpenseSummary {
+  receiptPath: string | null;
+  notes: string | null;
+  statusHistories: ExpenseStatusHistory[];
+  approval: ExpenseApproval | null;
+}
+export interface ExpenseList {
+  items: ExpenseSummary[];
+}
+export interface ListExpensesQuery {
+  q?: string;
+  status?: ExpenseStatus;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+}
+export interface ExpenseInput {
+  contractId: string | null;
+  workLogId: string | null;
+  engineerId: string | null;
+  expenseDate: string;
+  expenseType: ExpenseType;
+  description: string;
+  amount: number;
+  taxAmount: number;
+  currency: string;
+  billable: boolean;
+  receiptPath: string | null;
+  notes: string | null;
+}
+export interface ExpenseStatusTransitionInput {
+  status: ExpenseStatus;
+  reason: string | null;
+}
+
 export interface AccountingPeriodSummary {
   id: string;
   periodMonth: string;

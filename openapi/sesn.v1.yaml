@@ -7,6 +7,151 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /expenses:
+    get:
+      operationId: listExpenses
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/ExpenseStatus' },
+          }
+        - { name: dateFrom, in: query, schema: { type: string, format: date } }
+        - { name: dateTo, in: query, schema: { type: string, format: date } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Authorized expense list
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/ExpenseList' } },
+            }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createExpense
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/ExpenseInput' } },
+          }
+      responses:
+        '201':
+          description: Expense draft created
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/Expense' } },
+            }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /expenses/{id}:
+    get:
+      operationId: getExpense
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Expense detail with approval history
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/Expense' } },
+            }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateExpense
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              { schema: { $ref: '#/components/schemas/ExpenseInput' } },
+          }
+      responses:
+        '200':
+          description: Expense draft updated
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/Expense' } },
+            }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /expenses/{id}/status:
+    post:
+      operationId: transitionExpenseStatus
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  { $ref: '#/components/schemas/ExpenseStatusTransitionInput' },
+              },
+          }
+      responses:
+        '200':
+          description: Expense status transitioned
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/Expense' } },
+            }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /accounting-exports:
     get:
       operationId: listAccountingExports
@@ -2158,6 +2303,146 @@ components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
+    ExpenseType:
+      type: string
+      enum: [transportation, lodging, communication, equipment, meal, other]
+    ExpenseStatus:
+      type: string
+      enum:
+        [draft, submitted, approved, rejected, invoiced, reimbursed, cancelled]
+    ExpenseSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          contractId,
+          workLogId,
+          engineerId,
+          contractNo,
+          contractTitle,
+          engineerName,
+          expenseDate,
+          expenseType,
+          description,
+          amount,
+          taxAmount,
+          currency,
+          status,
+          billable,
+          invoiceId,
+          approvedAt,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        contractId: { type: [string, 'null'], format: uuid }
+        workLogId: { type: [string, 'null'], format: uuid }
+        engineerId: { type: [string, 'null'], format: uuid }
+        contractNo: { type: [string, 'null'] }
+        contractTitle: { type: [string, 'null'] }
+        engineerName: { type: [string, 'null'] }
+        expenseDate: { type: string, format: date }
+        expenseType: { $ref: '#/components/schemas/ExpenseType' }
+        description: { type: string }
+        amount: { type: number }
+        taxAmount: { type: number }
+        currency: { type: string }
+        status: { $ref: '#/components/schemas/ExpenseStatus' }
+        billable: { type: boolean }
+        invoiceId: { type: [string, 'null'], format: uuid }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    Expense:
+      allOf:
+        - { $ref: '#/components/schemas/ExpenseSummary' }
+        - type: object
+          required: [receiptPath, notes, statusHistories, approval]
+          properties:
+            receiptPath: { type: [string, 'null'], maxLength: 2000 }
+            notes: { type: [string, 'null'], maxLength: 5000 }
+            statusHistories:
+              type: array
+              items: { $ref: '#/components/schemas/ExpenseStatusHistory' }
+            approval:
+              oneOf:
+                - { $ref: '#/components/schemas/ExpenseApproval' }
+                - { type: 'null' }
+    ExpenseStatusHistory:
+      type: object
+      required: [id, fromStatus, toStatus, changeReason, changedAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus:
+          oneOf:
+            [{ $ref: '#/components/schemas/ExpenseStatus' }, { type: 'null' }]
+        toStatus: { $ref: '#/components/schemas/ExpenseStatus' }
+        changeReason: { type: [string, 'null'] }
+        changedAt: { type: string, format: date-time }
+    ExpenseApproval:
+      type: object
+      required:
+        [id, status, requestedAt, completedAt, requestNote, decisionNote]
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          {
+            type: string,
+            enum: [draft, pending, approved, rejected, cancelled, expired],
+          }
+        requestedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        requestNote: { type: [string, 'null'] }
+        decisionNote: { type: [string, 'null'] }
+    ExpenseList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/ExpenseSummary' },
+          }
+    ExpenseInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          contractId,
+          workLogId,
+          engineerId,
+          expenseDate,
+          expenseType,
+          description,
+          amount,
+          taxAmount,
+          currency,
+          billable,
+          receiptPath,
+          notes,
+        ]
+      properties:
+        contractId: { type: [string, 'null'], format: uuid }
+        workLogId: { type: [string, 'null'], format: uuid }
+        engineerId: { type: [string, 'null'], format: uuid }
+        expenseDate: { type: string, format: date }
+        expenseType: { $ref: '#/components/schemas/ExpenseType' }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        amount: { type: number, exclusiveMinimum: 0 }
+        taxAmount: { type: number, minimum: 0 }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        billable: { type: boolean }
+        receiptPath: { type: [string, 'null'], maxLength: 2000 }
+        notes: { type: [string, 'null'], maxLength: 5000 }
+    ExpenseStatusTransitionInput:
+      type: object
+      additionalProperties: false
+      required: [status, reason]
+      properties:
+        status: { $ref: '#/components/schemas/ExpenseStatus' }
+        reason: { type: [string, 'null'], maxLength: 1000 }
     AccountingExportFormat:
       type: string
       enum: [generic_csv, freee, money_forward, yayoi]
