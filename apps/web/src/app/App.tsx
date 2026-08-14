@@ -55,6 +55,10 @@ import type {
   WorkLogSummary,
   WorkLogStatus,
   WorkType,
+  Invoice,
+  InvoiceSummary,
+  InvoiceStatus,
+  InvoiceType,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -165,7 +169,24 @@ const workTypeLabels: Record<WorkType, string> = {
   other: 'その他',
 };
 
+const invoiceStatusLabels: Record<InvoiceStatus, string> = {
+  draft: '下書き',
+  issued: '発行済み',
+  sent: '送付済み',
+  partially_paid: '一部入金',
+  paid: '入金済み',
+  overdue: '支払期限超過',
+  cancelled: '取消',
+  void: '無効',
+};
+const invoiceTypeLabels: Record<InvoiceType, string> = {
+  sales: '売上請求',
+  purchase: '仕入請求',
+};
+
 type Route =
+  | { page: 'invoices' }
+  | { page: 'invoice-detail'; id: string }
   | { page: 'work-logs' }
   | { page: 'work-log-detail'; id: string }
   | { page: 'work-log-new' }
@@ -203,6 +224,10 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/invoices') return { page: 'invoices' };
+  const invoice = window.location.pathname.match(/^\/invoices\/([^/]+)$/);
+  if (invoice)
+    return { page: 'invoice-detail', id: decodeURIComponent(invoice[1]!) };
   if (window.location.pathname === '/work-logs') return { page: 'work-logs' };
   if (window.location.pathname === '/work-logs/new')
     return { page: 'work-log-new' };
@@ -328,6 +353,341 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
     <AuthProvider auth={auth}>
       <AuthenticatedApp {...(api === undefined ? {} : { api })} />
     </AuthProvider>
+  );
+}
+
+function money(value: number, currency: string) {
+  return new Intl.NumberFormat('ja-JP', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function InvoiceListView({
+  api,
+  onOpen,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onOpen: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<InvoiceSummary[]>([]);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<InvoiceStatus | ''>('');
+  const [invoiceType, setInvoiceType] = useState<InvoiceType | ''>('');
+  const [dueFrom, setDueFrom] = useState('');
+  const [dueTo, setDueTo] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api.listInvoices({
+        ...(query.trim() ? { q: query.trim() } : {}),
+        ...(status ? { status } : {}),
+        ...(invoiceType ? { invoiceType } : {}),
+        ...(dueFrom ? { dueFrom } : {}),
+        ...(dueTo ? { dueTo } : {}),
+        limit: 100,
+      });
+      setItems(result.items);
+    } catch (reason) {
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
+      else
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : '請求一覧を取得できませんでした。',
+        );
+    } finally {
+      setLoading(false);
+    }
+  }, [api, dueFrom, dueTo, invoiceType, onUnauthorized, query, status]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Finance</p>
+          <h2>請求</h2>
+        </div>
+      </div>
+      <div className="filter-row">
+        <input
+          aria-label="請求検索"
+          placeholder="請求番号・会社・契約名"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <select
+          aria-label="請求状態"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as InvoiceStatus | '')}
+        >
+          <option value="">すべての状態</option>
+          {Object.entries(invoiceStatusLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="請求種別"
+          value={invoiceType}
+          onChange={(e) => setInvoiceType(e.target.value as InvoiceType | '')}
+        >
+          <option value="">すべての種別</option>
+          {Object.entries(invoiceTypeLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <label>
+          期限（開始）
+          <input
+            type="date"
+            value={dueFrom}
+            onChange={(e) => setDueFrom(e.target.value)}
+          />
+        </label>
+        <label>
+          期限（終了）
+          <input
+            type="date"
+            value={dueTo}
+            onChange={(e) => setDueTo(e.target.value)}
+          />
+        </label>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      {loading ? (
+        <p role="status">請求一覧を読み込んでいます…</p>
+      ) : items.length === 0 ? (
+        <p>該当する請求はありません。</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>請求番号</th>
+                <th>種別</th>
+                <th>請求先</th>
+                <th>発行日</th>
+                <th>支払期限</th>
+                <th>状態</th>
+                <th>請求額</th>
+                <th>未入金</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <button
+                      className="link-button"
+                      onClick={() => onOpen(item.id)}
+                    >
+                      {item.invoiceNo}
+                    </button>
+                  </td>
+                  <td>{invoiceTypeLabels[item.invoiceType]}</td>
+                  <td>{item.billingCompanyName}</td>
+                  <td>{item.issueDate}</td>
+                  <td>{item.dueDate}</td>
+                  <td>{invoiceStatusLabels[item.status]}</td>
+                  <td>{money(item.totalAmount, item.currency)}</td>
+                  <td>{money(item.balanceAmount, item.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InvoiceDetailView({
+  api,
+  id,
+  onBack,
+  onOpenContract,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  id: string;
+  onBack: () => void;
+  onOpenContract: (id: string) => void;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [item, setItem] = useState<Invoice | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    api
+      .getInvoice(id)
+      .then((value) => {
+        if (active) setItem(value);
+      })
+      .catch(async (reason) => {
+        if (reason instanceof ApiClientError && reason.status === 401)
+          await onUnauthorized();
+        else if (active)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : '請求を取得できませんでした。',
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, id, onUnauthorized]);
+  if (error)
+    return (
+      <section className="content-panel">
+        <button className="secondary-button" onClick={onBack}>
+          請求一覧へ戻る
+        </button>
+        <p role="alert">{error}</p>
+      </section>
+    );
+  if (!item)
+    return (
+      <section className="content-panel">
+        <p role="status">請求を読み込んでいます…</p>
+      </section>
+    );
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">{invoiceTypeLabels[item.invoiceType]}</p>
+          <h2>{item.invoiceNo}</h2>
+        </div>
+        <button className="secondary-button" onClick={onBack}>
+          請求一覧へ戻る
+        </button>
+      </div>
+      <dl className="detail-grid">
+        <div>
+          <dt>請求先</dt>
+          <dd>{item.billingCompanyName}</dd>
+        </div>
+        <div>
+          <dt>契約</dt>
+          <dd>
+            {item.contractId ? (
+              <button
+                className="link-button"
+                onClick={() => onOpenContract(item.contractId!)}
+              >
+                {item.contractTitle ?? item.contractId}
+              </button>
+            ) : (
+              '―'
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>対象期間</dt>
+          <dd>
+            {item.billingPeriodStart ?? '―'} 〜 {item.billingPeriodEnd ?? '―'}
+          </dd>
+        </div>
+        <div>
+          <dt>発行日 / 支払期限</dt>
+          <dd>
+            {item.issueDate} / {item.dueDate}
+          </dd>
+        </div>
+        <div>
+          <dt>状態</dt>
+          <dd>{invoiceStatusLabels[item.status]}</dd>
+        </div>
+        <div>
+          <dt>請求先設定</dt>
+          <dd>
+            {item.billingAccount.accountName}（
+            {item.billingAccount.invoiceDeliveryMethod}）
+          </dd>
+        </div>
+        <div>
+          <dt>請求額</dt>
+          <dd>{money(item.totalAmount, item.currency)}</dd>
+        </div>
+        <div>
+          <dt>入金済 / 未入金</dt>
+          <dd>
+            {money(item.paidAmount, item.currency)} /{' '}
+            {money(item.balanceAmount, item.currency)}
+          </dd>
+        </div>
+      </dl>
+      <h3>請求明細</h3>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>内容</th>
+              <th>数量</th>
+              <th>単価</th>
+              <th>税率</th>
+              <th>金額</th>
+            </tr>
+          </thead>
+          <tbody>
+            {item.items.map((line) => (
+              <tr key={line.id}>
+                <td>{line.lineNo}</td>
+                <td>{line.description}</td>
+                <td>
+                  {line.quantity} {line.unit ?? ''}
+                </td>
+                <td>{money(line.unitPrice, item.currency)}</td>
+                <td>{line.taxRate}%</td>
+                <td>{money(line.amount, item.currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <h3>入金履歴</h3>
+      {item.payments.length === 0 ? (
+        <p>入金履歴はありません。</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>入金日</th>
+                <th>種別</th>
+                <th>方法</th>
+                <th>金額</th>
+              </tr>
+            </thead>
+            <tbody>
+              {item.payments.map((payment) => (
+                <tr key={payment.id}>
+                  <td>{payment.paymentDate}</td>
+                  <td>{payment.paymentType}</td>
+                  <td>{payment.paymentMethod ?? '―'}</td>
+                  <td>{money(payment.amount, payment.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -4217,6 +4577,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/invoices')}
+        >
+          請求
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/work-logs')}
         >
           月次実績
@@ -4270,7 +4636,21 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'work-logs' ? (
+      {route.page === 'invoices' ? (
+        <InvoiceListView
+          api={api}
+          onOpen={(id) => navigate(`/invoices/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'invoice-detail' ? (
+        <InvoiceDetailView
+          api={api}
+          id={route.id}
+          onBack={() => navigate('/invoices')}
+          onOpenContract={(id) => navigate(`/contracts/${id}`)}
+          onUnauthorized={signOut}
+        />
+      ) : route.page === 'work-logs' ? (
         <WorkLogListView
           api={api}
           onOpen={(id) => navigate(`/work-logs/${id}`)}

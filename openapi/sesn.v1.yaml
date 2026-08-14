@@ -7,6 +7,62 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /invoices:
+    get:
+      operationId: listInvoices
+      parameters:
+        - {
+            name: q,
+            in: query,
+            schema: { type: string, minLength: 1, maxLength: 100 },
+          }
+        - {
+            name: status,
+            in: query,
+            schema: { $ref: '#/components/schemas/InvoiceStatus' },
+          }
+        - {
+            name: invoiceType,
+            in: query,
+            schema: { $ref: '#/components/schemas/InvoiceType' },
+          }
+        - { name: dueFrom, in: query, schema: { type: string, format: date } }
+        - { name: dueTo, in: query, schema: { type: string, format: date } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Authorized invoice summary list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvoiceList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Authorized invoice detail with line items and payments
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invoice' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /work-logs:
     post:
       operationId: createWorkLog
@@ -2928,6 +2984,168 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/WorkLogSummary' }
+        page:
+          type: object
+          required: [limit, nextCursor]
+          properties:
+            limit: { type: integer }
+            nextCursor: { type: ['string', 'null'] }
+    InvoiceStatus:
+      type: string
+      enum:
+        [draft, issued, sent, partially_paid, paid, overdue, cancelled, void]
+    InvoiceType:
+      type: string
+      enum: [sales, purchase]
+    InvoiceSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          invoiceNo,
+          invoiceType,
+          contractId,
+          contractTitle,
+          billingCompanyId,
+          billingCompanyName,
+          billingPeriodStart,
+          billingPeriodEnd,
+          issueDate,
+          dueDate,
+          status,
+          currency,
+          subtotal,
+          taxAmount,
+          totalAmount,
+          paidAmount,
+          balanceAmount,
+          sentAt,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        invoiceNo: { type: string }
+        invoiceType: { $ref: '#/components/schemas/InvoiceType' }
+        contractId: { type: [string, 'null'], format: uuid }
+        contractTitle: { type: [string, 'null'] }
+        billingCompanyId: { type: string, format: uuid }
+        billingCompanyName: { type: string }
+        billingPeriodStart: { type: [string, 'null'], format: date }
+        billingPeriodEnd: { type: [string, 'null'], format: date }
+        issueDate: { type: string, format: date }
+        dueDate: { type: string, format: date }
+        status: { $ref: '#/components/schemas/InvoiceStatus' }
+        currency: { type: string }
+        subtotal: { type: number }
+        taxAmount: { type: number }
+        totalAmount: { type: number }
+        paidAmount: { type: number }
+        balanceAmount: { type: number }
+        sentAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    Invoice:
+      allOf:
+        - { $ref: '#/components/schemas/InvoiceSummary' }
+        - type: object
+          required: [billingAccount, items, payments]
+          properties:
+            billingAccount:
+              type: object
+              required:
+                [
+                  id,
+                  companyId,
+                  accountType,
+                  accountName,
+                  closingDay,
+                  paymentMonthOffset,
+                  paymentDay,
+                  invoiceDeliveryMethod,
+                  isDefault,
+                ]
+              properties:
+                id: { type: string, format: uuid }
+                companyId: { type: string, format: uuid }
+                accountType: { type: string, enum: [receivable, payable, both] }
+                accountName: { type: string }
+                closingDay: { type: [integer, 'null'] }
+                paymentMonthOffset: { type: integer }
+                paymentDay: { type: [integer, 'null'] }
+                invoiceDeliveryMethod:
+                  { type: string, enum: [email, postal, portal, edi, other] }
+                isDefault: { type: boolean }
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/InvoiceItem' }
+            payments:
+              type: array
+              items: { $ref: '#/components/schemas/InvoicePayment' }
+    InvoiceItem:
+      type: object
+      required:
+        [
+          id,
+          lineNo,
+          itemType,
+          description,
+          quantity,
+          unit,
+          unitPrice,
+          taxRate,
+          amount,
+          taxAmount,
+          workLogId,
+          displayOrder,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        lineNo: { type: integer }
+        itemType:
+          {
+            type: string,
+            enum: [service, expense, adjustment, discount, tax_exempt, other],
+          }
+        description: { type: string }
+        quantity: { type: number }
+        unit: { type: [string, 'null'] }
+        unitPrice: { type: number }
+        taxRate: { type: number }
+        amount: { type: number }
+        taxAmount: { type: number }
+        workLogId: { type: [string, 'null'], format: uuid }
+        displayOrder: { type: integer }
+    InvoicePayment:
+      type: object
+      required:
+        [
+          id,
+          paymentType,
+          paymentDate,
+          amount,
+          currency,
+          paymentMethod,
+          bankFeeAmount,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        paymentType:
+          { type: string, enum: [receipt, payment, refund, offset, other] }
+        paymentDate: { type: string, format: date }
+        amount: { type: number }
+        currency: { type: string }
+        paymentMethod: { type: [string, 'null'] }
+        bankFeeAmount: { type: number }
+    InvoiceList:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/InvoiceSummary' }
         page:
           type: object
           required: [limit, nextCursor]

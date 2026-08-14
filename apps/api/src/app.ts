@@ -35,6 +35,9 @@ import { registerEngagementRoutes } from './modules/engagements/engagement-route
 import { SupabaseWorkLogRepository } from './modules/work-logs/work-log-repository.js';
 import type { WorkLogRepository } from './modules/work-logs/work-log-repository.js';
 import { registerWorkLogRoutes } from './modules/work-logs/work-log-routes.js';
+import { SupabaseInvoiceRepository } from './modules/invoices/invoice-repository.js';
+import type { InvoiceRepository } from './modules/invoices/invoice-repository.js';
+import { registerInvoiceRoutes } from './modules/invoices/invoice-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -48,6 +51,7 @@ export interface AppDependencies {
   contracts?: ContractRepository;
   engagements?: EngagementRepository;
   workLogs?: WorkLogRepository;
+  invoices?: InvoiceRepository;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -110,6 +114,10 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerWorkLogRoutes(
     app,
     dependencies.workLogs ?? new SupabaseWorkLogRepository(),
+  );
+  registerInvoiceRoutes(
+    app,
+    dependencies.invoices ?? new SupabaseInvoiceRepository(),
   );
 
   return app;
