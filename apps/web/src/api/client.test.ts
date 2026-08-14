@@ -3,6 +3,42 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('calls accounting export endpoints with filters and row versions', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() => Promise.resolve(new Response(JSON.stringify({ items: [] }))));
+    const api = createProjectsApi({
+      getAccessToken: () => 'token',
+      fetch: request,
+    });
+    await api.listAccountingExports({
+      accountingPeriodId: 'period-1',
+      limit: 10,
+    });
+    await api.getAccountingExport('batch-1');
+    await api.generateAccountingExport({
+      accountingPeriodId: 'period-1',
+      exportFormat: 'freee',
+    });
+    await api.markAccountingExported('batch-1', 3, {
+      exportReference: 'job-1',
+    });
+    expect(request.mock.calls[0]![0]).toBe(
+      '/api/v1/accounting-exports?accountingPeriodId=period-1&limit=10',
+    );
+    expect(request.mock.calls[1]![0]).toBe(
+      '/api/v1/accounting-exports/batch-1',
+    );
+    expect(request.mock.calls[2]![0]).toBe('/api/v1/accounting-exports');
+    expect(request.mock.calls[3]![0]).toBe(
+      '/api/v1/accounting-exports/batch-1/exported',
+    );
+    const exportedRequest = request.mock.calls[3]![1] as RequestInit & {
+      headers: Record<string, string>;
+    };
+    expect(exportedRequest.headers['if-match']).toBe('"3"');
+  });
+
   it('lists, creates, reads, and transitions accounting periods', async () => {
     const request = vi.fn<
       (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>

@@ -25,6 +25,7 @@ import type {
   WorkLogInput,
   Invoice,
   AccountingPeriod,
+  AccountingExportBatch,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -329,6 +330,38 @@ const accountingPeriod: AccountingPeriod = {
   statusHistories: [],
 };
 
+const accountingExport: AccountingExportBatch = {
+  id: 'bcbcbcbc-bcbc-4bcb-8bcb-bcbcbcbcbcbc',
+  accountingPeriodId: accountingPeriod.id,
+  periodMonth: '2026-08-01',
+  versionNo: 1,
+  exportFormat: 'generic_csv',
+  status: 'generated',
+  generatedAt: '2026-08-14T02:00:00Z',
+  exportedAt: null,
+  exportReference: null,
+  lineCount: 2,
+  debitTotal: 110000,
+  creditTotal: 110000,
+  updatedAt: '2026-08-14T02:00:00Z',
+  rowVersion: 1,
+  lines: [
+    {
+      id: 'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd',
+      lineNo: 1,
+      entryDate: '2026-08-01',
+      accountCode: '1200',
+      accountName: '売掛金',
+      debitAmount: 110000,
+      creditAmount: 0,
+      currency: 'JPY',
+      description: '請求 INV-001',
+      sourceType: 'invoice',
+      sourceId: invoice.id,
+    },
+  ],
+};
+
 const company: Company = {
   id: '22222222-2222-4222-8222-222222222222',
   managementNo: 'CO-000001',
@@ -410,6 +443,16 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    listAccountingExports: vi.fn(() => Promise.resolve({ items: [] })),
+    getAccountingExport: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    generateAccountingExport: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    markAccountingExported: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listAccountingPeriods: vi.fn(() => Promise.resolve({ items: [] })),
     getAccountingPeriod: vi.fn(() =>
       Promise.reject(new Error('not configured')),
@@ -580,6 +623,65 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('generates, opens, and marks an accounting export as exported', async () => {
+    window.history.replaceState({}, '', '/accounting-exports');
+    const generateAccountingExport = vi.fn(() =>
+      Promise.resolve(accountingExport),
+    );
+    const markAccountingExported = vi.fn(() =>
+      Promise.resolve({
+        ...accountingExport,
+        status: 'exported' as const,
+        exportReference: 'job-42',
+        rowVersion: 2,
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          listAccountingExports: vi.fn(() =>
+            Promise.resolve({ items: [accountingExport] }),
+          ),
+          listAccountingPeriods: vi.fn(() =>
+            Promise.resolve({ items: [accountingPeriod] }),
+          ),
+          getAccountingExport: vi.fn(() => Promise.resolve(accountingExport)),
+          generateAccountingExport,
+          markAccountingExported,
+        })}
+      />,
+    );
+    const generateButton = await screen.findByRole('button', {
+      name: '仕訳を生成',
+    });
+    await waitFor(() => expect(generateButton).toBeEnabled());
+    fireEvent.click(generateButton);
+    await waitFor(() =>
+      expect(generateAccountingExport).toHaveBeenCalledWith({
+        accountingPeriodId: accountingPeriod.id,
+        exportFormat: 'generic_csv',
+      }),
+    );
+    expect(
+      await screen.findByRole('heading', {
+        level: 3,
+        name: '2026-08 v1 仕訳明細',
+      }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('外部出力参照'), {
+      target: { value: 'job-42' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '出力済みにする' }));
+    await waitFor(() =>
+      expect(markAccountingExported).toHaveBeenCalledWith(
+        accountingExport.id,
+        1,
+        { exportReference: 'job-42' },
+      ),
+    );
+  });
+
   it('creates and closes an accounting period in order', async () => {
     window.history.replaceState({}, '', '/accounting-periods');
     const listAccountingPeriods = vi.fn(() =>

@@ -5,6 +5,10 @@ const outputPath = new URL('../apps/web/src/api/generated.ts', import.meta.url);
 const contract = await readFile(contractPath, 'utf8');
 
 const requiredContractFragments = [
+  'operationId: listAccountingExports',
+  'operationId: getAccountingExport',
+  'operationId: generateAccountingExport',
+  'operationId: markAccountingExported',
   'operationId: listAccountingPeriods',
   'operationId: getAccountingPeriod',
   'operationId: createAccountingPeriod',
@@ -783,6 +787,56 @@ export interface AccountingPeriodTransitionInput {
   status: AccountingCloseStatus;
   reason: string | null;
   impactConfirmed: boolean;
+}
+
+export type AccountingExportFormat =
+  'generic_csv' | 'freee' | 'money_forward' | 'yayoi';
+export type AccountingExportStatus = 'generated' | 'exported' | 'cancelled';
+export interface AccountingExportBatchSummary {
+  id: string;
+  accountingPeriodId: string;
+  periodMonth: string;
+  versionNo: number;
+  exportFormat: AccountingExportFormat;
+  status: AccountingExportStatus;
+  generatedAt: string;
+  exportedAt: string | null;
+  exportReference: string | null;
+  lineCount: number;
+  debitTotal: number;
+  creditTotal: number;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface AccountingExportLine {
+  id: string;
+  lineNo: number;
+  entryDate: string;
+  accountCode: string;
+  accountName: string;
+  debitAmount: number;
+  creditAmount: number;
+  currency: string;
+  description: string;
+  sourceType: 'invoice' | 'payment';
+  sourceId: string;
+}
+export interface AccountingExportBatch extends AccountingExportBatchSummary {
+  lines: AccountingExportLine[];
+}
+export interface AccountingExportList {
+  items: AccountingExportBatchSummary[];
+}
+export interface ListAccountingExportsQuery {
+  accountingPeriodId?: string;
+  limit?: number;
+}
+export interface AccountingExportGenerateInput {
+  accountingPeriodId: string;
+  exportFormat: AccountingExportFormat;
+}
+export interface AccountingExportCompletionInput {
+  exportReference: string | null;
 }
 
 export interface InvoiceSummary {
