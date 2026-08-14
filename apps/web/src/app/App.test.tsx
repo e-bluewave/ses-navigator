@@ -21,6 +21,7 @@ import type {
   ContractInput,
   Engagement,
   EngagementInput,
+  WorkLog,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -179,6 +180,42 @@ const engagement: Engagement = {
   ],
 };
 
+const workLog: WorkLog = {
+  id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+  contractId: contract.id,
+  engineerId: proposal.engineerId,
+  contractTitle: contract.title,
+  engineerName: '青波 太郎',
+  workMonth: '2026-08-01',
+  status: 'approved',
+  scheduledDays: 20,
+  actualDays: 19,
+  scheduledHours: 160,
+  actualHours: 156,
+  overtimeHours: 8,
+  absenceHours: 8,
+  customerApprovedAt: '2026-09-03T00:00:00Z',
+  updatedAt: '2026-09-03T01:00:00Z',
+  rowVersion: 3,
+  approvedByName: '顧客担当者',
+  notes: '承認済み',
+  details: [
+    {
+      id: '12121212-1212-4212-8212-121212121212',
+      workDate: '2026-08-03',
+      workType: 'work',
+      startTime: '09:00:00',
+      endTime: '18:00:00',
+      breakMinutes: 60,
+      workHours: 8,
+      overtimeHours: 0,
+      description: '設計・実装',
+      updatedAt: '2026-08-03T10:00:00Z',
+      rowVersion: 1,
+    },
+  ],
+};
+
 const company: Company = {
   id: '22222222-2222-4222-8222-222222222222',
   managementNo: 'CO-000001',
@@ -260,6 +297,10 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    listWorkLogs: vi.fn(() =>
+      Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
+    ),
+    getWorkLog: vi.fn(() => Promise.reject(new Error('not configured'))),
     listEngagements: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -378,6 +419,56 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('lists monthly work logs and opens daily detail', async () => {
+    window.history.replaceState({}, '', '/work-logs');
+    const client = api({
+      listWorkLogs: vi.fn(() =>
+        Promise.resolve({
+          items: [workLog],
+          page: { limit: 50, nextCursor: null },
+        }),
+      ),
+      getWorkLog: vi.fn(() => Promise.resolve(workLog)),
+    });
+    render(<App auth={auth()} api={client} />);
+    fireEvent.click(await screen.findByRole('button', { name: '2026-08' }));
+    expect(await screen.findByText('日次実績')).toBeInTheDocument();
+    expect(screen.getByText('設計・実装')).toBeInTheDocument();
+    expect(screen.getByText(/顧客担当者/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: contract.title }),
+    ).toBeInTheDocument();
+  });
+
+  it('filters monthly work logs by query, status, and month', async () => {
+    window.history.replaceState({}, '', '/work-logs');
+    const listWorkLogs = vi.fn(() =>
+      Promise.resolve({
+        items: [workLog],
+        page: { limit: 50, nextCursor: null },
+      }),
+    );
+    render(<App auth={auth()} api={api({ listWorkLogs })} />);
+    await screen.findByText('2026-08');
+    fireEvent.change(
+      screen.getByLabelText('契約番号、契約件名または技術者名で検索'),
+      { target: { value: '青波' } },
+    );
+    fireEvent.change(screen.getByLabelText('月次実績状態'), {
+      target: { value: 'approved' },
+    });
+    fireEvent.change(screen.getByLabelText('対象月'), {
+      target: { value: '2026-08' },
+    });
+    await waitFor(() =>
+      expect(listWorkLogs).toHaveBeenLastCalledWith({
+        q: '青波',
+        status: 'approved',
+        workMonth: '2026-08-01',
+      }),
+    );
+  });
+
   it('lists engagements and opens conditions and status history', async () => {
     window.history.replaceState({}, '', '/engagements');
     const client = api({

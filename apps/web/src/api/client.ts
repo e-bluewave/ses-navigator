@@ -62,10 +62,15 @@ import type {
   ListEngagementsQuery,
   EngagementInput,
   EngagementStatusTransitionInput,
+  WorkLog,
+  WorkLogList,
+  ListWorkLogsQuery,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
+  listWorkLogs(query?: ListWorkLogsQuery): Promise<WorkLogList>;
+  getWorkLog(id: string): Promise<WorkLog>;
   listEngagements(query?: ListEngagementsQuery): Promise<EngagementList>;
   getEngagement(id: string): Promise<Engagement>;
   createEngagement(input: EngagementInput): Promise<Engagement>;
@@ -293,6 +298,19 @@ export function createProjectsApi(options: {
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
+    },
+    listWorkLogs(query = {}) {
+      const params = new URLSearchParams();
+      if (query.q) params.set('q', query.q);
+      if (query.status) params.set('status', query.status);
+      if (query.workMonth) params.set('workMonth', query.workMonth);
+      if (query.cursor) params.set('cursor', query.cursor);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return get<WorkLogList>(`/work-logs${suffix}`);
+    },
+    getWorkLog(id) {
+      return get<WorkLog>(`/work-logs/${encodeURIComponent(id)}`);
     },
     listEngagements(query = {}) {
       const params = new URLSearchParams();
