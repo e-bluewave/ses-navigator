@@ -7,6 +7,20 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /sales-kpi:
+    get:
+      operationId: getSalesKpiDashboard
+      parameters:
+        - { name: fromDate, in: query, required: true, schema: { type: string, format: date } }
+        - { name: toDate, in: query, required: true, schema: { type: string, format: date } }
+        - { name: contractExpiryDays, in: query, schema: { type: integer, minimum: 1, maximum: 365, default: 60 } }
+      responses:
+        '200':
+          description: Access-scoped sales KPI dashboard
+          content: { application/json: { schema: { $ref: '#/components/schemas/SalesKpiDashboard' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /profitability:
     get:
       operationId: getProfitabilityDashboard
@@ -2370,6 +2384,46 @@ components:
         salesInvoiceCount: { type: integer }
         purchaseInvoiceCount: { type: integer }
         expenseCount: { type: integer }
+    SalesKpiMonth:
+      type: object
+      required: [periodMonth, proposalCount, interviewProposalCount, interviewRate, wonCount, winRate]
+      properties:
+        periodMonth: { type: string, format: date }
+        proposalCount: { type: integer }
+        interviewProposalCount: { type: integer }
+        interviewRate: { type: [number, 'null'] }
+        wonCount: { type: integer }
+        winRate: { type: [number, 'null'] }
+    ExpiringContract:
+      type: object
+      required: [id, contractNo, title, endDate, daysRemaining, status]
+      properties:
+        id: { type: string, format: uuid }
+        contractNo: { type: string }
+        title: { type: string }
+        endDate: { type: string, format: date }
+        daysRemaining: { type: integer }
+        status: { type: string }
+    SalesKpiDashboard:
+      type: object
+      required: [fromDate, toDate, contractExpiryDays, proposalCount, interviewProposalCount, interviewRate, wonCount, winRate, averageProposalDays, averageInterviewCount, activeProposalCount, pendingApprovalCount, scheduledInterviewCount, expiringContractCount, monthly, expiringContracts]
+      properties:
+        fromDate: { type: string, format: date }
+        toDate: { type: string, format: date }
+        contractExpiryDays: { type: integer }
+        proposalCount: { type: integer }
+        interviewProposalCount: { type: integer }
+        interviewRate: { type: [number, 'null'] }
+        wonCount: { type: integer }
+        winRate: { type: [number, 'null'] }
+        averageProposalDays: { type: [number, 'null'] }
+        averageInterviewCount: { type: [number, 'null'] }
+        activeProposalCount: { type: integer }
+        pendingApprovalCount: { type: integer }
+        scheduledInterviewCount: { type: integer }
+        expiringContractCount: { type: integer }
+        monthly: { type: array, items: { $ref: '#/components/schemas/SalesKpiMonth' } }
+        expiringContracts: { type: array, items: { $ref: '#/components/schemas/ExpiringContract' } }
     ProfitabilityDashboard:
       type: object
       required:

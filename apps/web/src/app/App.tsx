@@ -75,6 +75,7 @@ import type {
   ExpenseSummary,
   ExpenseType,
   ProfitabilityDashboard,
+  SalesKpiDashboard,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -201,6 +202,7 @@ const invoiceTypeLabels: Record<InvoiceType, string> = {
 };
 
 type Route =
+  | { page: 'sales-kpi' }
   | { page: 'profitability' }
   | { page: 'expenses' }
   | { page: 'accounting-exports' }
@@ -248,6 +250,7 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/sales-kpi') return { page: 'sales-kpi' };
   if (window.location.pathname === '/profitability')
     return { page: 'profitability' };
   if (window.location.pathname === '/expenses') return { page: 'expenses' };
@@ -454,6 +457,198 @@ const emptyExpenseInput = (): ExpenseInput => ({
   receiptPath: null,
   notes: null,
 });
+
+function SalesKpiView({
+  api,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const initial = new Date(Date.now() - 180 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const [fromDate, setFromDate] = useState(initial);
+  const [toDate, setToDate] = useState(today);
+  const [expiryDays, setExpiryDays] = useState(60);
+  const [data, setData] = useState<SalesKpiDashboard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setData(
+        await api.getSalesKpiDashboard({
+          fromDate,
+          toDate,
+          contractExpiryDays: expiryDays,
+        }),
+      );
+    } catch (cause) {
+      if (cause instanceof ApiClientError && cause.status === 401)
+        await onUnauthorized();
+      else
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : '営業KPIを読み込めませんでした。',
+        );
+    } finally {
+      setLoading(false);
+    }
+  }, [api, expiryDays, fromDate, onUnauthorized, toDate]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const rate = (value: number | null) => (value === null ? '—' : `${value}%`);
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Sales KPI</p>
+          <h2>営業KPIダッシュボード</h2>
+          <p>提案から面談・成約までの転換率と、現在の対応事項を確認します。</p>
+        </div>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <form
+        className="filter-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void load();
+        }}
+      >
+        <label>
+          開始日
+          <input
+            aria-label="KPI開始日"
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+        </label>
+        <label>
+          終了日
+          <input
+            aria-label="KPI終了日"
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </label>
+        <label>
+          期限予告（日）
+          <input
+            aria-label="契約期限予告日数"
+            type="number"
+            min={1}
+            max={365}
+            value={expiryDays}
+            onChange={(e) => setExpiryDays(Number(e.target.value))}
+          />
+        </label>
+        <button className="secondary-button">集計</button>
+      </form>
+      {loading ? (
+        <p role="status">営業KPIを集計しています…</p>
+      ) : data ? (
+        <>
+          <dl className="detail-grid">
+            <div>
+              <dt>提案件数</dt>
+              <dd>{data.proposalCount}</dd>
+            </div>
+            <div>
+              <dt>面談化率</dt>
+              <dd>{rate(data.interviewRate)}</dd>
+            </div>
+            <div>
+              <dt>成約率</dt>
+              <dd>{rate(data.winRate)}</dd>
+            </div>
+            <div>
+              <dt>進行中提案</dt>
+              <dd>{data.activeProposalCount}</dd>
+            </div>
+            <div>
+              <dt>承認待ち</dt>
+              <dd>{data.pendingApprovalCount}</dd>
+            </div>
+            <div>
+              <dt>予定面談</dt>
+              <dd>{data.scheduledInterviewCount}</dd>
+            </div>
+            <div>
+              <dt>平均提案日数</dt>
+              <dd>{data.averageProposalDays ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>期限接近契約</dt>
+              <dd>{data.expiringContractCount}</dd>
+            </div>
+          </dl>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>対象月</th>
+                  <th>提案</th>
+                  <th>面談化</th>
+                  <th>面談化率</th>
+                  <th>成約</th>
+                  <th>成約率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.monthly.map((m) => (
+                  <tr key={m.periodMonth}>
+                    <td>{m.periodMonth.slice(0, 7)}</td>
+                    <td>{m.proposalCount}</td>
+                    <td>{m.interviewProposalCount}</td>
+                    <td>{rate(m.interviewRate)}</td>
+                    <td>{m.wonCount}</td>
+                    <td>{rate(m.winRate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <h3>契約期限アラート</h3>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>契約番号</th>
+                  <th>契約名</th>
+                  <th>終了日</th>
+                  <th>残日数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.expiringContracts.length ? (
+                  data.expiringContracts.map((c) => (
+                    <tr key={c.id}>
+                      <td>{c.contractNo}</td>
+                      <td>{c.title}</td>
+                      <td>{c.endDate}</td>
+                      <td>{c.daysRemaining}日</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4}>期限が近い契約はありません。</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
 
 function ProfitabilityView({
   api,
@@ -6756,6 +6951,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/sales-kpi')}
+        >
+          営業KPI
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/profitability')}
         >
           粗利・収支
@@ -6845,7 +7046,9 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'profitability' ? (
+      {route.page === 'sales-kpi' ? (
+        <SalesKpiView api={api} onUnauthorized={signOut} />
+      ) : route.page === 'profitability' ? (
         <ProfitabilityView api={api} onUnauthorized={signOut} />
       ) : route.page === 'expenses' ? (
         <ExpenseView api={api} onUnauthorized={signOut} />

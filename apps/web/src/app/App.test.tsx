@@ -470,6 +470,26 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    getSalesKpiDashboard: vi.fn(() =>
+      Promise.resolve({
+        fromDate: '2026-01-01',
+        toDate: '2026-08-14',
+        contractExpiryDays: 60,
+        proposalCount: 0,
+        interviewProposalCount: 0,
+        interviewRate: null,
+        wonCount: 0,
+        winRate: null,
+        averageProposalDays: null,
+        averageInterviewCount: null,
+        activeProposalCount: 0,
+        pendingApprovalCount: 0,
+        scheduledInterviewCount: 0,
+        expiringContractCount: 0,
+        monthly: [],
+        expiringContracts: [],
+      }),
+    ),
     getProfitabilityDashboard: vi.fn(() =>
       Promise.resolve({
         fromMonth: '2026-01-01',
