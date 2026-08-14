@@ -24,6 +24,7 @@ import type {
   WorkLog,
   WorkLogInput,
   Invoice,
+  AccountingPeriod,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -314,6 +315,20 @@ const supplierInvoice: Invoice = {
   payments: [],
 };
 
+const accountingPeriod: AccountingPeriod = {
+  id: 'abababab-abab-4bab-8bab-abababababab',
+  periodMonth: '2026-08-01',
+  salesStatus: 'open',
+  invoiceStatus: 'open',
+  paymentStatus: 'open',
+  salesClosedAt: null,
+  invoiceClosedAt: null,
+  paymentClosedAt: null,
+  updatedAt: '2026-08-14T00:00:00Z',
+  rowVersion: 1,
+  statusHistories: [],
+};
+
 const company: Company = {
   id: '22222222-2222-4222-8222-222222222222',
   managementNo: 'CO-000001',
@@ -395,6 +410,16 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    listAccountingPeriods: vi.fn(() => Promise.resolve({ items: [] })),
+    getAccountingPeriod: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    createAccountingPeriod: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    transitionAccountingPeriodStatus: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listInvoices: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -555,6 +580,127 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('creates and closes an accounting period in order', async () => {
+    window.history.replaceState({}, '', '/accounting-periods');
+    const listAccountingPeriods = vi.fn(() =>
+      Promise.resolve({ items: [accountingPeriod] }),
+    );
+    const createAccountingPeriod = vi.fn(() =>
+      Promise.resolve(accountingPeriod),
+    );
+    const closed = {
+      ...accountingPeriod,
+      salesStatus: 'closed' as const,
+      salesClosedAt: '2026-08-14T01:00:00Z',
+      rowVersion: 2,
+      statusHistories: [
+        {
+          id: 'acacacac-acac-4cac-8cac-acacacacacac',
+          closeType: 'sales' as const,
+          fromStatus: 'open' as const,
+          toStatus: 'closed' as const,
+          changeReason: null,
+          impactConfirmed: false,
+          changedAt: '2026-08-14T01:00:00Z',
+          changedBy: 'adadadad-adad-4dad-8dad-adadadadadad',
+        },
+      ],
+    };
+    const transitionAccountingPeriodStatus = vi.fn(() =>
+      Promise.resolve(closed),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          listAccountingPeriods,
+          getAccountingPeriod: vi.fn(() => Promise.resolve(accountingPeriod)),
+          createAccountingPeriod,
+          transitionAccountingPeriodStatus,
+        })}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '2026-08' }));
+    expect(await screen.findByText('2026-08 の締め操作')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '締め状態を更新' }));
+    await waitFor(() =>
+      expect(transitionAccountingPeriodStatus).toHaveBeenCalledWith(
+        accountingPeriod.id,
+        1,
+        {
+          closeType: 'sales',
+          status: 'closed',
+          reason: null,
+          impactConfirmed: false,
+        },
+      ),
+    );
+    expect(
+      await screen.findByText(/2026\/8\/14.*売上締め/),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('会計期間の対象月'), {
+      target: { value: '2026-09' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '会計期間を作成' }));
+    await waitFor(() =>
+      expect(createAccountingPeriod).toHaveBeenCalledWith({
+        periodMonth: '2026-09-01',
+      }),
+    );
+  });
+
+  it('requires a reason and impact confirmation before reopening a period', async () => {
+    window.history.replaceState({}, '', '/accounting-periods');
+    const closed = {
+      ...accountingPeriod,
+      salesStatus: 'closed' as const,
+      salesClosedAt: '2026-08-14T01:00:00Z',
+      rowVersion: 2,
+    };
+    const transitionAccountingPeriodStatus = vi.fn(() =>
+      Promise.resolve({ ...accountingPeriod, rowVersion: 3 }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          listAccountingPeriods: vi.fn(() =>
+            Promise.resolve({ items: [closed] }),
+          ),
+          getAccountingPeriod: vi.fn(() => Promise.resolve(closed)),
+          transitionAccountingPeriodStatus,
+        })}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '2026-08' }));
+    fireEvent.change(await screen.findByLabelText('次の締め状態'), {
+      target: { value: 'open' },
+    });
+    const update = screen.getByRole('button', { name: '締め状態を更新' });
+    expect(update).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('締め状態の変更理由'), {
+      target: { value: '請求金額の訂正' },
+    });
+    fireEvent.click(
+      screen.getByLabelText('後続の請求・支払・会計出力への影響を確認した'),
+    );
+    fireEvent.click(update);
+    await waitFor(() =>
+      expect(transitionAccountingPeriodStatus).toHaveBeenCalledWith(
+        accountingPeriod.id,
+        2,
+        {
+          closeType: 'sales',
+          status: 'open',
+          reason: '請求金額の訂正',
+          impactConfirmed: true,
+        },
+      ),
+    );
+  });
+
   it('lists supplier payment plans and registers a purchase payment', async () => {
     window.history.replaceState({}, '', '/supplier-payments');
     const listInvoices = vi.fn(() =>

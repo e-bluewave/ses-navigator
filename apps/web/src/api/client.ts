@@ -75,10 +75,27 @@ import type {
   InvoiceStatusTransitionInput,
   InvoicePaymentInput,
   InvoicePaymentReversalInput,
+  AccountingPeriod,
+  AccountingPeriodList,
+  ListAccountingPeriodsQuery,
+  AccountingPeriodInput,
+  AccountingPeriodTransitionInput,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
+  listAccountingPeriods(
+    query?: ListAccountingPeriodsQuery,
+  ): Promise<AccountingPeriodList>;
+  getAccountingPeriod(id: string): Promise<AccountingPeriod>;
+  createAccountingPeriod(
+    input: AccountingPeriodInput,
+  ): Promise<AccountingPeriod>;
+  transitionAccountingPeriodStatus(
+    id: string,
+    rowVersion: number,
+    input: AccountingPeriodTransitionInput,
+  ): Promise<AccountingPeriod>;
   listInvoices(query?: ListInvoicesQuery): Promise<InvoiceList>;
   getInvoice(id: string): Promise<Invoice>;
   getInvoiceOptions(): Promise<InvoiceOptions>;
@@ -344,6 +361,30 @@ export function createProjectsApi(options: {
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
+    },
+    listAccountingPeriods(query = {}) {
+      const params = new URLSearchParams();
+      if (query.fromMonth) params.set('fromMonth', query.fromMonth);
+      if (query.toMonth) params.set('toMonth', query.toMonth);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return get<AccountingPeriodList>(`/accounting-periods${suffix}`);
+    },
+    getAccountingPeriod(id) {
+      return get<AccountingPeriod>(
+        `/accounting-periods/${encodeURIComponent(id)}`,
+      );
+    },
+    createAccountingPeriod(input) {
+      return send<AccountingPeriod>('/accounting-periods', 'POST', input);
+    },
+    transitionAccountingPeriodStatus(id, rowVersion, input) {
+      return send<AccountingPeriod>(
+        `/accounting-periods/${encodeURIComponent(id)}/status`,
+        'POST',
+        input,
+        rowVersion,
+      );
     },
     listInvoices(query = {}) {
       const params = new URLSearchParams();

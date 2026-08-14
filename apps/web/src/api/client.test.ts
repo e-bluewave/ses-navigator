@@ -3,6 +3,49 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('lists, creates, reads, and transitions accounting periods', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ id: 'period-1', items: [] }), {
+          status: 200,
+        }),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    await api.listAccountingPeriods({
+      fromMonth: '2026-01-01',
+      toMonth: '2026-12-01',
+      limit: 12,
+    });
+    await api.getAccountingPeriod('period-1');
+    await api.createAccountingPeriod({ periodMonth: '2026-08-01' });
+    await api.transitionAccountingPeriodStatus('period-1', 2, {
+      closeType: 'sales',
+      status: 'closed',
+      reason: null,
+      impactConfirmed: false,
+    });
+    expect(request.mock.calls[0]![0]).toBe(
+      '/api/v1/accounting-periods?fromMonth=2026-01-01&toMonth=2026-12-01&limit=12',
+    );
+    expect(request.mock.calls[1]![0]).toBe(
+      '/api/v1/accounting-periods/period-1',
+    );
+    expect(request.mock.calls[2]![0]).toBe('/api/v1/accounting-periods');
+    expect(request.mock.calls[3]![0]).toBe(
+      '/api/v1/accounting-periods/period-1/status',
+    );
+    expect(request.mock.calls[3]![1]).toMatchObject({
+      method: 'POST',
+      headers: { 'if-match': '"2"' },
+    });
+  });
+
   it('lists and reads invoices with finance filters', async () => {
     const request = vi
       .fn()

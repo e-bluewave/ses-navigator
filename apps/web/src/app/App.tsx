@@ -62,6 +62,10 @@ import type {
   InvoiceInput,
   InvoiceBillingOption,
   InvoicePaymentInput,
+  AccountingPeriod,
+  AccountingPeriodSummary,
+  AccountingCloseType,
+  AccountingCloseStatus,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -188,6 +192,7 @@ const invoiceTypeLabels: Record<InvoiceType, string> = {
 };
 
 type Route =
+  | { page: 'accounting-periods' }
   | { page: 'supplier-payments' }
   | { page: 'supplier-payment-detail'; id: string }
   | { page: 'invoices' }
@@ -231,6 +236,8 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/accounting-periods')
+    return { page: 'accounting-periods' };
   if (window.location.pathname === '/supplier-payments')
     return { page: 'supplier-payments' };
   const supplierPayment = window.location.pathname.match(
@@ -386,6 +393,286 @@ function money(value: number, currency: string) {
     currency,
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+const accountingCloseTypeLabels: Record<AccountingCloseType, string> = {
+  sales: '売上締め',
+  invoice: '請求締め',
+  payment: '支払締め',
+};
+
+const accountingCloseStatusLabels: Record<AccountingCloseStatus, string> = {
+  open: '未締め',
+  closed: '締め済み',
+};
+
+function AccountingPeriodView({
+  api,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const currentMonth = `${new Date().toISOString().slice(0, 7)}-01`;
+  const [items, setItems] = useState<AccountingPeriodSummary[]>([]);
+  const [selected, setSelected] = useState<AccountingPeriod | null>(null);
+  const [periodMonth, setPeriodMonth] = useState(currentMonth);
+  const [closeType, setCloseType] = useState<AccountingCloseType>('sales');
+  const [targetStatus, setTargetStatus] =
+    useState<AccountingCloseStatus>('closed');
+  const [reason, setReason] = useState('');
+  const [impactConfirmed, setImpactConfirmed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleError = useCallback(
+    async (cause: unknown, fallback: string) => {
+      if (cause instanceof ApiClientError && cause.status === 401)
+        await onUnauthorized();
+      else setError(cause instanceof Error ? cause.message : fallback);
+    },
+    [onUnauthorized],
+  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await api.listAccountingPeriods({ limit: 24 });
+      setItems(result.items);
+    } catch (cause) {
+      await handleError(cause, '会計期間を読み込めませんでした。');
+    } finally {
+      setLoading(false);
+    }
+  }, [api, handleError]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function createPeriod(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const created = await api.createAccountingPeriod({ periodMonth });
+      setSelected(created);
+      await load();
+    } catch (cause) {
+      await handleError(cause, '会計期間を作成できませんでした。');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function openPeriod(id: string) {
+    setError('');
+    try {
+      setSelected(await api.getAccountingPeriod(id));
+    } catch (cause) {
+      await handleError(cause, '会計期間の詳細を読み込めませんでした。');
+    }
+  }
+
+  async function transition(event: FormEvent) {
+    event.preventDefault();
+    if (!selected) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await api.transitionAccountingPeriodStatus(
+        selected.id,
+        selected.rowVersion,
+        {
+          closeType,
+          status: targetStatus,
+          reason: reason.trim() || null,
+          impactConfirmed,
+        },
+      );
+      setSelected(updated);
+      setReason('');
+      setImpactConfirmed(false);
+      await load();
+    } catch (cause) {
+      await handleError(cause, '締め状態を更新できませんでした。');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Accounting Close</p>
+          <h2>会計期間・締め管理</h2>
+          <p>売上→請求→支払の順に締め、再開は影響確認付きで逆順に行います。</p>
+        </div>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <form
+        className="filter-row"
+        onSubmit={(event) => void createPeriod(event)}
+      >
+        <label>
+          対象月
+          <input
+            aria-label="会計期間の対象月"
+            type="month"
+            value={periodMonth.slice(0, 7)}
+            onChange={(event) =>
+              setPeriodMonth(
+                event.target.value ? `${event.target.value}-01` : '',
+              )
+            }
+            required
+          />
+        </label>
+        <button className="primary-button" disabled={saving}>
+          会計期間を作成
+        </button>
+      </form>
+      {loading ? (
+        <p role="status">会計期間を読み込んでいます…</p>
+      ) : items.length === 0 ? (
+        <p>会計期間はまだありません。</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>対象月</th>
+                <th>売上</th>
+                <th>請求</th>
+                <th>支払</th>
+                <th>更新日時</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <button
+                      className="link-button"
+                      onClick={() => void openPeriod(item.id)}
+                    >
+                      {item.periodMonth.slice(0, 7)}
+                    </button>
+                  </td>
+                  <td>{accountingCloseStatusLabels[item.salesStatus]}</td>
+                  <td>{accountingCloseStatusLabels[item.invoiceStatus]}</td>
+                  <td>{accountingCloseStatusLabels[item.paymentStatus]}</td>
+                  <td>{new Date(item.updatedAt).toLocaleString('ja-JP')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {selected ? (
+        <div>
+          <h3>{selected.periodMonth.slice(0, 7)} の締め操作</h3>
+          <dl className="detail-grid">
+            <div>
+              <dt>売上締め</dt>
+              <dd>{accountingCloseStatusLabels[selected.salesStatus]}</dd>
+            </div>
+            <div>
+              <dt>請求締め</dt>
+              <dd>{accountingCloseStatusLabels[selected.invoiceStatus]}</dd>
+            </div>
+            <div>
+              <dt>支払締め</dt>
+              <dd>{accountingCloseStatusLabels[selected.paymentStatus]}</dd>
+            </div>
+          </dl>
+          <form
+            className="stacked-form"
+            onSubmit={(event) => void transition(event)}
+          >
+            <div className="form-grid">
+              <label>
+                締め区分
+                <select
+                  aria-label="締め区分"
+                  value={closeType}
+                  onChange={(event) =>
+                    setCloseType(event.target.value as AccountingCloseType)
+                  }
+                >
+                  {Object.entries(accountingCloseTypeLabels).map(
+                    ([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label>
+                次の状態
+                <select
+                  aria-label="次の締め状態"
+                  value={targetStatus}
+                  onChange={(event) =>
+                    setTargetStatus(event.target.value as AccountingCloseStatus)
+                  }
+                >
+                  <option value="closed">締め済み</option>
+                  <option value="open">未締め（再開）</option>
+                </select>
+              </label>
+              <label>
+                理由
+                <textarea
+                  aria-label="締め状態の変更理由"
+                  maxLength={1000}
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  placeholder="再開時は必須"
+                />
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={impactConfirmed}
+                  onChange={(event) => setImpactConfirmed(event.target.checked)}
+                />
+                後続の請求・支払・会計出力への影響を確認した
+              </label>
+            </div>
+            <button
+              className="primary-button"
+              disabled={
+                saving ||
+                (targetStatus === 'open' &&
+                  (!reason.trim() || !impactConfirmed))
+              }
+            >
+              締め状態を更新
+            </button>
+          </form>
+          <h3>締め履歴</h3>
+          {selected.statusHistories.length === 0 ? (
+            <p>締め履歴はありません。</p>
+          ) : (
+            <ul className="timeline-list">
+              {selected.statusHistories.map((history) => (
+                <li key={history.id}>
+                  {new Date(history.changedAt).toLocaleString('ja-JP')}：
+                  {accountingCloseTypeLabels[history.closeType]}{' '}
+                  {accountingCloseStatusLabels[history.fromStatus]} →{' '}
+                  {accountingCloseStatusLabels[history.toStatus]}
+                  {history.changeReason ? `（${history.changeReason}）` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 function SupplierPaymentListView({
@@ -5562,6 +5849,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/accounting-periods')}
+        >
+          締め管理
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/supplier-payments')}
         >
           BP支払
@@ -5627,7 +5920,9 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'supplier-payments' ? (
+      {route.page === 'accounting-periods' ? (
+        <AccountingPeriodView api={api} onUnauthorized={signOut} />
+      ) : route.page === 'supplier-payments' ? (
         <SupplierPaymentListView
           api={api}
           onOpen={(id) => navigate(`/supplier-payments/${id}`)}
