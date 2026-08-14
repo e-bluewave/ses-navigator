@@ -61,6 +61,7 @@ import type {
   InvoiceType,
   InvoiceInput,
   InvoiceBillingOption,
+  InvoicePaymentInput,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -552,12 +553,30 @@ function InvoiceDetailView({
   >('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [reversalReason, setReversalReason] = useState('');
+  const [paymentInput, setPaymentInput] = useState<InvoicePaymentInput>({
+    paymentType: 'receipt',
+    paymentDate: new Date().toISOString().slice(0, 10),
+    amount: 0,
+    currency: 'JPY',
+    paymentMethod: 'bank_transfer',
+    bankFeeAmount: 0,
+  });
   useEffect(() => {
     let active = true;
     api
       .getInvoice(id)
       .then((value) => {
-        if (active) setItem(value);
+        if (active) {
+          setItem(value);
+          setPaymentInput((current) => ({
+            ...current,
+            paymentType: value.invoiceType === 'sales' ? 'receipt' : 'payment',
+            currency: value.currency,
+            amount: value.balanceAmount,
+          }));
+        }
       })
       .catch(async (reason) => {
         if (reason instanceof ApiClientError && reason.status === 401)
@@ -595,6 +614,55 @@ function InvoiceDetailView({
       );
     } finally {
       setSaving(false);
+    }
+  }
+  async function registerPayment(event: FormEvent) {
+    event.preventDefault();
+    if (!item) return;
+    setPaymentSaving(true);
+    setError(null);
+    try {
+      const updated = await api.registerInvoicePayment(
+        item.id,
+        item.rowVersion,
+        paymentInput,
+      );
+      setItem(updated);
+      setPaymentInput((current) => ({
+        ...current,
+        amount: updated.balanceAmount,
+      }));
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : '入金を登録できませんでした。',
+      );
+    } finally {
+      setPaymentSaving(false);
+    }
+  }
+  async function reversePayment(paymentId: string) {
+    if (!item || !reversalReason.trim()) return;
+    setPaymentSaving(true);
+    setError(null);
+    try {
+      const updated = await api.reverseInvoicePayment(
+        item.id,
+        paymentId,
+        item.rowVersion,
+        { reason: reversalReason.trim() },
+      );
+      setItem(updated);
+      setReversalReason('');
+      setPaymentInput((current) => ({
+        ...current,
+        amount: updated.balanceAmount,
+      }));
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : '入金を取り消せませんでした。',
+      );
+    } finally {
+      setPaymentSaving(false);
     }
   }
   if (error)
@@ -766,6 +834,127 @@ function InvoiceDetailView({
         </table>
       </div>
       <h3>入金履歴</h3>
+      {(
+        [
+          'issued',
+          'sent',
+          'partially_paid',
+          'paid',
+          'overdue',
+        ] as InvoiceStatus[]
+      ).includes(item.status) && (
+        <form
+          className="stacked-form"
+          onSubmit={(event) => void registerPayment(event)}
+        >
+          <h3>入金・支払を登録</h3>
+          <div className="form-grid">
+            <label>
+              入金種別
+              <select
+                aria-label="入金種別"
+                value={paymentInput.paymentType}
+                onChange={(event) =>
+                  setPaymentInput((current) => ({
+                    ...current,
+                    paymentType: event.target
+                      .value as InvoicePaymentInput['paymentType'],
+                  }))
+                }
+              >
+                {item.invoiceType === 'sales' ? (
+                  <>
+                    <option value="receipt">入金</option>
+                    <option value="refund">返金</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="payment">支払</option>
+                    <option value="refund">返金</option>
+                  </>
+                )}
+                <option value="offset">相殺</option>
+                <option value="other">その他</option>
+              </select>
+            </label>
+            <label>
+              入金日
+              <input
+                aria-label="入金日"
+                type="date"
+                value={paymentInput.paymentDate}
+                onChange={(event) =>
+                  setPaymentInput((current) => ({
+                    ...current,
+                    paymentDate: event.target.value,
+                  }))
+                }
+                required
+              />
+            </label>
+            <label>
+              金額
+              <input
+                aria-label="入金額"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={paymentInput.amount}
+                onChange={(event) =>
+                  setPaymentInput((current) => ({
+                    ...current,
+                    amount: Number(event.target.value),
+                  }))
+                }
+                required
+              />
+            </label>
+            <label>
+              方法
+              <select
+                aria-label="入金方法"
+                value={paymentInput.paymentMethod ?? ''}
+                onChange={(event) =>
+                  setPaymentInput((current) => ({
+                    ...current,
+                    paymentMethod: (event.target.value ||
+                      null) as InvoicePaymentInput['paymentMethod'],
+                  }))
+                }
+              >
+                <option value="">指定なし</option>
+                <option value="bank_transfer">銀行振込</option>
+                <option value="cash">現金</option>
+                <option value="credit_card">カード</option>
+                <option value="direct_debit">口座振替</option>
+                <option value="offset">相殺</option>
+                <option value="other">その他</option>
+              </select>
+            </label>
+            <label>
+              振込手数料
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={paymentInput.bankFeeAmount}
+                onChange={(event) =>
+                  setPaymentInput((current) => ({
+                    ...current,
+                    bankFeeAmount: Number(event.target.value),
+                  }))
+                }
+              />
+            </label>
+          </div>
+          <button
+            className="primary-button"
+            disabled={paymentSaving || paymentInput.amount <= 0}
+          >
+            {paymentSaving ? '登録中…' : '入金を登録して消込'}
+          </button>
+        </form>
+      )}
       {item.payments.length === 0 ? (
         <p>入金履歴はありません。</p>
       ) : (
@@ -777,6 +966,7 @@ function InvoiceDetailView({
                 <th>種別</th>
                 <th>方法</th>
                 <th>金額</th>
+                <th>訂正</th>
               </tr>
             </thead>
             <tbody>
@@ -786,11 +976,32 @@ function InvoiceDetailView({
                   <td>{payment.paymentType}</td>
                   <td>{payment.paymentMethod ?? '―'}</td>
                   <td>{money(payment.amount, payment.currency)}</td>
+                  <td>
+                    <button
+                      className="danger-button"
+                      disabled={paymentSaving || !reversalReason.trim()}
+                      onClick={() => void reversePayment(payment.id)}
+                    >
+                      入金を取消
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+      {item.payments.length > 0 && (
+        <label>
+          入金取消理由
+          <textarea
+            aria-label="入金取消理由"
+            value={reversalReason}
+            onChange={(event) => setReversalReason(event.target.value)}
+            maxLength={1000}
+            placeholder="取消する場合は理由を入力"
+          />
+        </label>
       )}
       <h3>状態履歴</h3>
       {item.statusHistories.length === 0 ? (

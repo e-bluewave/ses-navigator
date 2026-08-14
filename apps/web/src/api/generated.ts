@@ -758,6 +758,24 @@ export interface InvoiceStatusTransitionInput {
   status: 'issued' | 'sent' | 'cancelled' | 'void';
   reason: string | null;
 }
+export interface InvoicePaymentInput {
+  paymentType: 'receipt' | 'payment' | 'refund' | 'offset' | 'other';
+  paymentDate: string;
+  amount: number;
+  currency: string;
+  paymentMethod:
+    | 'bank_transfer'
+    | 'cash'
+    | 'credit_card'
+    | 'direct_debit'
+    | 'offset'
+    | 'other'
+    | null;
+  bankFeeAmount: number;
+}
+export interface InvoicePaymentReversalInput {
+  reason: string;
+}
 export interface InvoiceList {
   items: InvoiceSummary[];
   page: { limit: number; nextCursor: string | null };

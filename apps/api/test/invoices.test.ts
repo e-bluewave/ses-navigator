@@ -124,6 +124,8 @@ function repository(
       Promise.resolve({ ...invoice, status: 'draft' as const }),
     ),
     transitionStatus: vi.fn(() => Promise.resolve(invoice)),
+    registerPayment: vi.fn(() => Promise.resolve(invoice)),
+    reversePayment: vi.fn(() => Promise.resolve(invoice)),
     ...overrides,
   };
 }
@@ -317,5 +319,100 @@ describe('invoice write API', () => {
       payload: input,
     });
     expect(missingVersion.statusCode).toBe(428);
+  });
+});
+
+describe('invoice payment allocation API', () => {
+  it('registers a payment with invoice optimistic locking', async () => {
+    const registerPayment = vi.fn(() =>
+      Promise.resolve({ ...invoice, status: 'paid' as const }),
+    );
+    const response = await app(repository({ registerPayment })).inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${summary.id}/payments`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: {
+        paymentType: 'receipt',
+        paymentDate: '2026-08-20',
+        amount: 600000,
+        currency: 'JPY',
+        paymentMethod: 'bank_transfer',
+        bankFeeAmount: 0,
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(registerPayment).toHaveBeenCalledWith(
+      'valid',
+      summary.id,
+      2,
+      {
+        paymentType: 'receipt',
+        paymentDate: '2026-08-20',
+        amount: 600000,
+        currency: 'JPY',
+        paymentMethod: 'bank_transfer',
+        bankFeeAmount: 0,
+      },
+      expect.any(String),
+    );
+  });
+
+  it('reverses a payment with a mandatory reason', async () => {
+    const reversePayment = vi.fn(() => Promise.resolve(invoice));
+    const response = await app(repository({ reversePayment })).inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${summary.id}/payments/${invoice.payments[0]!.id}/reversal`,
+      headers: { authorization: 'Bearer valid', 'if-match': '2' },
+      payload: { reason: '重複入金の訂正' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(reversePayment).toHaveBeenCalledWith(
+      'valid',
+      summary.id,
+      invoice.payments[0]!.id,
+      2,
+      '重複入金の訂正',
+      expect.any(String),
+    );
+    const invalid = await app().inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${summary.id}/payments/${invoice.payments[0]!.id}/reversal`,
+      headers: { authorization: 'Bearer valid', 'if-match': '2' },
+      payload: { reason: '' },
+    });
+    expect(invalid.statusCode).toBe(400);
+  });
+
+  it('validates payment amount and requires finance.manage', async () => {
+    const invalid = await app().inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${summary.id}/payments`,
+      headers: { authorization: 'Bearer valid', 'if-match': '2' },
+      payload: {
+        paymentType: 'receipt',
+        paymentDate: '2026-08-20',
+        amount: 0,
+        currency: 'JPY',
+        paymentMethod: null,
+        bankFeeAmount: 0,
+      },
+    });
+    expect(invalid.statusCode).toBe(400);
+    const forbidden = await app(
+      repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${summary.id}/payments`,
+      headers: { authorization: 'Bearer valid', 'if-match': '2' },
+      payload: {
+        paymentType: 'receipt',
+        paymentDate: '2026-08-20',
+        amount: 1000,
+        currency: 'JPY',
+        paymentMethod: null,
+        bankFeeAmount: 0,
+      },
+    });
+    expect(forbidden.statusCode).toBe(403);
   });
 });

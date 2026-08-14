@@ -406,6 +406,12 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     transitionInvoiceStatus: vi.fn(() =>
       Promise.reject(new Error('not configured')),
     ),
+    registerInvoicePayment: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    reverseInvoicePayment: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listWorkLogs: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -648,6 +654,57 @@ describe('App', () => {
         invoice.id,
         invoice.rowVersion,
         { status: 'issued', reason: null },
+      ),
+    );
+  });
+
+  it('registers and reverses invoice payments from detail', async () => {
+    window.history.replaceState({}, '', `/invoices/${invoice.id}`);
+    const paid = {
+      ...invoice,
+      status: 'paid' as const,
+      paidAmount: invoice.totalAmount,
+      balanceAmount: 0,
+      rowVersion: 3,
+    };
+    const registerInvoicePayment = vi.fn(() => Promise.resolve(paid));
+    const reverseInvoicePayment = vi.fn(() =>
+      Promise.resolve({ ...invoice, rowVersion: 4 }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getInvoice: vi.fn(() => Promise.resolve(invoice)),
+          registerInvoicePayment,
+          reverseInvoicePayment,
+        })}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: '入金を登録して消込' }),
+    );
+    await waitFor(() =>
+      expect(registerInvoicePayment).toHaveBeenCalledWith(
+        invoice.id,
+        invoice.rowVersion,
+        expect.objectContaining({
+          paymentType: 'receipt',
+          amount: invoice.balanceAmount,
+          currency: 'JPY',
+        }),
+      ),
+    );
+    fireEvent.change(screen.getByLabelText('入金取消理由'), {
+      target: { value: '重複入金' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '入金を取消' }));
+    await waitFor(() =>
+      expect(reverseInvoicePayment).toHaveBeenCalledWith(
+        invoice.id,
+        invoice.payments[0]!.id,
+        paid.rowVersion,
+        { reason: '重複入金' },
       ),
     );
   });

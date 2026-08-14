@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ApiError } from '../../shared/errors.js';
 import type {
   InvoiceInput,
+  InvoicePaymentInput,
   InvoiceRepository,
   InvoiceStatus,
   InvoiceType,
@@ -163,6 +164,53 @@ export function registerInvoiceRoutes(
         id,
         rowVersion,
         input,
+        request.id,
+      );
+      if (!item) throw conflict();
+      return reply.header('etag', `"${item.rowVersion}"`).send(item);
+    },
+  );
+
+  app.post(
+    '/api/v1/invoices/:id/payments',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const input = parsePayment(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const item = await repository.registerPayment(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        input,
+        request.id,
+      );
+      if (!item) throw conflict();
+      return reply.header('etag', `"${item.rowVersion}"`).send(item);
+    },
+  );
+
+  app.post(
+    '/api/v1/invoices/:id/payments/:paymentId/reversal',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id, paymentId } = request.params as {
+        id: string;
+        paymentId: string;
+      };
+      if (!uuidPattern.test(id) || !uuidPattern.test(paymentId))
+        throw invalid('id and paymentId must be UUIDs');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const reason = parseReversal(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const item = await repository.reversePayment(
+        request.user.accessToken,
+        id,
+        paymentId,
+        rowVersion,
+        reason,
         request.id,
       );
       if (!item) throw conflict();
@@ -353,6 +401,80 @@ function parseTransition(value: unknown) {
     status: body.status as 'issued' | 'sent' | 'cancelled' | 'void',
     reason,
   };
+}
+
+function parsePayment(value: unknown): InvoicePaymentInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const body = value as Record<string, unknown>;
+  if (
+    typeof body.paymentType !== 'string' ||
+    !['receipt', 'payment', 'refund', 'offset', 'other'].includes(
+      body.paymentType,
+    )
+  )
+    throw invalid('paymentType is invalid');
+  if (
+    typeof body.paymentDate !== 'string' ||
+    !datePattern.test(body.paymentDate) ||
+    Number.isNaN(Date.parse(`${body.paymentDate}T00:00:00Z`))
+  )
+    throw invalid('paymentDate is invalid');
+  if (
+    typeof body.amount !== 'number' ||
+    !Number.isFinite(body.amount) ||
+    body.amount <= 0
+  )
+    throw invalid('amount must be greater than zero');
+  if (typeof body.currency !== 'string' || !/^[A-Za-z]{3}$/.test(body.currency))
+    throw invalid('currency is invalid');
+  const methods = [
+    'bank_transfer',
+    'cash',
+    'credit_card',
+    'direct_debit',
+    'offset',
+    'other',
+  ] as const;
+  const paymentMethod =
+    body.paymentMethod === null ||
+    body.paymentMethod === undefined ||
+    body.paymentMethod === ''
+      ? null
+      : typeof body.paymentMethod === 'string' &&
+          methods.includes(body.paymentMethod as (typeof methods)[number])
+        ? (body.paymentMethod as (typeof methods)[number])
+        : null;
+  if (body.paymentMethod && paymentMethod === null)
+    throw invalid('paymentMethod is invalid');
+  const bankFeeAmount = body.bankFeeAmount ?? 0;
+  if (
+    typeof bankFeeAmount !== 'number' ||
+    !Number.isFinite(bankFeeAmount) ||
+    bankFeeAmount < 0
+  )
+    throw invalid('bankFeeAmount is invalid');
+  return {
+    paymentType: body.paymentType as InvoicePaymentInput['paymentType'],
+    paymentDate: body.paymentDate,
+    amount: body.amount,
+    currency: body.currency.toUpperCase(),
+    paymentMethod,
+    bankFeeAmount,
+  };
+}
+
+function parseReversal(value: unknown) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const reason = (value as Record<string, unknown>).reason;
+  if (
+    typeof reason !== 'string' ||
+    reason.trim().length < 1 ||
+    reason.length > 1000
+  )
+    throw invalid('reason is required');
+  return reason.trim();
 }
 
 function parseIfMatch(value: string | string[] | undefined) {

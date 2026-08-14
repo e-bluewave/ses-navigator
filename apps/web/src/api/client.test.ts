@@ -68,6 +68,17 @@ describe('generated projects API client', () => {
       status: 'issued',
       reason: null,
     });
+    await api.registerInvoicePayment('invoice-1', 4, {
+      paymentType: 'receipt',
+      paymentDate: '2026-08-20',
+      amount: 1000,
+      currency: 'JPY',
+      paymentMethod: 'bank_transfer',
+      bankFeeAmount: 0,
+    });
+    await api.reverseInvoicePayment('invoice-1', 'payment-1', 5, {
+      reason: '重複入金',
+    });
     expect(request.mock.calls[0]![0]).toBe('/api/v1/invoices/options');
     expect(request.mock.calls[1]![0]).toBe('/api/v1/invoices');
     expect(request.mock.calls[2]![1]).toMatchObject({
@@ -78,6 +89,18 @@ describe('generated projects API client', () => {
     expect(request.mock.calls[3]![1]).toMatchObject({
       method: 'POST',
       headers: { 'if-match': '"3"' },
+    });
+    expect(request.mock.calls[4]![0]).toBe(
+      '/api/v1/invoices/invoice-1/payments',
+    );
+    expect(request.mock.calls[4]![1]).toMatchObject({
+      headers: { 'if-match': '"4"' },
+    });
+    expect(request.mock.calls[5]![0]).toBe(
+      '/api/v1/invoices/invoice-1/payments/payment-1/reversal',
+    );
+    expect(request.mock.calls[5]![1]).toMatchObject({
+      headers: { 'if-match': '"5"' },
     });
   });
 
