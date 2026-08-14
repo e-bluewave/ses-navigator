@@ -41,6 +41,8 @@ import type {
   EngineerResume,
   EngineerResumeVersionInput,
   EngineerResumeList,
+  ResumeExtraction,
+  ResumeExtractionReviewInput,
   Proposal,
   ProposalInput,
   ProposalList,
@@ -244,6 +246,21 @@ export interface ProjectsApi {
     rowVersion: number,
     input: EngineerResumeVersionInput,
   ): Promise<EngineerResume>;
+  createResumeExtraction(
+    engineerId: string,
+    versionId: string,
+    sourceText: string,
+  ): Promise<ResumeExtraction>;
+  getLatestResumeExtraction(
+    engineerId: string,
+    versionId: string,
+  ): Promise<ResumeExtraction | null>;
+  reviewResumeExtraction(
+    engineerId: string,
+    versionId: string,
+    extractionId: string,
+    input: ResumeExtractionReviewInput,
+  ): Promise<ResumeExtraction>;
   listProjects(query?: ListProjectsQuery): Promise<ProjectList>;
   getProject(id: string): Promise<Project>;
   createProject(input: ProjectInput): Promise<Project>;
@@ -744,6 +761,25 @@ export function createProjectsApi(options: {
         'POST',
         input,
         rowVersion,
+      );
+    },
+    createResumeExtraction(engineerId, versionId, sourceText) {
+      return send<ResumeExtraction>(
+        `/engineers/${encodeURIComponent(engineerId)}/resume-versions/${encodeURIComponent(versionId)}/extractions`,
+        'POST',
+        { sourceText },
+      );
+    },
+    getLatestResumeExtraction(engineerId, versionId) {
+      return get<ResumeExtraction | null>(
+        `/engineers/${encodeURIComponent(engineerId)}/resume-versions/${encodeURIComponent(versionId)}/extractions/latest`,
+      );
+    },
+    reviewResumeExtraction(engineerId, versionId, extractionId, input) {
+      return send<ResumeExtraction>(
+        `/engineers/${encodeURIComponent(engineerId)}/resume-versions/${encodeURIComponent(versionId)}/extractions/${encodeURIComponent(extractionId)}/review`,
+        'POST',
+        input,
       );
     },
     listProjects(query = {}) {

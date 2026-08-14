@@ -2054,6 +2054,62 @@ paths:
           }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /engineers/{id}/resume-versions/{versionId}/extractions:
+    post:
+      operationId: createResumeExtraction
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResumeExtractionInput' }
+      responses:
+        '201':
+          description: Resume extraction completed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResumeExtraction' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /engineers/{id}/resume-versions/{versionId}/extractions/latest:
+    get:
+      operationId: getLatestResumeExtraction
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Latest resume extraction, or null when not requested
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/ResumeExtraction' }
+                  - { type: 'null' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /engineers/{id}/resume-versions/{versionId}/extractions/{extractionId}/review:
+    post:
+      operationId: reviewResumeExtraction
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: extractionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResumeExtractionReviewInput' }
+      responses:
+        '200':
+          description: Resume extraction reviewed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResumeExtraction' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /engineers/{id}/skills:
     get:
       operationId: listEngineerSkills
@@ -3113,6 +3169,109 @@ components:
               },
           },
       }
+    ResumeExtractionInput:
+      type: object
+      additionalProperties: false
+      required: [sourceText]
+      properties:
+        sourceText: { type: string, minLength: 50, maxLength: 100000 }
+    ResumeExtractionResult:
+      type: object
+      additionalProperties: false
+      required: [profile, careerHistories, skills, qualifications, preferences, uncertainties, confidenceScore]
+      properties:
+        profile:
+          type: object
+          additionalProperties: false
+          required: [summary, nearestStation, availableFrom]
+          properties:
+            summary: { type: [string, 'null'] }
+            nearestStation: { type: [string, 'null'] }
+            availableFrom: { type: [string, 'null'] }
+        careerHistories:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [projectName, clientName, roleName, industry, overview, responsibilities, achievements, startedOn, endedOn, evidence]
+            properties:
+              projectName: { type: string }
+              clientName: { type: [string, 'null'] }
+              roleName: { type: [string, 'null'] }
+              industry: { type: [string, 'null'] }
+              overview: { type: [string, 'null'] }
+              responsibilities: { type: [string, 'null'] }
+              achievements: { type: [string, 'null'] }
+              startedOn: { type: [string, 'null'] }
+              endedOn: { type: [string, 'null'] }
+              evidence: { type: string }
+        skills:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, experienceMonths, proficiencyLevel, lastUsedOn, evidence]
+            properties:
+              name: { type: string }
+              experienceMonths: { type: [integer, 'null'], minimum: 0 }
+              proficiencyLevel: { type: [string, 'null'] }
+              lastUsedOn: { type: [string, 'null'] }
+              evidence: { type: string }
+        qualifications:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, issuer, acquiredOn, expiresOn, evidence]
+            properties:
+              name: { type: string }
+              issuer: { type: [string, 'null'] }
+              acquiredOn: { type: [string, 'null'] }
+              expiresOn: { type: [string, 'null'] }
+              evidence: { type: string }
+        preferences:
+          type: object
+          additionalProperties: false
+          required: [desiredRoles, desiredLocations, desiredContractTypes, minimumRate, availableFrom]
+          properties:
+            desiredRoles: { type: array, items: { type: string } }
+            desiredLocations: { type: array, items: { type: string } }
+            desiredContractTypes: { type: array, items: { type: string } }
+            minimumRate: { type: [number, 'null'] }
+            availableFrom: { type: [string, 'null'] }
+        uncertainties: { type: array, items: { type: string } }
+        confidenceScore: { type: number, minimum: 0, maximum: 1 }
+    ResumeExtraction:
+      type: object
+      additionalProperties: false
+      required: [id, resumeVersionId, aiExecutionId, status, provider, modelName, promptVersion, result, errorMessage, reviewNotes, reviewedAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        resumeVersionId: { type: string, format: uuid }
+        aiExecutionId: { type: string, format: uuid }
+        status: { type: string, enum: [pending, processing, completed, approved, rejected, failed] }
+        provider: { type: string }
+        modelName: { type: string }
+        promptVersion: { type: string }
+        result:
+          oneOf:
+            - { $ref: '#/components/schemas/ResumeExtractionResult' }
+            - { type: 'null' }
+        errorMessage: { type: [string, 'null'] }
+        reviewNotes: { type: [string, 'null'] }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    ResumeExtractionReviewInput:
+      type: object
+      additionalProperties: false
+      required: [decision, correctedResult, notes]
+      properties:
+        decision: { type: string, enum: [approved, rejected] }
+        correctedResult:
+          oneOf:
+            - { $ref: '#/components/schemas/ResumeExtractionResult' }
+            - { type: 'null' }
+        notes: { type: [string, 'null'], maxLength: 2000 }
     EngineerSkill:
       type: object
       required:

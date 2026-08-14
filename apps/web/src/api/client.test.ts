@@ -3,6 +3,32 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('calls resume extraction and review endpoints', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() => Promise.resolve(new Response(JSON.stringify({ id: 'extract-1' }))));
+    const api = createProjectsApi({
+      getAccessToken: () => 'token',
+      fetch: request,
+    });
+    await api.createResumeExtraction('engineer-1', 'version-1', 'resume text');
+    await api.getLatestResumeExtraction('engineer-1', 'version-1');
+    await api.reviewResumeExtraction('engineer-1', 'version-1', 'extract-1', {
+      decision: 'approved',
+      correctedResult: null,
+      notes: null,
+    });
+    expect(request.mock.calls[0]![0]).toBe(
+      '/api/v1/engineers/engineer-1/resume-versions/version-1/extractions',
+    );
+    expect(request.mock.calls[1]![0]).toBe(
+      '/api/v1/engineers/engineer-1/resume-versions/version-1/extractions/latest',
+    );
+    expect(request.mock.calls[2]![0]).toBe(
+      '/api/v1/engineers/engineer-1/resume-versions/version-1/extractions/extract-1/review',
+    );
+  });
+
   it('calls the sales KPI dashboard endpoint', async () => {
     const request = vi.fn<
       (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
