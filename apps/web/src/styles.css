@@ -122,8 +122,70 @@ button {
 
 .module-navigation {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-bottom: 1rem;
+}
+.home-dashboard {
+  display: grid;
+  gap: 1rem;
+}
+.dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+.dashboard-actions button,
+.dashboard-section-heading button {
+  padding: 0.45rem 0.7rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: #d9e9e6;
+  color: #18564e;
+  cursor: pointer;
+  font-weight: 750;
+}
+.dashboard-section {
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border: 1px solid #d1dfe1;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 0.75rem 2rem rgb(22 34 47 / 6%);
+}
+.dashboard-section h3 {
+  margin: 0 0 1rem;
+}
+.dashboard-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.dashboard-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+.dashboard-metric {
+  padding: 1rem;
+  border: 1px solid #dbe4e5;
+  border-radius: 0.75rem;
+  background: #f8fafb;
+}
+.dashboard-metric dd {
+  font-size: 1.25rem;
+}
+.dashboard-metric-alert {
+  border-color: #e8c981;
+  background: #fff9e8;
+}
+.dashboard-notice {
+  margin: 0;
+  padding: 0.8rem;
+  border-radius: 0.6rem;
+  background: #f3f7f7;
+  color: #52616a;
 }
 .account-actions {
   display: flex;

@@ -694,6 +694,102 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('shows the integrated home dashboard and opens a source module', async () => {
+    window.history.replaceState({}, '', '/dashboard');
+    const getSalesKpiDashboard = vi.fn(() =>
+      Promise.resolve({
+        fromDate: '2026-01-01',
+        toDate: '2026-08-14',
+        contractExpiryDays: 60,
+        proposalCount: 12,
+        interviewProposalCount: 6,
+        interviewRate: 50,
+        wonCount: 3,
+        winRate: 25,
+        averageProposalDays: 14,
+        averageInterviewCount: 0.8,
+        activeProposalCount: 4,
+        pendingApprovalCount: 2,
+        scheduledInterviewCount: 3,
+        expiringContractCount: 1,
+        monthly: [
+          {
+            periodMonth: '2026-08-01',
+            proposalCount: 4,
+            interviewProposalCount: 2,
+            interviewRate: 50,
+            wonCount: 1,
+            winRate: 25,
+          },
+        ],
+        expiringContracts: [
+          {
+            id: contract.id,
+            contractNo: contract.contractNo,
+            title: contract.title,
+            endDate: '2026-09-30',
+            daysRemaining: 47,
+            status: 'active',
+          },
+        ],
+      }),
+    );
+    const getProfitabilityDashboard = vi.fn(() =>
+      Promise.resolve({
+        fromMonth: '2026-01-01',
+        toMonth: '2026-08-01',
+        currency: 'JPY',
+        revenue: 1_000_000,
+        purchaseCost: 600_000,
+        expenseCost: 50_000,
+        grossProfit: 350_000,
+        grossMarginRate: 35,
+        cashIn: 800_000,
+        cashOut: 500_000,
+        receivableBalance: 200_000,
+        payableBalance: 100_000,
+        monthly: [
+          {
+            periodMonth: '2026-08-01',
+            revenue: 1_000_000,
+            purchaseCost: 600_000,
+            expenseCost: 50_000,
+            grossProfit: 350_000,
+            grossMarginRate: 35,
+            cashIn: 800_000,
+            cashOut: 500_000,
+            receivableBalance: 200_000,
+            payableBalance: 100_000,
+            salesInvoiceCount: 2,
+            purchaseInvoiceCount: 1,
+            expenseCount: 1,
+          },
+        ],
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({ getSalesKpiDashboard, getProfitabilityDashboard })}
+      />,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'ホームダッシュボード' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('12')).toBeInTheDocument();
+    expect(screen.getAllByText('50%')).not.toHaveLength(0);
+    expect(screen.getByText(contract.contractNo)).toBeInTheDocument();
+    expect(getSalesKpiDashboard).toHaveBeenCalledOnce();
+    expect(getProfitabilityDashboard).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: '提案を確認' }));
+    expect(window.location.pathname).toBe('/proposals');
+    expect(
+      await screen.findByRole('heading', { name: '提案' }),
+    ).toBeInTheDocument();
+  });
+
   it('creates and submits an expense', async () => {
     window.history.replaceState({}, '', '/expenses');
     const createExpense = vi.fn(() => Promise.resolve(expense));
