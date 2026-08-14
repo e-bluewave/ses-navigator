@@ -46,6 +46,16 @@ export type WorkLogStatus =
   'draft' | 'submitted' | 'approved' | 'rejected' | 'locked';
 export type WorkType =
   'work' | 'paid_leave' | 'absence' | 'holiday' | 'training' | 'other';
+export type InvoiceStatus =
+  | 'draft'
+  | 'issued'
+  | 'sent'
+  | 'partially_paid'
+  | 'paid'
+  | 'overdue'
+  | 'cancelled'
+  | 'void';
+export type InvoiceType = 'sales' | 'purchase';
 
 export interface AuthContext {
   requiresMfa: boolean;
@@ -629,6 +639,85 @@ export interface ListWorkLogsQuery {
   q?: string;
   status?: WorkLogStatus;
   workMonth?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface InvoiceSummary {
+  id: string;
+  invoiceNo: string;
+  invoiceType: InvoiceType;
+  contractId: string | null;
+  contractTitle: string | null;
+  billingCompanyId: string;
+  billingCompanyName: string;
+  billingPeriodStart: string | null;
+  billingPeriodEnd: string | null;
+  issueDate: string;
+  dueDate: string;
+  status: InvoiceStatus;
+  currency: string;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  sentAt: string | null;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface Invoice extends InvoiceSummary {
+  billingAccount: {
+    id: string;
+    companyId: string;
+    accountType: 'receivable' | 'payable' | 'both';
+    accountName: string;
+    closingDay: number | null;
+    paymentMonthOffset: number;
+    paymentDay: number | null;
+    invoiceDeliveryMethod: 'email' | 'postal' | 'portal' | 'edi' | 'other';
+    isDefault: boolean;
+  };
+  items: Array<{
+    id: string;
+    lineNo: number;
+    itemType:
+      | 'service'
+      | 'expense'
+      | 'adjustment'
+      | 'discount'
+      | 'tax_exempt'
+      | 'other';
+    description: string;
+    quantity: number;
+    unit: string | null;
+    unitPrice: number;
+    taxRate: number;
+    amount: number;
+    taxAmount: number;
+    workLogId: string | null;
+    displayOrder: number;
+  }>;
+  payments: Array<{
+    id: string;
+    paymentType: 'receipt' | 'payment' | 'refund' | 'offset' | 'other';
+    paymentDate: string;
+    amount: number;
+    currency: string;
+    paymentMethod: string | null;
+    bankFeeAmount: number;
+  }>;
+}
+export interface InvoiceList {
+  items: InvoiceSummary[];
+  page: { limit: number; nextCursor: string | null };
+}
+export interface ListInvoicesQuery {
+  q?: string;
+  status?: InvoiceStatus;
+  invoiceType?: InvoiceType;
+  dueFrom?: string;
+  dueTo?: string;
   cursor?: string;
   limit?: number;
 }

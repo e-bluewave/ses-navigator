@@ -67,10 +67,15 @@ import type {
   ListWorkLogsQuery,
   WorkLogInput,
   WorkLogStatusTransitionInput,
+  Invoice,
+  InvoiceList,
+  ListInvoicesQuery,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
+  listInvoices(query?: ListInvoicesQuery): Promise<InvoiceList>;
+  getInvoice(id: string): Promise<Invoice>;
   listWorkLogs(query?: ListWorkLogsQuery): Promise<WorkLogList>;
   getWorkLog(id: string): Promise<WorkLog>;
   createWorkLog(input: WorkLogInput): Promise<WorkLog>;
@@ -311,6 +316,21 @@ export function createProjectsApi(options: {
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
+    },
+    listInvoices(query = {}) {
+      const params = new URLSearchParams();
+      if (query.q) params.set('q', query.q);
+      if (query.status) params.set('status', query.status);
+      if (query.invoiceType) params.set('invoiceType', query.invoiceType);
+      if (query.dueFrom) params.set('dueFrom', query.dueFrom);
+      if (query.dueTo) params.set('dueTo', query.dueTo);
+      if (query.cursor) params.set('cursor', query.cursor);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return get<InvoiceList>(`/invoices${suffix}`);
+    },
+    getInvoice(id) {
+      return get<Invoice>(`/invoices/${encodeURIComponent(id)}`);
     },
     listWorkLogs(query = {}) {
       const params = new URLSearchParams();

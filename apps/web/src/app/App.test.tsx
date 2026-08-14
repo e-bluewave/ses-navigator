@@ -23,6 +23,7 @@ import type {
   EngagementInput,
   WorkLog,
   WorkLogInput,
+  Invoice,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -234,6 +235,68 @@ const workLog: WorkLog = {
   },
 };
 
+const invoice: Invoice = {
+  id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  invoiceNo: 'INV-2026-0001',
+  invoiceType: 'sales',
+  contractId: contract.id,
+  contractTitle: contract.title,
+  billingCompanyId: '22222222-2222-4222-8222-222222222222',
+  billingCompanyName: '青波株式会社',
+  billingPeriodStart: '2026-07-01',
+  billingPeriodEnd: '2026-07-31',
+  issueDate: '2026-08-01',
+  dueDate: '2026-08-31',
+  status: 'partially_paid',
+  currency: 'JPY',
+  subtotal: 1000000,
+  taxAmount: 100000,
+  totalAmount: 1100000,
+  paidAmount: 500000,
+  balanceAmount: 600000,
+  sentAt: '2026-08-02T00:00:00Z',
+  updatedAt: '2026-08-10T00:00:00Z',
+  rowVersion: 2,
+  billingAccount: {
+    id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    companyId: '22222222-2222-4222-8222-222222222222',
+    accountType: 'receivable',
+    accountName: '本社請求先',
+    closingDay: 31,
+    paymentMonthOffset: 1,
+    paymentDay: 31,
+    invoiceDeliveryMethod: 'email',
+    isDefault: true,
+  },
+  items: [
+    {
+      id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      lineNo: 1,
+      itemType: 'service',
+      description: '7月分技術支援',
+      quantity: 1,
+      unit: '式',
+      unitPrice: 1000000,
+      taxRate: 10,
+      amount: 1000000,
+      taxAmount: 100000,
+      workLogId: null,
+      displayOrder: 1,
+    },
+  ],
+  payments: [
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      paymentType: 'receipt',
+      paymentDate: '2026-08-10',
+      amount: 500000,
+      currency: 'JPY',
+      paymentMethod: 'bank_transfer',
+      bankFeeAmount: 0,
+    },
+  ],
+};
+
 const company: Company = {
   id: '22222222-2222-4222-8222-222222222222',
   managementNo: 'CO-000001',
@@ -315,6 +378,10 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    listInvoices: vi.fn(() =>
+      Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
+    ),
+    getInvoice: vi.fn(() => Promise.reject(new Error('not configured'))),
     listWorkLogs: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -442,6 +509,66 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('lists invoices and opens line and payment detail', async () => {
+    window.history.replaceState({}, '', '/invoices');
+    const client = api({
+      listInvoices: vi.fn(() =>
+        Promise.resolve({
+          items: [invoice],
+          page: { limit: 50, nextCursor: null },
+        }),
+      ),
+      getInvoice: vi.fn(() => Promise.resolve(invoice)),
+    });
+    render(<App auth={auth()} api={client} />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: invoice.invoiceNo }),
+    );
+    expect(await screen.findByText('請求明細')).toBeInTheDocument();
+    expect(screen.getByText('7月分技術支援')).toBeInTheDocument();
+    expect(screen.getByText('入金履歴')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: contract.title }),
+    ).toBeInTheDocument();
+  });
+
+  it('filters invoices by query, status, type, and due dates', async () => {
+    window.history.replaceState({}, '', '/invoices');
+    const listInvoices = vi.fn(() =>
+      Promise.resolve({
+        items: [invoice],
+        page: { limit: 50, nextCursor: null },
+      }),
+    );
+    render(<App auth={auth()} api={api({ listInvoices })} />);
+    await screen.findByText(invoice.invoiceNo);
+    fireEvent.change(screen.getByLabelText('請求検索'), {
+      target: { value: '青波' },
+    });
+    fireEvent.change(screen.getByLabelText('請求状態'), {
+      target: { value: 'overdue' },
+    });
+    fireEvent.change(screen.getByLabelText('請求種別'), {
+      target: { value: 'sales' },
+    });
+    fireEvent.change(screen.getByLabelText('期限（開始）'), {
+      target: { value: '2026-08-01' },
+    });
+    fireEvent.change(screen.getByLabelText('期限（終了）'), {
+      target: { value: '2026-08-31' },
+    });
+    await waitFor(() =>
+      expect(listInvoices).toHaveBeenLastCalledWith({
+        q: '青波',
+        status: 'overdue',
+        invoiceType: 'sales',
+        dueFrom: '2026-08-01',
+        dueTo: '2026-08-31',
+        limit: 100,
+      }),
+    );
+  });
+
   it('lists monthly work logs and opens daily detail', async () => {
     window.history.replaceState({}, '', '/work-logs');
     const client = api({
