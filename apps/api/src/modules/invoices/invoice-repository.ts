@@ -77,6 +77,56 @@ export interface Invoice extends InvoiceSummary {
     paymentMethod: string | null;
     bankFeeAmount: number;
   }>;
+  statusHistories: InvoiceStatusHistory[];
+}
+
+export interface InvoiceStatusHistory {
+  id: string;
+  fromStatus: InvoiceStatus | null;
+  toStatus: InvoiceStatus;
+  changeReason: string | null;
+  changedAt: string;
+}
+
+export interface InvoiceBillingOption {
+  id: string;
+  companyId: string;
+  companyName: string;
+  accountType: 'receivable' | 'payable' | 'both';
+  accountName: string;
+  closingDay: number | null;
+  paymentMonthOffset: number;
+  paymentDay: number | null;
+  invoiceDeliveryMethod: 'email' | 'postal' | 'portal' | 'edi' | 'other';
+  isDefault: boolean;
+}
+
+export interface InvoiceInput {
+  invoiceNo: string;
+  invoiceType: InvoiceType;
+  contractId: string | null;
+  billingAccountId: string;
+  billingPeriodStart: string | null;
+  billingPeriodEnd: string | null;
+  issueDate: string;
+  dueDate: string;
+  currency: string;
+  items: Array<{
+    itemType: Invoice['items'][number]['itemType'];
+    description: string;
+    quantity: number;
+    unit: string | null;
+    unitPrice: number;
+    taxRate: number;
+    amount: number;
+    taxAmount: number;
+    workLogId: string | null;
+  }>;
+}
+
+export interface InvoiceStatusTransitionInput {
+  status: 'issued' | 'sent' | 'cancelled' | 'void';
+  reason: string | null;
 }
 
 export interface InvoiceListQuery {
@@ -96,11 +146,32 @@ export interface InvoiceListResult {
 
 export interface InvoiceRepository {
   canRead(accessToken: string): Promise<boolean>;
+  canManage(accessToken: string): Promise<boolean>;
+  listBillingOptions(accessToken: string): Promise<InvoiceBillingOption[]>;
   list(
     accessToken: string,
     query: InvoiceListQuery,
   ): Promise<InvoiceListResult>;
   findById(accessToken: string, id: string): Promise<Invoice | null>;
+  create(
+    accessToken: string,
+    input: InvoiceInput,
+    requestId: string,
+  ): Promise<Invoice | null>;
+  update(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: InvoiceInput,
+    requestId: string,
+  ): Promise<Invoice | null>;
+  transitionStatus(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: InvoiceStatusTransitionInput,
+    requestId: string,
+  ): Promise<Invoice | null>;
 }
 
 type SummaryRow = {
@@ -162,6 +233,25 @@ type DetailRow = SummaryRow & {
     bank_fee_amount: number;
   }>;
 };
+type BillingOptionRow = {
+  id: string;
+  company_id: string;
+  company_name: string;
+  account_type: InvoiceBillingOption['accountType'];
+  account_name: string;
+  closing_day: number | null;
+  payment_month_offset: number;
+  payment_day: number | null;
+  invoice_delivery_method: InvoiceBillingOption['invoiceDeliveryMethod'];
+  is_default: boolean;
+};
+type HistoryRow = {
+  id: string;
+  from_status: InvoiceStatus | null;
+  to_status: InvoiceStatus;
+  change_reason: string | null;
+  changed_at: string;
+};
 
 export class SupabaseInvoiceRepository implements InvoiceRepository {
   async canRead(token: string): Promise<boolean> {
@@ -170,6 +260,35 @@ export class SupabaseInvoiceRepository implements InvoiceRepository {
       body: JSON.stringify({ required_permission: 'finance.read' }),
     });
     return (await response.json()) === true;
+  }
+
+  async canManage(token: string): Promise<boolean> {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'finance.manage' }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async listBillingOptions(token: string): Promise<InvoiceBillingOption[]> {
+    const response = await this.request(
+      token,
+      '/rpc/list_invoice_billing_options',
+      { method: 'POST', body: '{}' },
+    );
+    const rows = (await response.json()) as BillingOptionRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      companyId: row.company_id,
+      companyName: row.company_name,
+      accountType: row.account_type,
+      accountName: row.account_name,
+      closingDay: row.closing_day,
+      paymentMonthOffset: row.payment_month_offset,
+      paymentDay: row.payment_day,
+      invoiceDeliveryMethod: row.invoice_delivery_method,
+      isDefault: row.is_default,
+    }));
   }
 
   async list(
@@ -222,45 +341,141 @@ export class SupabaseInvoiceRepository implements InvoiceRepository {
     );
     if (response.status === 403) return null;
     const row = (await response.json()) as DetailRow | null;
-    return row
-      ? {
-          ...toSummary(row),
-          billingAccount: {
-            id: row.billing_account.id,
-            companyId: row.billing_account.company_id,
-            accountType: row.billing_account.account_type,
-            accountName: row.billing_account.account_name,
-            closingDay: row.billing_account.closing_day,
-            paymentMonthOffset: row.billing_account.payment_month_offset,
-            paymentDay: row.billing_account.payment_day,
-            invoiceDeliveryMethod: row.billing_account.invoice_delivery_method,
-            isDefault: row.billing_account.is_default,
-          },
-          items: row.items.map((item) => ({
-            id: item.id,
-            lineNo: item.line_no,
-            itemType: item.item_type,
-            description: item.description,
-            quantity: item.quantity,
-            unit: item.unit,
-            unitPrice: item.unit_price,
-            taxRate: item.tax_rate,
-            amount: item.amount,
-            taxAmount: item.tax_amount,
-            workLogId: item.work_log_id,
-            displayOrder: item.display_order,
-          })),
-          payments: row.payments.map((payment) => ({
-            id: payment.id,
-            paymentType: payment.payment_type,
-            paymentDate: payment.payment_date,
-            amount: payment.amount,
-            currency: payment.currency,
-            paymentMethod: payment.payment_method,
-            bankFeeAmount: payment.bank_fee_amount,
-          })),
-        }
-      : null;
+    if (!row) return null;
+    const historyResponse = await this.request(
+      token,
+      '/rpc/get_invoice_status_histories',
+      { method: 'POST', body: JSON.stringify({ p_invoice_id: id }) },
+    );
+    const histories = (await historyResponse.json()) as HistoryRow[];
+    return {
+      ...toSummary(row),
+      billingAccount: {
+        id: row.billing_account.id,
+        companyId: row.billing_account.company_id,
+        accountType: row.billing_account.account_type,
+        accountName: row.billing_account.account_name,
+        closingDay: row.billing_account.closing_day,
+        paymentMonthOffset: row.billing_account.payment_month_offset,
+        paymentDay: row.billing_account.payment_day,
+        invoiceDeliveryMethod: row.billing_account.invoice_delivery_method,
+        isDefault: row.billing_account.is_default,
+      },
+      items: row.items.map((item) => ({
+        id: item.id,
+        lineNo: item.line_no,
+        itemType: item.item_type,
+        description: item.description,
+        quantity: item.quantity,
+        unit: item.unit,
+        unitPrice: item.unit_price,
+        taxRate: item.tax_rate,
+        amount: item.amount,
+        taxAmount: item.tax_amount,
+        workLogId: item.work_log_id,
+        displayOrder: item.display_order,
+      })),
+      payments: row.payments.map((payment) => ({
+        id: payment.id,
+        paymentType: payment.payment_type,
+        paymentDate: payment.payment_date,
+        amount: payment.amount,
+        currency: payment.currency,
+        paymentMethod: payment.payment_method,
+        bankFeeAmount: payment.bank_fee_amount,
+      })),
+      statusHistories: histories.map((history) => ({
+        id: history.id,
+        fromStatus: history.from_status,
+        toStatus: history.to_status,
+        changeReason: history.change_reason,
+        changedAt: history.changed_at,
+      })),
+    };
+  }
+
+  async create(
+    token: string,
+    input: InvoiceInput,
+    requestId: string,
+  ): Promise<Invoice | null> {
+    return this.save(token, null, 0, input, requestId);
+  }
+
+  async update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: InvoiceInput,
+    requestId: string,
+  ): Promise<Invoice | null> {
+    return this.save(token, id, rowVersion, input, requestId);
+  }
+
+  async transitionStatus(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: InvoiceStatusTransitionInput,
+    requestId: string,
+  ): Promise<Invoice | null> {
+    const response = await this.request(
+      token,
+      '/rpc/transition_invoice_status',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          p_invoice_id: id,
+          p_row_version: rowVersion,
+          p_to_status: input.status,
+          p_reason: input.reason,
+          p_request_id: requestId,
+        }),
+      },
+    );
+    const saved = (await response.json()) as { id: string } | null;
+    return saved ? this.findById(token, saved.id) : null;
+  }
+
+  private async save(
+    token: string,
+    id: string | null,
+    rowVersion: number,
+    input: InvoiceInput,
+    requestId: string,
+  ): Promise<Invoice | null> {
+    const response = await this.request(token, '/rpc/save_invoice', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_invoice_id: id,
+        p_row_version: rowVersion,
+        p_invoice: {
+          invoice_no: input.invoiceNo,
+          invoice_type: input.invoiceType,
+          contract_id: input.contractId,
+          billing_account_id: input.billingAccountId,
+          billing_period_start: input.billingPeriodStart,
+          billing_period_end: input.billingPeriodEnd,
+          issue_date: input.issueDate,
+          due_date: input.dueDate,
+          currency: input.currency,
+        },
+        p_items: input.items.map((item) => ({
+          item_type: item.itemType,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unit_price: item.unitPrice,
+          tax_rate: item.taxRate,
+          amount: item.amount,
+          tax_amount: item.taxAmount,
+          work_log_id: item.workLogId,
+        })),
+        p_request_id: requestId,
+      }),
+    });
+    const saved = (await response.json()) as { id: string } | null;
+    return saved ? this.findById(token, saved.id) : null;
   }
 
   private async request(

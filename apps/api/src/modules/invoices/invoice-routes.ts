@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ApiError } from '../../shared/errors.js';
 import type {
+  InvoiceInput,
   InvoiceRepository,
   InvoiceStatus,
   InvoiceType,
@@ -25,6 +26,22 @@ export function registerInvoiceRoutes(
   app: FastifyInstance,
   repository: InvoiceRepository,
 ): void {
+  app.post(
+    '/api/v1/invoices',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const input = parseInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const item = await repository.create(
+        request.user.accessToken,
+        input,
+        request.id,
+      );
+      if (!item) throw conflict();
+      return reply.code(201).header('etag', `"${item.rowVersion}"`).send(item);
+    },
+  );
+
   app.get(
     '/api/v1/invoices',
     { preHandler: (request) => app.authenticate(request) },
@@ -99,6 +116,61 @@ export function registerInvoiceRoutes(
   );
 
   app.get(
+    '/api/v1/invoices/options',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request) => {
+      await requireManage(repository, request.user.accessToken);
+      return {
+        billingAccounts: await repository.listBillingOptions(
+          request.user.accessToken,
+        ),
+      };
+    },
+  );
+
+  app.put(
+    '/api/v1/invoices/:id',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const input = parseInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const item = await repository.update(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        input,
+        request.id,
+      );
+      if (!item) throw conflict();
+      return reply.header('etag', `"${item.rowVersion}"`).send(item);
+    },
+  );
+
+  app.post(
+    '/api/v1/invoices/:id/status',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const input = parseTransition(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const item = await repository.transitionStatus(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        input,
+        request.id,
+      );
+      if (!item) throw conflict();
+      return reply.header('etag', `"${item.rowVersion}"`).send(item);
+    },
+  );
+
+  app.get(
     '/api/v1/invoices/:id',
     { preHandler: (request) => app.authenticate(request) },
     async (request) => {
@@ -111,6 +183,192 @@ export function registerInvoiceRoutes(
         throw new ApiError(404, 'not_found', 'Invoice was not found');
       return invoice;
     },
+  );
+}
+
+async function requireManage(repository: InvoiceRepository, token: string) {
+  if (!(await repository.canManage(token)))
+    throw new ApiError(403, 'forbidden', 'finance.manage is required');
+}
+
+function parseInput(value: unknown): InvoiceInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const body = value as Record<string, unknown>;
+  const text = (name: string, max: number) => {
+    const item = body[name];
+    if (typeof item !== 'string' || item.trim().length < 1 || item.length > max)
+      throw invalid(`${name} is invalid`);
+    return item.trim();
+  };
+  const nullableUuid = (name: string) => {
+    const item = body[name];
+    if (item === null || item === undefined || item === '') return null;
+    if (typeof item !== 'string' || !uuidPattern.test(item))
+      throw invalid(`${name} must be a UUID or null`);
+    return item;
+  };
+  const invoiceNo = text('invoiceNo', 40);
+  if (
+    typeof body.invoiceType !== 'string' ||
+    !types.has(body.invoiceType as InvoiceType)
+  )
+    throw invalid('invoiceType is invalid');
+  if (
+    typeof body.billingAccountId !== 'string' ||
+    !uuidPattern.test(body.billingAccountId)
+  )
+    throw invalid('billingAccountId must be a UUID');
+  const date = (name: string, nullable = false) => {
+    const item = body[name];
+    if (nullable && (item === null || item === undefined || item === ''))
+      return null;
+    if (
+      typeof item !== 'string' ||
+      !datePattern.test(item) ||
+      Number.isNaN(Date.parse(`${item}T00:00:00Z`))
+    )
+      throw invalid(`${name} is invalid`);
+    return item;
+  };
+  const billingPeriodStart = date('billingPeriodStart', true);
+  const billingPeriodEnd = date('billingPeriodEnd', true);
+  const issueDate = date('issueDate')!;
+  const dueDate = date('dueDate')!;
+  if (
+    (billingPeriodStart === null) !== (billingPeriodEnd === null) ||
+    (billingPeriodStart &&
+      billingPeriodEnd &&
+      billingPeriodEnd < billingPeriodStart)
+  )
+    throw invalid('billing period is invalid');
+  if (dueDate < issueDate)
+    throw invalid('dueDate must be on or after issueDate');
+  if (typeof body.currency !== 'string' || !/^[A-Za-z]{3}$/.test(body.currency))
+    throw invalid('currency is invalid');
+  if (!Array.isArray(body.items) || body.items.length > 100)
+    throw invalid('items is invalid');
+  const items = body.items.map((value, index) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value))
+      throw invalid(`items[${index}] is invalid`);
+    const item = value as Record<string, unknown>;
+    if (
+      typeof item.itemType !== 'string' ||
+      ![
+        'service',
+        'expense',
+        'adjustment',
+        'discount',
+        'tax_exempt',
+        'other',
+      ].includes(item.itemType)
+    )
+      throw invalid(`items[${index}].itemType is invalid`);
+    if (
+      typeof item.description !== 'string' ||
+      item.description.trim().length < 1 ||
+      item.description.length > 1000
+    )
+      throw invalid(`items[${index}].description is invalid`);
+    const number = (name: string, minimum: number, maximum: number) => {
+      const field = item[name];
+      if (
+        typeof field !== 'number' ||
+        !Number.isFinite(field) ||
+        field < minimum ||
+        field > maximum
+      )
+        throw invalid(`items[${index}].${name} is invalid`);
+      return field;
+    };
+    const amount = number(
+      'amount',
+      item.itemType === 'discount' ? -999999999999.99 : 0,
+      item.itemType === 'discount' ? 0 : 999999999999.99,
+    );
+    const unit =
+      item.unit === null || item.unit === undefined || item.unit === ''
+        ? null
+        : typeof item.unit === 'string' && item.unit.length <= 40
+          ? item.unit.trim() || null
+          : (() => {
+              throw invalid(`items[${index}].unit is invalid`);
+            })();
+    const workLogId =
+      item.workLogId === null ||
+      item.workLogId === undefined ||
+      item.workLogId === ''
+        ? null
+        : typeof item.workLogId === 'string' && uuidPattern.test(item.workLogId)
+          ? item.workLogId
+          : (() => {
+              throw invalid(`items[${index}].workLogId is invalid`);
+            })();
+    return {
+      itemType: item.itemType as InvoiceInput['items'][number]['itemType'],
+      description: item.description.trim(),
+      quantity: number('quantity', 0, 99999999),
+      unit,
+      unitPrice: number('unitPrice', -999999999999.99, 999999999999.99),
+      taxRate: number('taxRate', 0, 100),
+      amount,
+      taxAmount: number('taxAmount', 0, 999999999999.99),
+      workLogId,
+    };
+  });
+  return {
+    invoiceNo,
+    invoiceType: body.invoiceType as InvoiceType,
+    contractId: nullableUuid('contractId'),
+    billingAccountId: body.billingAccountId,
+    billingPeriodStart,
+    billingPeriodEnd,
+    issueDate,
+    dueDate,
+    currency: body.currency.toUpperCase(),
+    items,
+  };
+}
+
+function parseTransition(value: unknown) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const body = value as Record<string, unknown>;
+  if (
+    typeof body.status !== 'string' ||
+    !['issued', 'sent', 'cancelled', 'void'].includes(body.status)
+  )
+    throw invalid('status is invalid');
+  const reason =
+    body.reason === null || body.reason === undefined || body.reason === ''
+      ? null
+      : typeof body.reason === 'string' && body.reason.length <= 1000
+        ? body.reason.trim() || null
+        : (() => {
+            throw invalid('reason is invalid');
+          })();
+  if (['cancelled', 'void'].includes(body.status) && reason === null)
+    throw invalid('reason is required');
+  return {
+    status: body.status as 'issued' | 'sent' | 'cancelled' | 'void',
+    reason,
+  };
+}
+
+function parseIfMatch(value: string | string[] | undefined) {
+  if (value === undefined)
+    throw new ApiError(428, 'precondition_required', 'If-Match is required');
+  const raw = Array.isArray(value) ? value[0] : value;
+  const match = raw?.match(/^(?:W\/)?"?(\d+)"?$/);
+  if (!match || Number(match[1]) < 1) throw invalid('If-Match is invalid');
+  return Number(match[1]);
+}
+
+function conflict() {
+  return new ApiError(
+    409,
+    'conflict',
+    'Invoice was changed or its billing, contract, or lifecycle state is unavailable',
   );
 }
 

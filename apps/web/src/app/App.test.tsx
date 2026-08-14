@@ -295,6 +295,7 @@ const invoice: Invoice = {
       bankFeeAmount: 0,
     },
   ],
+  statusHistories: [],
 };
 
 const company: Company = {
@@ -382,6 +383,29 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
     getInvoice: vi.fn(() => Promise.reject(new Error('not configured'))),
+    getInvoiceOptions: vi.fn(() =>
+      Promise.resolve({
+        billingAccounts: [
+          {
+            id: invoice.billingAccount.id,
+            companyId: invoice.billingCompanyId,
+            companyName: invoice.billingCompanyName,
+            accountType: 'receivable' as const,
+            accountName: invoice.billingAccount.accountName,
+            closingDay: 31,
+            paymentMonthOffset: 1,
+            paymentDay: 31,
+            invoiceDeliveryMethod: 'email' as const,
+            isDefault: true,
+          },
+        ],
+      }),
+    ),
+    createInvoice: vi.fn(() => Promise.reject(new Error('not configured'))),
+    updateInvoice: vi.fn(() => Promise.reject(new Error('not configured'))),
+    transitionInvoiceStatus: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listWorkLogs: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -566,6 +590,65 @@ describe('App', () => {
         dueTo: '2026-08-31',
         limit: 100,
       }),
+    );
+  });
+
+  it('creates an invoice draft with one calculated line', async () => {
+    window.history.replaceState({}, '', '/invoices/new');
+    const created = { ...invoice, status: 'draft' as const };
+    const createInvoice = vi.fn(() => Promise.resolve(created));
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          createInvoice,
+          listContracts: vi.fn(() =>
+            Promise.resolve({
+              items: [contract],
+              page: { limit: 200, nextCursor: null },
+            }),
+          ),
+        })}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('請求番号'), {
+      target: { value: 'INV-2026-0002' },
+    });
+    fireEvent.change(screen.getByLabelText('請求先設定'), {
+      target: { value: invoice.billingAccount.id },
+    });
+    fireEvent.change(screen.getByLabelText('明細1内容'), {
+      target: { value: '8月分技術支援' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '請求を登録' }));
+    await waitFor(() => expect(createInvoice).toHaveBeenCalled());
+  });
+
+  it('issues a draft invoice with optimistic locking', async () => {
+    window.history.replaceState({}, '', `/invoices/${invoice.id}`);
+    const draft = { ...invoice, status: 'draft' as const };
+    const transitionInvoiceStatus = vi.fn(() =>
+      Promise.resolve({ ...draft, status: 'issued' as const, rowVersion: 3 }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getInvoice: vi.fn(() => Promise.resolve(draft)),
+          transitionInvoiceStatus,
+        })}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('次の請求状態'), {
+      target: { value: 'issued' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '請求状態を更新' }));
+    await waitFor(() =>
+      expect(transitionInvoiceStatus).toHaveBeenCalledWith(
+        invoice.id,
+        invoice.rowVersion,
+        { status: 'issued', reason: null },
+      ),
     );
   });
 
