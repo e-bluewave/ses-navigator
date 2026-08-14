@@ -66,6 +66,9 @@ import type {
   AccountingPeriodSummary,
   AccountingCloseType,
   AccountingCloseStatus,
+  AccountingExportBatch,
+  AccountingExportBatchSummary,
+  AccountingExportFormat,
 } from '../api/generated.js';
 import { AuthProvider, useAuth } from '../auth/AuthProvider.js';
 import { LoginPage } from '../auth/LoginPage.js';
@@ -192,6 +195,7 @@ const invoiceTypeLabels: Record<InvoiceType, string> = {
 };
 
 type Route =
+  | { page: 'accounting-exports' }
   | { page: 'accounting-periods' }
   | { page: 'supplier-payments' }
   | { page: 'supplier-payment-detail'; id: string }
@@ -236,6 +240,8 @@ type Route =
   | { page: 'engineer-edit'; id: string };
 
 function currentRoute(): Route {
+  if (window.location.pathname === '/accounting-exports')
+    return { page: 'accounting-exports' };
   if (window.location.pathname === '/accounting-periods')
     return { page: 'accounting-periods' };
   if (window.location.pathname === '/supplier-payments')
@@ -405,6 +411,284 @@ const accountingCloseStatusLabels: Record<AccountingCloseStatus, string> = {
   open: '未締め',
   closed: '締め済み',
 };
+
+const accountingExportFormatLabels: Record<AccountingExportFormat, string> = {
+  generic_csv: '汎用CSV',
+  freee: 'freee',
+  money_forward: 'マネーフォワード',
+  yayoi: '弥生',
+};
+
+function AccountingExportView({
+  api,
+  onUnauthorized,
+}: {
+  api: ProjectsApi;
+  onUnauthorized: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<AccountingExportBatchSummary[]>([]);
+  const [periods, setPeriods] = useState<AccountingPeriodSummary[]>([]);
+  const [selected, setSelected] = useState<AccountingExportBatch | null>(null);
+  const [accountingPeriodId, setAccountingPeriodId] = useState('');
+  const [exportFormat, setExportFormat] =
+    useState<AccountingExportFormat>('generic_csv');
+  const [exportReference, setExportReference] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleError = useCallback(
+    async (cause: unknown, fallback: string) => {
+      if (cause instanceof ApiClientError && cause.status === 401)
+        await onUnauthorized();
+      else setError(cause instanceof Error ? cause.message : fallback);
+    },
+    [onUnauthorized],
+  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [exportsResult, periodsResult] = await Promise.all([
+        api.listAccountingExports({ limit: 50 }),
+        api.listAccountingPeriods({ limit: 24 }),
+      ]);
+      setItems(exportsResult.items);
+      setPeriods(periodsResult.items);
+      setAccountingPeriodId(
+        (current) => current || periodsResult.items[0]?.id || '',
+      );
+    } catch (cause) {
+      await handleError(cause, '会計出力を読み込めませんでした。');
+    } finally {
+      setLoading(false);
+    }
+  }, [api, handleError]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function generate(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const created = await api.generateAccountingExport({
+        accountingPeriodId,
+        exportFormat,
+      });
+      setSelected(created);
+      await load();
+    } catch (cause) {
+      await handleError(cause, '会計出力を生成できませんでした。');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function open(id: string) {
+    setError('');
+    try {
+      setSelected(await api.getAccountingExport(id));
+    } catch (cause) {
+      await handleError(cause, '仕訳明細を読み込めませんでした。');
+    }
+  }
+
+  async function markExported(event: FormEvent) {
+    event.preventDefault();
+    if (!selected) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await api.markAccountingExported(
+        selected.id,
+        selected.rowVersion,
+        { exportReference: exportReference.trim() || null },
+      );
+      setSelected(updated);
+      await load();
+    } catch (cause) {
+      await handleError(cause, '出力済みに更新できませんでした。');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="content-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Accounting Export</p>
+          <h2>会計出力・仕訳明細</h2>
+          <p>
+            すべて締め済みの会計期間から、貸借一致した版管理付き仕訳を生成します。
+          </p>
+        </div>
+      </div>
+      {error ? <p role="alert">{error}</p> : null}
+      <form className="filter-row" onSubmit={(event) => void generate(event)}>
+        <label>
+          会計期間
+          <select
+            aria-label="会計出力の対象期間"
+            value={accountingPeriodId}
+            onChange={(event) => setAccountingPeriodId(event.target.value)}
+            required
+          >
+            <option value="">選択してください</option>
+            {periods.map((period) => (
+              <option key={period.id} value={period.id}>
+                {period.periodMonth.slice(0, 7)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          出力形式
+          <select
+            aria-label="会計出力形式"
+            value={exportFormat}
+            onChange={(event) =>
+              setExportFormat(event.target.value as AccountingExportFormat)
+            }
+          >
+            {Object.entries(accountingExportFormatLabels).map(
+              ([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+        <button
+          className="primary-button"
+          disabled={saving || !accountingPeriodId}
+        >
+          仕訳を生成
+        </button>
+      </form>
+      {loading ? (
+        <p role="status">会計出力を読み込んでいます…</p>
+      ) : items.length === 0 ? (
+        <p>会計出力はまだありません。</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>対象月</th>
+                <th>版</th>
+                <th>形式</th>
+                <th>状態</th>
+                <th>明細</th>
+                <th>借方</th>
+                <th>貸方</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <button
+                      className="link-button"
+                      onClick={() => void open(item.id)}
+                    >
+                      {item.periodMonth.slice(0, 7)}
+                    </button>
+                  </td>
+                  <td>v{item.versionNo}</td>
+                  <td>{accountingExportFormatLabels[item.exportFormat]}</td>
+                  <td>
+                    {item.status === 'exported'
+                      ? '出力済み'
+                      : item.status === 'generated'
+                        ? '生成済み'
+                        : '取消'}
+                  </td>
+                  <td>{item.lineCount}</td>
+                  <td>{money(item.debitTotal, 'JPY')}</td>
+                  <td>{money(item.creditTotal, 'JPY')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {selected ? (
+        <div>
+          <h3>
+            {selected.periodMonth.slice(0, 7)} v{selected.versionNo} 仕訳明細
+          </h3>
+          <p>
+            借方 {money(selected.debitTotal, 'JPY')} / 貸方{' '}
+            {money(selected.creditTotal, 'JPY')}
+          </p>
+          {selected.status === 'generated' ? (
+            <form
+              className="filter-row"
+              onSubmit={(event) => void markExported(event)}
+            >
+              <label>
+                外部出力参照
+                <input
+                  aria-label="外部出力参照"
+                  maxLength={1000}
+                  value={exportReference}
+                  onChange={(event) => setExportReference(event.target.value)}
+                />
+              </label>
+              <button className="primary-button" disabled={saving}>
+                出力済みにする
+              </button>
+            </form>
+          ) : (
+            <p>出力参照: {selected.exportReference || '—'}</p>
+          )}
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>No.</th>
+                  <th>日付</th>
+                  <th>勘定科目</th>
+                  <th>借方</th>
+                  <th>貸方</th>
+                  <th>摘要</th>
+                  <th>元データ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selected.lines.map((line) => (
+                  <tr key={line.id}>
+                    <td>{line.lineNo}</td>
+                    <td>{line.entryDate}</td>
+                    <td>
+                      {line.accountCode} {line.accountName}
+                    </td>
+                    <td>
+                      {line.debitAmount
+                        ? money(line.debitAmount, line.currency)
+                        : '—'}
+                    </td>
+                    <td>
+                      {line.creditAmount
+                        ? money(line.creditAmount, line.currency)
+                        : '—'}
+                    </td>
+                    <td>{line.description}</td>
+                    <td>{line.sourceType === 'invoice' ? '請求' : '決済'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 function AccountingPeriodView({
   api,
@@ -5849,6 +6133,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       <nav className="module-navigation" aria-label="主要機能">
         <button
           className="secondary-button"
+          onClick={() => navigate('/accounting-exports')}
+        >
+          会計出力
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/accounting-periods')}
         >
           締め管理
@@ -5920,7 +6210,9 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           技術者
         </button>
       </nav>
-      {route.page === 'accounting-periods' ? (
+      {route.page === 'accounting-exports' ? (
+        <AccountingExportView api={api} onUnauthorized={signOut} />
+      ) : route.page === 'accounting-periods' ? (
         <AccountingPeriodView api={api} onUnauthorized={signOut} />
       ) : route.page === 'supplier-payments' ? (
         <SupplierPaymentListView

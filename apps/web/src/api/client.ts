@@ -80,10 +80,27 @@ import type {
   ListAccountingPeriodsQuery,
   AccountingPeriodInput,
   AccountingPeriodTransitionInput,
+  AccountingExportBatch,
+  AccountingExportList,
+  ListAccountingExportsQuery,
+  AccountingExportGenerateInput,
+  AccountingExportCompletionInput,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
+  listAccountingExports(
+    query?: ListAccountingExportsQuery,
+  ): Promise<AccountingExportList>;
+  getAccountingExport(id: string): Promise<AccountingExportBatch>;
+  generateAccountingExport(
+    input: AccountingExportGenerateInput,
+  ): Promise<AccountingExportBatch>;
+  markAccountingExported(
+    id: string,
+    rowVersion: number,
+    input: AccountingExportCompletionInput,
+  ): Promise<AccountingExportBatch>;
   listAccountingPeriods(
     query?: ListAccountingPeriodsQuery,
   ): Promise<AccountingPeriodList>;
@@ -361,6 +378,30 @@ export function createProjectsApi(options: {
   return {
     getAuthContext() {
       return get<AuthContext>('/auth/context');
+    },
+    listAccountingExports(query = {}) {
+      const params = new URLSearchParams();
+      if (query.accountingPeriodId)
+        params.set('accountingPeriodId', query.accountingPeriodId);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return get<AccountingExportList>(`/accounting-exports${suffix}`);
+    },
+    getAccountingExport(id) {
+      return get<AccountingExportBatch>(
+        `/accounting-exports/${encodeURIComponent(id)}`,
+      );
+    },
+    generateAccountingExport(input) {
+      return send<AccountingExportBatch>('/accounting-exports', 'POST', input);
+    },
+    markAccountingExported(id, rowVersion, input) {
+      return send<AccountingExportBatch>(
+        `/accounting-exports/${encodeURIComponent(id)}/exported`,
+        'POST',
+        input,
+        rowVersion,
+      );
     },
     listAccountingPeriods(query = {}) {
       const params = new URLSearchParams();

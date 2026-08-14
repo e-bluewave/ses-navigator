@@ -7,6 +7,100 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /accounting-exports:
+    get:
+      operationId: listAccountingExports
+      parameters:
+        - {
+            name: accountingPeriodId,
+            in: query,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+      responses:
+        '200':
+          description: Authorized accounting export batch list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingExportList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: generateAccountingExport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: '#/components/schemas/AccountingExportGenerateInput' }
+      responses:
+        '201':
+          description: Versioned accounting export batch generated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingExportBatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /accounting-exports/{id}:
+    get:
+      operationId: getAccountingExport
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        '200':
+          description: Accounting export batch with journal lines
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingExportBatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /accounting-exports/{id}/exported:
+    post:
+      operationId: markAccountingExported
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: '#/components/schemas/AccountingExportCompletionInput' }
+      responses:
+        '200':
+          description: Accounting export batch marked exported
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountingExportBatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /accounting-periods:
     get:
       operationId: listAccountingPeriods
@@ -2064,6 +2158,106 @@ components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
+    AccountingExportFormat:
+      type: string
+      enum: [generic_csv, freee, money_forward, yayoi]
+    AccountingExportStatus:
+      type: string
+      enum: [generated, exported, cancelled]
+    AccountingExportBatchSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          accountingPeriodId,
+          periodMonth,
+          versionNo,
+          exportFormat,
+          status,
+          generatedAt,
+          exportedAt,
+          exportReference,
+          lineCount,
+          debitTotal,
+          creditTotal,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        accountingPeriodId: { type: string, format: uuid }
+        periodMonth: { type: string, format: date }
+        versionNo: { type: integer, minimum: 1 }
+        exportFormat: { $ref: '#/components/schemas/AccountingExportFormat' }
+        status: { $ref: '#/components/schemas/AccountingExportStatus' }
+        generatedAt: { type: string, format: date-time }
+        exportedAt: { type: [string, 'null'], format: date-time }
+        exportReference: { type: [string, 'null'], maxLength: 1000 }
+        lineCount: { type: integer, minimum: 0 }
+        debitTotal: { type: number }
+        creditTotal: { type: number }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    AccountingExportLine:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          lineNo,
+          entryDate,
+          accountCode,
+          accountName,
+          debitAmount,
+          creditAmount,
+          currency,
+          description,
+          sourceType,
+          sourceId,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        lineNo: { type: integer, minimum: 1 }
+        entryDate: { type: string, format: date }
+        accountCode: { type: string }
+        accountName: { type: string }
+        debitAmount: { type: number }
+        creditAmount: { type: number }
+        currency: { type: string }
+        description: { type: string }
+        sourceType: { type: string, enum: [invoice, payment] }
+        sourceId: { type: string, format: uuid }
+    AccountingExportBatch:
+      allOf:
+        - { $ref: '#/components/schemas/AccountingExportBatchSummary' }
+        - type: object
+          required: [lines]
+          properties:
+            lines:
+              type: array
+              items: { $ref: '#/components/schemas/AccountingExportLine' }
+    AccountingExportList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AccountingExportBatchSummary' }
+    AccountingExportGenerateInput:
+      type: object
+      additionalProperties: false
+      required: [accountingPeriodId, exportFormat]
+      properties:
+        accountingPeriodId: { type: string, format: uuid }
+        exportFormat: { $ref: '#/components/schemas/AccountingExportFormat' }
+    AccountingExportCompletionInput:
+      type: object
+      additionalProperties: false
+      required: [exportReference]
+      properties:
+        exportReference: { type: [string, 'null'], maxLength: 1000 }
     AccountingCloseStatus:
       type: string
       enum: [open, closed]
