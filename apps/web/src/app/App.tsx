@@ -47,6 +47,7 @@ import type {
   ContractStatus,
   ContractType,
   Engagement,
+  EngagementInput,
   EngagementSummary,
   EngagementStatus,
 } from '../api/generated.js';
@@ -145,6 +146,8 @@ const engagementStatusLabels: Record<EngagementStatus, string> = {
 type Route =
   | { page: 'engagements' }
   | { page: 'engagement-detail'; id: string }
+  | { page: 'engagement-new' }
+  | { page: 'engagement-edit'; id: string }
   | { page: 'contracts' }
   | { page: 'contract-detail'; id: string }
   | { page: 'contract-new' }
@@ -176,6 +179,16 @@ type Route =
 function currentRoute(): Route {
   if (window.location.pathname === '/engagements')
     return { page: 'engagements' };
+  if (window.location.pathname === '/engagements/new')
+    return { page: 'engagement-new' };
+  const engagementEdit = window.location.pathname.match(
+    /^\/engagements\/([^/]+)\/edit$/,
+  );
+  if (engagementEdit)
+    return {
+      page: 'engagement-edit',
+      id: decodeURIComponent(engagementEdit[1]!),
+    };
   const engagement = window.location.pathname.match(/^\/engagements\/([^/]+)$/);
   if (engagement)
     return {
@@ -278,10 +291,12 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
 function EngagementListView({
   api,
   onOpen,
+  onCreate,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   onOpen: (id: string) => void;
+  onCreate: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [items, setItems] = useState<EngagementSummary[]>([]);
@@ -326,6 +341,9 @@ function EngagementListView({
           <h2>参画</h2>
           <p>契約の認可境界を引き継いだ参画情報を表示します。</p>
         </div>
+        <button className="primary-button" onClick={onCreate}>
+          参画を登録
+        </button>
       </div>
       <div className="filter-row">
         <input
@@ -403,16 +421,25 @@ function EngagementDetail({
   id,
   onBack,
   onOpenContract,
+  onEdit,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
   onOpenContract: (id: string) => void;
+  onEdit: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [item, setItem] = useState<Engagement | null>(null);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [nextStatus, setNextStatus] = useState<
+    Exclude<EngagementStatus, 'draft'> | ''
+  >('');
+  const [reason, setReason] = useState('');
+  const [actualDate, setActualDate] = useState('');
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     void api
       .getEngagement(id)
@@ -431,6 +458,38 @@ function EngagementDetail({
           );
       });
   }, [api, id, onUnauthorized]);
+  async function transition(event: FormEvent) {
+    event.preventDefault();
+    if (!item || !nextStatus) return;
+    setSaving(true);
+    setActionError('');
+    try {
+      const updated = await api.transitionEngagementStatus(
+        item.id,
+        item.rowVersion,
+        {
+          status: nextStatus,
+          reason: reason.trim() || null,
+          actualDate: actualDate || null,
+        },
+      );
+      setItem(updated);
+      setNextStatus('');
+      setReason('');
+      setActualDate('');
+    } catch (failure) {
+      if (failure instanceof ApiClientError && failure.status === 401)
+        await onUnauthorized();
+      else
+        setActionError(
+          failure instanceof Error
+            ? failure.message
+            : '参画状態を更新できませんでした。',
+        );
+    } finally {
+      setSaving(false);
+    }
+  }
   if (error)
     return (
       <section className="content-panel">
@@ -456,9 +515,16 @@ function EngagementDetail({
           <h2>{item.engineerName}</h2>
           <p>{item.contractTitle}</p>
         </div>
-        <button className="secondary-button" onClick={onBack}>
-          参画一覧へ戻る
-        </button>
+        <div className="filter-row">
+          {item.status === 'draft' ? (
+            <button className="primary-button" onClick={onEdit}>
+              編集
+            </button>
+          ) : null}
+          <button className="secondary-button" onClick={onBack}>
+            参画一覧へ戻る
+          </button>
+        </div>
       </div>
       <dl className="detail-grid">
         <dt>状態</dt>
@@ -530,6 +596,382 @@ function EngagementDetail({
           )}
         </dd>
       </dl>
+      {!['ended', 'cancelled'].includes(item.status) ? (
+        <form
+          className="project-form"
+          onSubmit={(event) => void transition(event)}
+        >
+          <h3>参画状態</h3>
+          {actionError ? <p role="alert">{actionError}</p> : null}
+          <label>
+            次の参画状態
+            <select
+              required
+              value={nextStatus}
+              onChange={(event) =>
+                setNextStatus(
+                  event.target.value as Exclude<EngagementStatus, 'draft'> | '',
+                )
+              }
+            >
+              <option value="">選択してください</option>
+              {item.status === 'draft' ? (
+                <>
+                  <option value="preparing">参画準備中へ</option>
+                  <option value="cancelled">開始前取消</option>
+                </>
+              ) : item.status === 'preparing' ? (
+                <>
+                  <option value="active">参画開始</option>
+                  <option value="cancelled">開始前取消</option>
+                </>
+              ) : item.status === 'active' ? (
+                <option value="ending">終了手続開始</option>
+              ) : (
+                <option value="ended">参画終了</option>
+              )}
+            </select>
+          </label>
+          <label>
+            実績日
+            <input
+              aria-label="参画実績日"
+              type="date"
+              value={actualDate}
+              onChange={(event) => setActualDate(event.target.value)}
+            />
+          </label>
+          <label>
+            変更理由
+            <textarea
+              maxLength={1000}
+              required={nextStatus === 'ended' || nextStatus === 'cancelled'}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </label>
+          <button className="primary-button" disabled={saving || !nextStatus}>
+            {saving ? '更新中…' : '参画状態を更新'}
+          </button>
+        </form>
+      ) : null}
+    </section>
+  );
+}
+
+function EngagementForm({
+  api,
+  id,
+  onCancel,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  id?: string;
+  onCancel: () => void;
+  onSaved: (id: string) => void;
+}) {
+  const empty: EngagementInput = {
+    engagementNo: '',
+    contractId: '',
+    engineerId: '',
+    previousEngagementId: null,
+    plannedStartDate: '',
+    plannedEndDate: null,
+    roleName: null,
+    workLocation: null,
+    remoteFrequency: null,
+    condition: {
+      effectiveFrom: '',
+      effectiveTo: null,
+      monthlySalesAmount: null,
+      monthlyCostAmount: null,
+      currency: 'JPY',
+      settlementLowerHours: null,
+      settlementUpperHours: null,
+      notes: null,
+    },
+  };
+  const [input, setInput] = useState<EngagementInput>(empty);
+  const [rowVersion, setRowVersion] = useState(0);
+  const [loading, setLoading] = useState(Boolean(id));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!id) return;
+    void api
+      .getEngagement(id)
+      .then((item) => {
+        const condition = item.conditions[0];
+        setInput({
+          engagementNo: item.engagementNo,
+          contractId: item.contractId,
+          engineerId: item.engineerId,
+          previousEngagementId: item.previousEngagementId,
+          plannedStartDate: item.plannedStartDate ?? '',
+          plannedEndDate: item.plannedEndDate,
+          roleName: item.roleName,
+          workLocation: item.workLocation,
+          remoteFrequency: item.remoteFrequency,
+          condition: {
+            effectiveFrom:
+              condition?.effectiveFrom ?? item.plannedStartDate ?? '',
+            effectiveTo: condition?.effectiveTo ?? null,
+            monthlySalesAmount: condition?.monthlySalesAmount ?? null,
+            monthlyCostAmount: condition?.monthlyCostAmount ?? null,
+            currency: condition?.currency ?? 'JPY',
+            settlementLowerHours: condition?.settlementLowerHours ?? null,
+            settlementUpperHours: condition?.settlementUpperHours ?? null,
+            notes: condition?.notes ?? null,
+          },
+        });
+        setRowVersion(item.rowVersion);
+      })
+      .catch((failure: unknown) =>
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : '参画を読み込めませんでした。',
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [api, id]);
+  const set = <K extends keyof EngagementInput>(
+    key: K,
+    value: EngagementInput[K],
+  ) => setInput((current) => ({ ...current, [key]: value }));
+  const setCondition = <K extends keyof EngagementInput['condition']>(
+    key: K,
+    value: EngagementInput['condition'][K],
+  ) =>
+    setInput((current) => ({
+      ...current,
+      condition: { ...current.condition, [key]: value },
+    }));
+  const nullableNumber = (value: string) =>
+    value === '' ? null : Number(value);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const saved = id
+        ? await api.updateEngagement(id, rowVersion, input)
+        : await api.createEngagement(input);
+      onSaved(saved.id);
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : '参画を保存できませんでした。',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  if (loading)
+    return (
+      <section className="content-panel" role="status">
+        参画を読み込んでいます…
+      </section>
+    );
+  return (
+    <section className="content-panel">
+      <h2>{id ? '参画を編集' : '参画を登録'}</h2>
+      {error ? <p role="alert">{error}</p> : null}
+      <form className="project-form" onSubmit={(event) => void submit(event)}>
+        <label>
+          参画番号
+          <input
+            required
+            maxLength={32}
+            value={input.engagementNo}
+            onChange={(e) => set('engagementNo', e.target.value)}
+          />
+        </label>
+        <label>
+          契約ID
+          <input
+            required
+            disabled={Boolean(id)}
+            value={input.contractId}
+            onChange={(e) => set('contractId', e.target.value)}
+          />
+        </label>
+        <label>
+          技術者ID
+          <input
+            required
+            disabled={Boolean(id)}
+            value={input.engineerId}
+            onChange={(e) => set('engineerId', e.target.value)}
+          />
+        </label>
+        <label>
+          前回参画ID
+          <input
+            value={input.previousEngagementId ?? ''}
+            onChange={(e) =>
+              set('previousEngagementId', e.target.value || null)
+            }
+          />
+        </label>
+        <label>
+          参画予定開始日
+          <input
+            required
+            type="date"
+            value={input.plannedStartDate}
+            onChange={(e) => {
+              set('plannedStartDate', e.target.value);
+              if (!input.condition.effectiveFrom)
+                setCondition('effectiveFrom', e.target.value);
+            }}
+          />
+        </label>
+        <label>
+          参画予定終了日
+          <input
+            type="date"
+            value={input.plannedEndDate ?? ''}
+            onChange={(e) => set('plannedEndDate', e.target.value || null)}
+          />
+        </label>
+        <label>
+          役割
+          <input
+            maxLength={300}
+            value={input.roleName ?? ''}
+            onChange={(e) => set('roleName', e.target.value || null)}
+          />
+        </label>
+        <label>
+          勤務地
+          <input
+            maxLength={500}
+            value={input.workLocation ?? ''}
+            onChange={(e) => {
+              set('workLocation', e.target.value || null);
+            }}
+          />
+        </label>
+        <label>
+          リモート頻度
+          <input
+            maxLength={200}
+            value={input.remoteFrequency ?? ''}
+            onChange={(e) => {
+              set('remoteFrequency', e.target.value || null);
+            }}
+          />
+        </label>
+        <fieldset>
+          <legend>初回参画条件</legend>
+          <label>
+            条件適用開始日
+            <input
+              required
+              type="date"
+              value={input.condition.effectiveFrom}
+              onChange={(e) => setCondition('effectiveFrom', e.target.value)}
+            />
+          </label>
+          <label>
+            条件適用終了日
+            <input
+              type="date"
+              value={input.condition.effectiveTo ?? ''}
+              onChange={(e) =>
+                setCondition('effectiveTo', e.target.value || null)
+              }
+            />
+          </label>
+          <label>
+            月額売上
+            <input
+              type="number"
+              min="0"
+              value={input.condition.monthlySalesAmount ?? ''}
+              onChange={(e) =>
+                setCondition(
+                  'monthlySalesAmount',
+                  nullableNumber(e.target.value),
+                )
+              }
+            />
+          </label>
+          <label>
+            月額原価
+            <input
+              type="number"
+              min="0"
+              value={input.condition.monthlyCostAmount ?? ''}
+              onChange={(e) =>
+                setCondition(
+                  'monthlyCostAmount',
+                  nullableNumber(e.target.value),
+                )
+              }
+            />
+          </label>
+          <label>
+            通貨
+            <input
+              required
+              pattern="[A-Z]{3}"
+              value={input.condition.currency}
+              onChange={(e) =>
+                setCondition('currency', e.target.value.toUpperCase())
+              }
+            />
+          </label>
+          <label>
+            精算下限時間
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={input.condition.settlementLowerHours ?? ''}
+              onChange={(e) =>
+                setCondition(
+                  'settlementLowerHours',
+                  nullableNumber(e.target.value),
+                )
+              }
+            />
+          </label>
+          <label>
+            精算上限時間
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={input.condition.settlementUpperHours ?? ''}
+              onChange={(e) =>
+                setCondition(
+                  'settlementUpperHours',
+                  nullableNumber(e.target.value),
+                )
+              }
+            />
+          </label>
+          <label>
+            条件備考
+            <textarea
+              maxLength={5000}
+              value={input.condition.notes ?? ''}
+              onChange={(e) => setCondition('notes', e.target.value || null)}
+            />
+          </label>
+        </fieldset>
+        <div className="filter-row">
+          <button className="primary-button" disabled={saving}>
+            {saving ? '保存中…' : id ? '参画を保存' : '参画を登録'}
+          </button>
+          <button type="button" className="secondary-button" onClick={onCancel}>
+            キャンセル
+          </button>
+        </div>
+      </form>
     </section>
   );
 }
@@ -3065,6 +3507,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         <EngagementListView
           api={api}
           onOpen={(id) => navigate(`/engagements/${id}`)}
+          onCreate={() => navigate('/engagements/new')}
           onUnauthorized={signOut}
         />
       ) : route.page === 'engagement-detail' ? (
@@ -3073,7 +3516,22 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           id={route.id}
           onBack={() => navigate('/engagements')}
           onOpenContract={(id) => navigate(`/contracts/${id}`)}
+          onEdit={() => navigate(`/engagements/${route.id}/edit`)}
           onUnauthorized={signOut}
+        />
+      ) : route.page === 'engagement-new' ||
+        route.page === 'engagement-edit' ? (
+        <EngagementForm
+          api={api}
+          {...(route.page === 'engagement-edit' ? { id: route.id } : {})}
+          onCancel={() =>
+            navigate(
+              route.page === 'engagement-edit'
+                ? `/engagements/${route.id}`
+                : '/engagements',
+            )
+          }
+          onSaved={(id) => navigate(`/engagements/${id}`)}
         />
       ) : route.page === 'contracts' ? (
         <ContractListView

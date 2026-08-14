@@ -60,12 +60,25 @@ import type {
   Engagement,
   EngagementList,
   ListEngagementsQuery,
+  EngagementInput,
+  EngagementStatusTransitionInput,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
   listEngagements(query?: ListEngagementsQuery): Promise<EngagementList>;
   getEngagement(id: string): Promise<Engagement>;
+  createEngagement(input: EngagementInput): Promise<Engagement>;
+  updateEngagement(
+    id: string,
+    rowVersion: number,
+    input: EngagementInput,
+  ): Promise<Engagement>;
+  transitionEngagementStatus(
+    id: string,
+    rowVersion: number,
+    input: EngagementStatusTransitionInput,
+  ): Promise<Engagement>;
   listContracts(query?: ListContractsQuery): Promise<ContractList>;
   getContract(id: string): Promise<Contract>;
   createContract(input: ContractInput): Promise<Contract>;
@@ -292,6 +305,25 @@ export function createProjectsApi(options: {
     },
     getEngagement(id) {
       return get<Engagement>(`/engagements/${encodeURIComponent(id)}`);
+    },
+    createEngagement(input) {
+      return send<Engagement>('/engagements', 'POST', input);
+    },
+    updateEngagement(id, rowVersion, input) {
+      return send<Engagement>(
+        `/engagements/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    transitionEngagementStatus(id, rowVersion, input) {
+      return send<Engagement>(
+        `/engagements/${encodeURIComponent(id)}/status`,
+        'POST',
+        input,
+        rowVersion,
+      );
     },
     listContracts(query = {}) {
       const params = new URLSearchParams();

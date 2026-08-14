@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app.js';
 import type {
   Engagement,
+  EngagementInput,
   EngagementRepository,
   EngagementSummary,
 } from '../src/modules/engagements/engagement-repository.js';
@@ -58,6 +59,28 @@ const engagement: Engagement = {
   ],
 };
 
+const input: EngagementInput = {
+  engagementNo: engagement.engagementNo,
+  contractId: engagement.contractId,
+  engineerId: engagement.engineerId,
+  previousEngagementId: null,
+  plannedStartDate: '2026-09-01',
+  plannedEndDate: '2027-02-28',
+  roleName: engagement.roleName,
+  workLocation: engagement.workLocation,
+  remoteFrequency: engagement.remoteFrequency,
+  condition: {
+    effectiveFrom: '2026-09-01',
+    effectiveTo: null,
+    monthlySalesAmount: 900000,
+    monthlyCostAmount: 650000,
+    currency: 'JPY',
+    settlementLowerHours: 140,
+    settlementUpperHours: 180,
+    notes: '初回条件',
+  },
+};
+
 const authentication: AuthenticationService = {
   authenticate: (accessToken) => Promise.resolve({ id: 'user-a', accessToken }),
 };
@@ -70,8 +93,16 @@ function repository(
 ): EngagementRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
+    canManage: vi.fn(() => Promise.resolve(true)),
     list: vi.fn(() => Promise.resolve({ items: [summary], nextCursor: null })),
     findById: vi.fn(() => Promise.resolve(engagement)),
+    create: vi.fn(() =>
+      Promise.resolve({ ...engagement, status: 'draft' as const }),
+    ),
+    update: vi.fn(() =>
+      Promise.resolve({ ...engagement, status: 'draft' as const }),
+    ),
+    transitionStatus: vi.fn(() => Promise.resolve(engagement)),
     ...overrides,
   };
 }
@@ -176,5 +207,104 @@ describe('engagement read API', () => {
       headers: { authorization: 'Bearer valid' },
     });
     expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('engagement write API', () => {
+  it('creates a manual engagement draft', async () => {
+    const create = vi.fn(() =>
+      Promise.resolve({
+        ...engagement,
+        status: 'draft' as const,
+        rowVersion: 1,
+      }),
+    );
+    const response = await app(repository({ create })).inject({
+      method: 'POST',
+      url: '/api/v1/engagements',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.headers.etag).toBe('"1"');
+    expect(create).toHaveBeenCalledWith('valid', input, expect.any(String));
+  });
+
+  it('requires contract.manage to create', async () => {
+    const response = await app(
+      repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'POST',
+      url: '/api/v1/engagements',
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('updates a draft using If-Match', async () => {
+    const update = vi.fn(() =>
+      Promise.resolve({
+        ...engagement,
+        status: 'draft' as const,
+        rowVersion: 3,
+      }),
+    );
+    const response = await app(repository({ update })).inject({
+      method: 'PUT',
+      url: `/api/v1/engagements/${engagement.id}`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      'valid',
+      engagement.id,
+      2,
+      input,
+      expect.any(String),
+    );
+  });
+
+  it('transitions to active with an actual start date', async () => {
+    const transitionStatus = vi.fn(() => Promise.resolve(engagement));
+    const response = await app(repository({ transitionStatus })).inject({
+      method: 'POST',
+      url: `/api/v1/engagements/${engagement.id}/status`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: {
+        status: 'active',
+        reason: '開始確認済み',
+        actualDate: '2026-09-01',
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(transitionStatus).toHaveBeenCalledWith(
+      'valid',
+      engagement.id,
+      2,
+      { status: 'active', reason: '開始確認済み', actualDate: '2026-09-01' },
+      expect.any(String),
+    );
+  });
+
+  it('requires a reason when ending or cancelling', async () => {
+    const response = await app().inject({
+      method: 'POST',
+      url: `/api/v1/engagements/${engagement.id}/status`,
+      headers: { authorization: 'Bearer valid', 'if-match': '"2"' },
+      payload: { status: 'ended', reason: null, actualDate: '2027-02-28' },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('requires If-Match for draft updates', async () => {
+    const response = await app().inject({
+      method: 'PUT',
+      url: `/api/v1/engagements/${engagement.id}`,
+      headers: { authorization: 'Bearer valid' },
+      payload: input,
+    });
+    expect(response.statusCode).toBe(428);
   });
 });
