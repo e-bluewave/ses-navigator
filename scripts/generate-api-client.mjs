@@ -63,6 +63,8 @@ const requiredContractFragments = [
   'operationId: createProjectExtraction',
   'operationId: getLatestProjectExtraction',
   'operationId: reviewProjectExtraction',
+  'operationId: createProjectEngineerMatch',
+  'operationId: getLatestProjectEngineerMatch',
   'operationId: getAuthContext',
   'operationId: listCompanies',
   'operationId: getCompany',
@@ -676,6 +678,77 @@ export interface ProjectExtractionReviewInput {
   decision: 'approved' | 'rejected';
   correctedResult: ProjectExtractionResult | null;
   notes: string | null;
+}
+
+export interface ProjectEngineerMatchSkill {
+  name: string;
+  requirementType: string | null;
+  requiredMonths: number | null;
+  experienceMonths: number | null;
+  reason: string | null;
+}
+export interface ProjectEngineerMatchEvidence {
+  text: string;
+  evidence: string;
+}
+export interface ProjectEngineerMatchExplanation {
+  matches: ProjectEngineerMatchEvidence[];
+  mismatches: ProjectEngineerMatchEvidence[];
+  missingInformation: ProjectEngineerMatchEvidence[];
+  warnings: string[];
+  recommendation: string;
+  questions: string[];
+}
+export interface ProjectEngineerMatchFacts {
+  engineerManagementNo: string;
+  engineerName: string;
+  status: string;
+  availabilityStatus: string;
+  availableFrom: string | null;
+  nearestStation: string | null;
+  desiredRateMin: number | null;
+  desiredRateMax: number | null;
+  currencyCode: string | null;
+  remotePreference: string | null;
+  preferredLocations: Array<{
+    prefecture: string | null;
+    city: string | null;
+    stationName: string | null;
+  }>;
+}
+export interface ProjectEngineerMatchCandidate {
+  id: string;
+  engineerId: string;
+  resumeVersionId: string | null;
+  rank: number;
+  overallScore: number;
+  requiredSkillScore: number;
+  preferredSkillScore: number;
+  availabilityScore: number;
+  rateScore: number;
+  locationScore: number;
+  requiredConditionsMet: boolean;
+  confidenceScore: number;
+  matchedSkills: ProjectEngineerMatchSkill[];
+  missingSkills: ProjectEngineerMatchSkill[];
+  warnings: string[];
+  facts: ProjectEngineerMatchFacts;
+  explanation: ProjectEngineerMatchExplanation | null;
+}
+export interface ProjectEngineerMatch {
+  id: string;
+  projectId: string;
+  projectRequirementVersionId: string | null;
+  aiExecutionId: string;
+  status: 'explaining' | 'completed' | 'explanation_failed';
+  calculationVersion: string;
+  criteria: Record<string, unknown>;
+  candidateCount: number;
+  overallSummary: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  candidates: ProjectEngineerMatchCandidate[];
 }
 
 export interface ApiErrorBody {

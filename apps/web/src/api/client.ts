@@ -8,6 +8,7 @@ import type {
   ProjectAuditList,
   ProjectExtraction,
   ProjectExtractionReviewInput,
+  ProjectEngineerMatch,
   Company,
   CompanyInput,
   CompanyList,
@@ -101,6 +102,13 @@ import type {
 } from './generated.js';
 
 export interface ProjectsApi {
+  createProjectEngineerMatch(
+    projectId: string,
+    limit?: number,
+  ): Promise<ProjectEngineerMatch>;
+  getLatestProjectEngineerMatch(
+    projectId: string,
+  ): Promise<ProjectEngineerMatch | null>;
   createProjectExtraction(
     projectId: string,
     sourceText: string,
@@ -495,6 +503,18 @@ export function createProjectsApi(options: {
         `/projects/${encodeURIComponent(projectId)}/extractions/${encodeURIComponent(extractionId)}/review`,
         'POST',
         input,
+      );
+    },
+    createProjectEngineerMatch(projectId, limit = 5) {
+      return send<ProjectEngineerMatch>(
+        `/projects/${encodeURIComponent(projectId)}/ai/match-engineers`,
+        'POST',
+        { limit },
+      );
+    },
+    getLatestProjectEngineerMatch(projectId) {
+      return get<ProjectEngineerMatch | null>(
+        `/projects/${encodeURIComponent(projectId)}/ai/matches/latest`,
       );
     },
     transitionExpenseStatus(id, rowVersion, input) {

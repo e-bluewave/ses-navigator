@@ -63,6 +63,11 @@ import type { ProjectExtractionRepository } from './modules/project-extractions/
 import { OpenAIProjectExtractor } from './modules/project-extractions/project-extraction-service.js';
 import type { ProjectExtractor } from './modules/project-extractions/project-extraction-service.js';
 import { registerProjectExtractionRoutes } from './modules/project-extractions/project-extraction-routes.js';
+import { SupabaseProjectMatchRepository } from './modules/project-matches/project-match-repository.js';
+import type { ProjectMatchRepository } from './modules/project-matches/project-match-repository.js';
+import { OpenAIProjectMatchExplainer } from './modules/project-matches/project-match-service.js';
+import type { ProjectMatchExplainer } from './modules/project-matches/project-match-service.js';
+import { registerProjectMatchRoutes } from './modules/project-matches/project-match-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -86,6 +91,8 @@ export interface AppDependencies {
   resumeExtractor?: ResumeExtractor;
   projectExtractions?: ProjectExtractionRepository;
   projectExtractor?: ProjectExtractor;
+  projectMatches?: ProjectMatchRepository;
+  projectMatchExplainer?: ProjectMatchExplainer;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -183,6 +190,11 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
     dependencies.projectExtractions ??
       new SupabaseProjectExtractionRepository(),
     dependencies.projectExtractor ?? new OpenAIProjectExtractor(),
+  );
+  registerProjectMatchRoutes(
+    app,
+    dependencies.projectMatches ?? new SupabaseProjectMatchRepository(),
+    dependencies.projectMatchExplainer ?? new OpenAIProjectMatchExplainer(),
   );
 
   return app;

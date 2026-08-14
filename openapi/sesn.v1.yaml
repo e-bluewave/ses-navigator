@@ -2457,6 +2457,40 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{id}/ai/match-engineers:
+    post:
+      operationId: createProjectEngineerMatch
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectEngineerMatchInput' }
+      responses:
+        '201':
+          description: Deterministic scores and AI explanations completed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectEngineerMatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{id}/ai/matches/latest:
+    get:
+      operationId: getLatestProjectEngineerMatch
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Latest saved match run, or null when not requested
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/ProjectEngineerMatch' }
+                  - { type: 'null' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -3790,6 +3824,120 @@ components:
             - { $ref: '#/components/schemas/ProjectExtractionResult' }
             - { type: 'null' }
         notes: { type: [string, 'null'], maxLength: 2000 }
+    ProjectEngineerMatchInput:
+      type: object
+      additionalProperties: false
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 5, default: 5 }
+    ProjectEngineerMatchSkill:
+      type: object
+      additionalProperties: false
+      required: [name, requirementType, requiredMonths, experienceMonths, reason]
+      properties:
+        name: { type: string }
+        requirementType: { type: [string, 'null'] }
+        requiredMonths: { type: [integer, 'null'], minimum: 0 }
+        experienceMonths: { type: [integer, 'null'], minimum: 0 }
+        reason: { type: [string, 'null'] }
+    ProjectEngineerMatchEvidence:
+      type: object
+      additionalProperties: false
+      required: [text, evidence]
+      properties:
+        text: { type: string }
+        evidence: { type: string }
+    ProjectEngineerMatchExplanation:
+      type: object
+      additionalProperties: false
+      required: [matches, mismatches, missingInformation, warnings, recommendation, questions]
+      properties:
+        matches:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectEngineerMatchEvidence' }
+        mismatches:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectEngineerMatchEvidence' }
+        missingInformation:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectEngineerMatchEvidence' }
+        warnings: { type: array, items: { type: string } }
+        recommendation: { type: string }
+        questions: { type: array, items: { type: string } }
+    ProjectEngineerMatchFacts:
+      type: object
+      additionalProperties: false
+      required: [engineerManagementNo, engineerName, status, availabilityStatus, availableFrom, nearestStation, desiredRateMin, desiredRateMax, currencyCode, remotePreference, preferredLocations]
+      properties:
+        engineerManagementNo: { type: string }
+        engineerName: { type: string }
+        status: { type: string }
+        availabilityStatus: { type: string }
+        availableFrom: { type: [string, 'null'], format: date }
+        nearestStation: { type: [string, 'null'] }
+        desiredRateMin: { type: [integer, 'null'] }
+        desiredRateMax: { type: [integer, 'null'] }
+        currencyCode: { type: [string, 'null'] }
+        remotePreference: { type: [string, 'null'] }
+        preferredLocations:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [prefecture, city, stationName]
+            properties:
+              prefecture: { type: [string, 'null'] }
+              city: { type: [string, 'null'] }
+              stationName: { type: [string, 'null'] }
+    ProjectEngineerMatchCandidate:
+      type: object
+      additionalProperties: false
+      required: [id, engineerId, resumeVersionId, rank, overallScore, requiredSkillScore, preferredSkillScore, availabilityScore, rateScore, locationScore, requiredConditionsMet, confidenceScore, matchedSkills, missingSkills, warnings, facts, explanation]
+      properties:
+        id: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        resumeVersionId: { type: [string, 'null'], format: uuid }
+        rank: { type: integer, minimum: 1, maximum: 5 }
+        overallScore: { type: number, minimum: 0, maximum: 100 }
+        requiredSkillScore: { type: number, minimum: 0, maximum: 100 }
+        preferredSkillScore: { type: number, minimum: 0, maximum: 100 }
+        availabilityScore: { type: number, minimum: 0, maximum: 100 }
+        rateScore: { type: number, minimum: 0, maximum: 100 }
+        locationScore: { type: number, minimum: 0, maximum: 100 }
+        requiredConditionsMet: { type: boolean }
+        confidenceScore: { type: number, minimum: 0, maximum: 1 }
+        matchedSkills:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectEngineerMatchSkill' }
+        missingSkills:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectEngineerMatchSkill' }
+        warnings: { type: array, items: { type: string } }
+        facts: { $ref: '#/components/schemas/ProjectEngineerMatchFacts' }
+        explanation:
+          oneOf:
+            - { $ref: '#/components/schemas/ProjectEngineerMatchExplanation' }
+            - { type: 'null' }
+    ProjectEngineerMatch:
+      type: object
+      additionalProperties: false
+      required: [id, projectId, projectRequirementVersionId, aiExecutionId, status, calculationVersion, criteria, candidateCount, overallSummary, errorMessage, createdAt, completedAt, candidates]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        projectRequirementVersionId: { type: [string, 'null'], format: uuid }
+        aiExecutionId: { type: string, format: uuid }
+        status: { type: string, enum: [explaining, completed, explanation_failed] }
+        calculationVersion: { type: string }
+        criteria: { type: object, additionalProperties: true }
+        candidateCount: { type: integer, minimum: 0, maximum: 5 }
+        overallSummary: { type: [string, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        candidates:
+          type: array
+          maxItems: 5
+          items: { $ref: '#/components/schemas/ProjectEngineerMatchCandidate' }
     ProjectDeleteInput:
       type: object
       required: [reason]

@@ -15,6 +15,7 @@ import type {
   RecruitmentStatus,
   ProjectInput,
   ProjectExtraction,
+  ProjectEngineerMatch,
   Engineer,
   EngineerInput,
   EngineerStatus,
@@ -10624,6 +10625,207 @@ function ProjectExtractionPanel({
   );
 }
 
+function ProjectEngineerMatchPanel({
+  api,
+  projectId,
+}: {
+  api: ProjectsApi;
+  projectId: string;
+}) {
+  const [match, setMatch] = useState<ProjectEngineerMatch | null>(null);
+  const [limit, setLimit] = useState(5);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .getLatestProjectEngineerMatch(projectId)
+      .then((result) => active && setMatch(result))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [api, projectId]);
+
+  async function runMatch() {
+    setRunning(true);
+    setError(null);
+    try {
+      setMatch(await api.createProjectEngineerMatch(projectId, limit));
+    } catch (reason) {
+      setError(reason);
+      try {
+        setMatch(await api.getLatestProjectEngineerMatch(projectId));
+      } catch {
+        // Keep the original matching error visible.
+      }
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <section className="audit-panel" aria-labelledby="project-match-heading">
+      <h3 id="project-match-heading">案件・技術者マッチング</h3>
+      <p>
+        構造化条件を決定ルールで採点し、AIは点数を変更せず推薦理由と確認事項を説明します。候補は自動提案されません。
+      </p>
+      {error ? <ErrorNotice error={error} /> : null}
+      <div className="button-row">
+        <label>
+          比較人数
+          <select
+            value={limit}
+            onChange={(event) => setLimit(Number(event.target.value))}
+          >
+            {[1, 2, 3, 4, 5].map((value) => (
+              <option key={value} value={value}>
+                {value}名
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={running}
+          onClick={() => void runMatch()}
+        >
+          {running ? 'マッチング中…' : '候補を再計算'}
+        </button>
+      </div>
+      {match ? (
+        <section aria-label="案件・技術者マッチング結果">
+          <p>
+            状態: {match.status}／算定ルール: {match.calculationVersion}／候補:{' '}
+            {match.candidateCount}名
+          </p>
+          {match.overallSummary ? <p>{match.overallSummary}</p> : null}
+          {match.errorMessage ? (
+            <p role="alert">
+              AI説明の生成に失敗しました。決定スコアは保存されています：
+              {match.errorMessage}
+            </p>
+          ) : null}
+          {match.candidates.length === 0 ? (
+            <p>参照可能な候補技術者がいません。</p>
+          ) : (
+            <div className="match-candidate-list">
+              {match.candidates.map((candidate) => (
+                <article className="audit-panel" key={candidate.id}>
+                  <div className="section-heading">
+                    <div>
+                      <p className="section-kicker">
+                        #{candidate.rank} {candidate.facts.engineerManagementNo}
+                      </p>
+                      <h4>{candidate.facts.engineerName}</h4>
+                    </div>
+                    <strong>{Math.round(candidate.overallScore)}点</strong>
+                  </div>
+                  <p>
+                    必須条件:{' '}
+                    {candidate.requiredConditionsMet ? '適合' : '不一致あり'}
+                    ／信頼度: {Math.round(candidate.confidenceScore * 100)}%
+                  </p>
+                  <dl className="detail-grid">
+                    <Detail
+                      label="必須スキル"
+                      value={`${Math.round(candidate.requiredSkillScore)}点`}
+                    />
+                    <Detail
+                      label="尚可スキル"
+                      value={`${Math.round(candidate.preferredSkillScore)}点`}
+                    />
+                    <Detail
+                      label="稼働"
+                      value={`${Math.round(candidate.availabilityScore)}点`}
+                    />
+                    <Detail
+                      label="単価"
+                      value={`${Math.round(candidate.rateScore)}点`}
+                    />
+                    <Detail
+                      label="勤務地"
+                      value={`${Math.round(candidate.locationScore)}点`}
+                    />
+                  </dl>
+                  <h5>一致スキル</h5>
+                  {candidate.matchedSkills.length ? (
+                    <ul>
+                      {candidate.matchedSkills.map((skill, index) => (
+                        <li key={`${skill.name}-${index}`}>
+                          {skill.name}
+                          {skill.experienceMonths == null
+                            ? ''
+                            : `（経験${skill.experienceMonths}か月）`}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>確認できた一致スキルはありません。</p>
+                  )}
+                  {candidate.missingSkills.length ? (
+                    <>
+                      <h5>必須スキルの不一致</h5>
+                      <ul>
+                        {candidate.missingSkills.map((skill, index) => (
+                          <li key={`${skill.name}-${index}`}>
+                            {skill.name} —{' '}
+                            {skill.reason === 'insufficient_experience'
+                              ? '経験期間不足'
+                              : '未登録'}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                  {candidate.warnings.length ? (
+                    <>
+                      <h5>決定ルールの注意点</h5>
+                      <ul>
+                        {candidate.warnings.map((warning) => (
+                          <li key={warning}>{warning}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                  {candidate.explanation ? (
+                    <>
+                      <h5>AI推薦理由</h5>
+                      <p>{candidate.explanation.recommendation}</p>
+                      {candidate.explanation.matches.length ? (
+                        <ul>
+                          {candidate.explanation.matches.map((point, index) => (
+                            <li key={`${point.text}-${index}`}>
+                              <strong>{point.text}</strong>
+                              <small>根拠: {point.evidence}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {candidate.explanation.questions.length ? (
+                        <>
+                          <h5>追加確認質問</h5>
+                          <ul>
+                            {candidate.explanation.questions.map((question) => (
+                              <li key={question}>{question}</li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : null}
+                    </>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+    </section>
+  );
+}
+
 function ProjectDetail({
   api,
   id,
@@ -10750,6 +10952,7 @@ function ProjectDetail({
             projectId={id}
             onApplied={setProject}
           />
+          <ProjectEngineerMatchPanel api={api} projectId={id} />
           {showDelete ? (
             <form
               className="delete-panel"
