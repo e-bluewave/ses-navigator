@@ -20,6 +20,7 @@ import type {
   Contract,
   ContractInput,
   Engagement,
+  EngagementInput,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -263,6 +264,11 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
     getEngagement: vi.fn(() => Promise.reject(new Error('not configured'))),
+    createEngagement: vi.fn(() => Promise.reject(new Error('not configured'))),
+    updateEngagement: vi.fn(() => Promise.reject(new Error('not configured'))),
+    transitionEngagementStatus: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listContracts: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -414,6 +420,72 @@ describe('App', () => {
       expect(listEngagements).toHaveBeenLastCalledWith({
         q: '青波',
         status: 'active',
+      }),
+    );
+  });
+
+  it('creates a manual engagement draft with initial conditions', async () => {
+    window.history.replaceState({}, '', '/engagements/new');
+    const created = { ...engagement, status: 'draft' as const, rowVersion: 1 };
+    const createEngagement = vi
+      .fn<(input: EngagementInput) => Promise<Engagement>>()
+      .mockResolvedValue(created);
+    render(<App auth={auth()} api={api({ createEngagement })} />);
+    fireEvent.change(await screen.findByLabelText('参画番号'), {
+      target: { value: engagement.engagementNo },
+    });
+    fireEvent.change(screen.getByLabelText('契約ID'), {
+      target: { value: engagement.contractId },
+    });
+    fireEvent.change(screen.getByLabelText('技術者ID'), {
+      target: { value: engagement.engineerId },
+    });
+    fireEvent.change(screen.getByLabelText('参画予定開始日'), {
+      target: { value: '2026-09-01' },
+    });
+    fireEvent.change(screen.getByLabelText('月額売上'), {
+      target: { value: '900000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '参画を登録' }));
+    await waitFor(() => expect(createEngagement).toHaveBeenCalledOnce());
+    const saved = createEngagement.mock.calls[0]![0];
+    expect(saved.engagementNo).toBe(engagement.engagementNo);
+    expect(saved.contractId).toBe(engagement.contractId);
+    expect(saved.condition.effectiveFrom).toBe('2026-09-01');
+    expect(saved.condition.monthlySalesAmount).toBe(900000);
+  });
+
+  it('moves a draft engagement into preparation with optimistic locking', async () => {
+    const draft = { ...engagement, status: 'draft' as const };
+    window.history.replaceState({}, '', `/engagements/${draft.id}`);
+    const transitionEngagementStatus = vi.fn(() =>
+      Promise.resolve({
+        ...draft,
+        status: 'preparing' as const,
+        rowVersion: 3,
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getEngagement: () => Promise.resolve(draft),
+          transitionEngagementStatus,
+        })}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('次の参画状態'), {
+      target: { value: 'preparing' },
+    });
+    fireEvent.change(screen.getByLabelText('変更理由'), {
+      target: { value: '開始準備を確認' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '参画状態を更新' }));
+    await waitFor(() =>
+      expect(transitionEngagementStatus).toHaveBeenCalledWith(draft.id, 2, {
+        status: 'preparing',
+        reason: '開始準備を確認',
+        actualDate: null,
       }),
     );
   });

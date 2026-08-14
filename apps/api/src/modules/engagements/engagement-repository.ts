@@ -54,6 +54,28 @@ export interface Engagement extends EngagementSummary {
   statusHistories: EngagementStatusHistory[];
 }
 
+export interface EngagementInput {
+  engagementNo: string;
+  contractId: string;
+  engineerId: string;
+  previousEngagementId: string | null;
+  plannedStartDate: string;
+  plannedEndDate: string | null;
+  roleName: string | null;
+  workLocation: string | null;
+  remoteFrequency: string | null;
+  condition: Omit<
+    EngagementCondition,
+    'id' | 'versionNo' | 'createdAt' | 'workLocation' | 'remoteFrequency'
+  >;
+}
+
+export interface EngagementStatusTransitionInput {
+  status: Exclude<EngagementStatus, 'draft'>;
+  reason: string | null;
+  actualDate: string | null;
+}
+
 export interface EngagementListQuery {
   limit: number;
   cursor?: { updatedAt: string; id: string };
@@ -68,11 +90,31 @@ export interface EngagementListResult {
 
 export interface EngagementRepository {
   canRead(accessToken: string): Promise<boolean>;
+  canManage(accessToken: string): Promise<boolean>;
   list(
     accessToken: string,
     query: EngagementListQuery,
   ): Promise<EngagementListResult>;
   findById(accessToken: string, id: string): Promise<Engagement | null>;
+  create(
+    accessToken: string,
+    input: EngagementInput,
+    requestId: string,
+  ): Promise<Engagement | null>;
+  update(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: EngagementInput,
+    requestId: string,
+  ): Promise<Engagement | null>;
+  transitionStatus(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: EngagementStatusTransitionInput,
+    requestId: string,
+  ): Promise<Engagement | null>;
 }
 
 type EngagementSummaryRow = {
@@ -135,6 +177,14 @@ export class SupabaseEngagementRepository implements EngagementRepository {
     return (await response.json()) === true;
   }
 
+  async canManage(token: string): Promise<boolean> {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'contract.manage' }),
+    });
+    return (await response.json()) === true;
+  }
+
   async list(
     token: string,
     query: EngagementListQuery,
@@ -178,6 +228,90 @@ export class SupabaseEngagementRepository implements EngagementRepository {
     if (response.status === 403) return null;
     const row = (await response.json()) as EngagementDetailRow | null;
     return row ? toEngagement(row) : null;
+  }
+
+  async create(
+    token: string,
+    input: EngagementInput,
+    requestId: string,
+  ): Promise<Engagement | null> {
+    return this.save(token, null, 0, input, requestId);
+  }
+
+  async update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: EngagementInput,
+    requestId: string,
+  ): Promise<Engagement | null> {
+    return this.save(token, id, rowVersion, input, requestId);
+  }
+
+  async transitionStatus(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: EngagementStatusTransitionInput,
+    requestId: string,
+  ): Promise<Engagement | null> {
+    const response = await this.request(
+      token,
+      '/rpc/transition_engagement_status',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          p_engagement_id: id,
+          p_row_version: rowVersion,
+          p_to_status: input.status,
+          p_change_reason: input.reason,
+          p_actual_date: input.actualDate,
+          p_request_id: requestId,
+        }),
+      },
+    );
+    const saved = (await response.json()) as { id: string } | null;
+    return saved ? this.findById(token, saved.id) : null;
+  }
+
+  private async save(
+    token: string,
+    id: string | null,
+    rowVersion: number,
+    input: EngagementInput,
+    requestId: string,
+  ): Promise<Engagement | null> {
+    const response = await this.request(token, '/rpc/save_engagement', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_engagement_id: id,
+        p_row_version: rowVersion,
+        p_engagement: {
+          engagement_no: input.engagementNo,
+          contract_id: input.contractId,
+          engineer_id: input.engineerId,
+          previous_engagement_id: input.previousEngagementId,
+          planned_start_date: input.plannedStartDate,
+          planned_end_date: input.plannedEndDate,
+          role_name: input.roleName,
+          work_location: input.workLocation,
+          remote_frequency: input.remoteFrequency,
+        },
+        p_condition: {
+          effective_from: input.condition.effectiveFrom,
+          effective_to: input.condition.effectiveTo,
+          monthly_sales_amount: input.condition.monthlySalesAmount,
+          monthly_cost_amount: input.condition.monthlyCostAmount,
+          currency: input.condition.currency,
+          settlement_lower_hours: input.condition.settlementLowerHours,
+          settlement_upper_hours: input.condition.settlementUpperHours,
+          notes: input.condition.notes,
+        },
+        p_request_id: requestId,
+      }),
+    });
+    const saved = (await response.json()) as { id: string } | null;
+    return saved ? this.findById(token, saved.id) : null;
   }
 
   private async request(

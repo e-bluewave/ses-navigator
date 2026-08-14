@@ -33,6 +33,60 @@ describe('generated projects API client', () => {
     );
   });
 
+  it('sends engagement create, versioned update, and status transition', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ id: 'engagement-1' }), { status: 200 }),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    const input = {
+      engagementNo: 'ENG-000001',
+      contractId: '11111111-1111-4111-8111-111111111111',
+      engineerId: '22222222-2222-4222-8222-222222222222',
+      previousEngagementId: null,
+      plannedStartDate: '2026-09-01',
+      plannedEndDate: null,
+      roleName: '開発',
+      workLocation: '東京都',
+      remoteFrequency: '週3日',
+      condition: {
+        effectiveFrom: '2026-09-01',
+        effectiveTo: null,
+        monthlySalesAmount: 900000,
+        monthlyCostAmount: 650000,
+        currency: 'JPY',
+        settlementLowerHours: 140,
+        settlementUpperHours: 180,
+        notes: null,
+      },
+    };
+    await api.createEngagement(input);
+    await api.updateEngagement('engagement-1', 2, input);
+    await api.transitionEngagementStatus('engagement-1', 3, {
+      status: 'preparing',
+      reason: '開始準備',
+      actualDate: null,
+    });
+    expect(request.mock.calls[0]![0]).toBe('/api/v1/engagements');
+    expect(request.mock.calls[1]![1]).toMatchObject({
+      method: 'PUT',
+      headers: { 'if-match': '"2"' },
+    });
+    expect(request.mock.calls[2]![0]).toBe(
+      '/api/v1/engagements/engagement-1/status',
+    );
+    expect(request.mock.calls[2]![1]).toMatchObject({
+      method: 'POST',
+      headers: { 'if-match': '"3"' },
+    });
+  });
+
   it('lists and reads contracts with bearer authentication', async () => {
     const request = vi
       .fn()

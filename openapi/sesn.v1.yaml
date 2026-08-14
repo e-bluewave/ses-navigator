@@ -8,6 +8,23 @@ security:
   - bearerAuth: []
 paths:
   /engagements:
+    post:
+      operationId: createEngagement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EngagementInput' }
+      responses:
+        '201':
+          description: Manual engagement draft created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Engagement' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
     get:
       operationId: listEngagements
       parameters:
@@ -37,6 +54,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /engagements/{id}:
+    put:
+      operationId: updateEngagement
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EngagementInput' }
+      responses:
+        '200':
+          description: Engagement draft updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Engagement' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     get:
       operationId: getEngagement
       parameters:
@@ -56,6 +104,39 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /engagements/{id}/status:
+    post:
+      operationId: transitionEngagementStatus
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: '#/components/schemas/EngagementStatusTransitionInput' }
+      responses:
+        '200':
+          description: Engagement status transitioned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Engagement' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /contracts:
     post:
       operationId: createContract
@@ -2636,6 +2717,65 @@ components:
         toStatus: { $ref: '#/components/schemas/EngagementStatus' }
         changeReason: { type: [string, 'null'] }
         changedAt: { type: string, format: date-time }
+    EngagementInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          engagementNo,
+          contractId,
+          engineerId,
+          previousEngagementId,
+          plannedStartDate,
+          plannedEndDate,
+          roleName,
+          workLocation,
+          remoteFrequency,
+          condition,
+        ]
+      properties:
+        engagementNo: { type: string, minLength: 1, maxLength: 32 }
+        contractId: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        previousEngagementId: { type: [string, 'null'], format: uuid }
+        plannedStartDate: { type: string, format: date }
+        plannedEndDate: { type: [string, 'null'], format: date }
+        roleName: { type: [string, 'null'], maxLength: 300 }
+        workLocation: { type: [string, 'null'], maxLength: 500 }
+        remoteFrequency: { type: [string, 'null'], maxLength: 200 }
+        condition: { $ref: '#/components/schemas/EngagementConditionInput' }
+    EngagementConditionInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          effectiveFrom,
+          effectiveTo,
+          monthlySalesAmount,
+          monthlyCostAmount,
+          currency,
+          settlementLowerHours,
+          settlementUpperHours,
+          notes,
+        ]
+      properties:
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: [string, 'null'], format: date }
+        monthlySalesAmount: { type: [number, 'null'], minimum: 0 }
+        monthlyCostAmount: { type: [number, 'null'], minimum: 0 }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        settlementLowerHours: { type: [number, 'null'], minimum: 0 }
+        settlementUpperHours: { type: [number, 'null'], minimum: 0 }
+        notes: { type: [string, 'null'], maxLength: 5000 }
+    EngagementStatusTransitionInput:
+      type: object
+      additionalProperties: false
+      required: [status, reason, actualDate]
+      properties:
+        status:
+          { type: string, enum: [preparing, active, ending, ended, cancelled] }
+        reason: { type: [string, 'null'], maxLength: 1000 }
+        actualDate: { type: [string, 'null'], format: date }
     EngagementList:
       type: object
       required: [items, page]

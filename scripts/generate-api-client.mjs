@@ -7,6 +7,9 @@ const contract = await readFile(contractPath, 'utf8');
 const requiredContractFragments = [
   'operationId: listEngagements',
   'operationId: getEngagement',
+  'operationId: createEngagement',
+  'operationId: updateEngagement',
+  'operationId: transitionEngagementStatus',
   'operationId: listContracts',
   'operationId: getContract',
   'operationId: createContract',
@@ -661,6 +664,33 @@ export interface Engagement extends EngagementSummary {
   previousEngagementId: string | null;
   conditions: EngagementCondition[];
   statusHistories: EngagementStatusHistory[];
+}
+export interface EngagementConditionInput {
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  monthlySalesAmount: number | null;
+  monthlyCostAmount: number | null;
+  currency: string;
+  settlementLowerHours: number | null;
+  settlementUpperHours: number | null;
+  notes: string | null;
+}
+export interface EngagementInput {
+  engagementNo: string;
+  contractId: string;
+  engineerId: string;
+  previousEngagementId: string | null;
+  plannedStartDate: string;
+  plannedEndDate: string | null;
+  roleName: string | null;
+  workLocation: string | null;
+  remoteFrequency: string | null;
+  condition: EngagementConditionInput;
+}
+export interface EngagementStatusTransitionInput {
+  status: Exclude<EngagementStatus, 'draft'>;
+  reason: string | null;
+  actualDate: string | null;
 }
 export interface EngagementList {
   items: EngagementSummary[];
