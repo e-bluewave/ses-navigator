@@ -30,6 +30,7 @@ import type {
   EngineerQualificationInput,
   EngineerCareerHistory,
   EngineerResume,
+  ResumeExtraction,
   Proposal,
   ProposalInput,
   ProposalStatus,
@@ -8929,6 +8930,9 @@ function EngineerCareerResumePanel({
   const [projectName, setProjectName] = useState('');
   const [title, setTitle] = useState('職務経歴書');
   const [fileName, setFileName] = useState('');
+  const [resumeVersionId, setResumeVersionId] = useState('');
+  const [sourceText, setSourceText] = useState('');
+  const [extraction, setExtraction] = useState<ResumeExtraction | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(null);
   async function addCareer(e: FormEvent) {
@@ -8975,6 +8979,44 @@ function EngineerCareerResumePanel({
       });
       setFileName('');
       onSaved();
+    } catch (x) {
+      setError(x);
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function extractResume(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      setExtraction(
+        await api.createResumeExtraction(
+          engineerId,
+          resumeVersionId,
+          sourceText,
+        ),
+      );
+    } catch (x) {
+      setError(x);
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function reviewExtraction(decision: 'approved' | 'rejected') {
+    if (!extraction) return;
+    setSaving(true);
+    setError(null);
+    try {
+      setExtraction(
+        await api.reviewResumeExtraction(
+          engineerId,
+          resumeVersionId,
+          extraction.id,
+          { decision, correctedResult: null, notes: null },
+        ),
+      );
+      if (decision === 'approved') onSaved();
     } catch (x) {
       setError(x);
     } finally {
@@ -9052,6 +9094,122 @@ function EngineerCareerResumePanel({
           新しい版を追加
         </button>
       </form>
+      <h4>AI経歴書取り込み</h4>
+      <p>
+        経歴書本文からスキル・職務経歴・資格を抽出し、承認後にこの版の構造化データへ反映します。
+      </p>
+      <form onSubmit={(e) => void extractResume(e)}>
+        <label>
+          対象バージョン
+          <select
+            required
+            value={resumeVersionId}
+            onChange={(e) => {
+              setResumeVersionId(e.target.value);
+              setExtraction(null);
+            }}
+          >
+            <option value="">選択してください</option>
+            {resumes.flatMap((resume) =>
+              resume.versions.map((version) => (
+                <option key={version.id} value={version.id}>
+                  {resume.title} 第{version.versionNo}版
+                </option>
+              )),
+            )}
+          </select>
+        </label>
+        <label>
+          経歴書テキスト
+          <textarea
+            required
+            minLength={50}
+            maxLength={100000}
+            rows={10}
+            value={sourceText}
+            onChange={(e) => setSourceText(e.target.value)}
+          />
+        </label>
+        <button
+          className="primary-button"
+          disabled={saving || !resumeVersionId || sourceText.trim().length < 50}
+        >
+          {saving ? '解析中…' : 'AIで構造化'}
+        </button>
+      </form>
+      {extraction?.result ? (
+        <section aria-label="AI構造化結果">
+          <p>
+            状態: {extraction.status}／信頼度:{' '}
+            {Math.round(extraction.result.confidenceScore * 100)}%
+          </p>
+          {extraction.result.profile.summary ? (
+            <p>{extraction.result.profile.summary}</p>
+          ) : null}
+          <h5>職務経歴（{extraction.result.careerHistories.length}件）</h5>
+          <ul>
+            {extraction.result.careerHistories.map((career, index) => (
+              <li key={`${career.projectName}-${index}`}>
+                <strong>{career.projectName}</strong>
+                {career.roleName ? ` — ${career.roleName}` : ''}（
+                {career.startedOn ?? '開始日不明'}〜
+                {career.endedOn ?? '終了日不明'}）
+                <small>根拠: {career.evidence}</small>
+              </li>
+            ))}
+          </ul>
+          <h5>スキル（{extraction.result.skills.length}件）</h5>
+          <ul>
+            {extraction.result.skills.map((skill, index) => (
+              <li key={`${skill.name}-${index}`}>
+                <strong>{skill.name}</strong>
+                {skill.experienceMonths == null
+                  ? ''
+                  : ` — ${skill.experienceMonths}か月`}
+                <small>根拠: {skill.evidence}</small>
+              </li>
+            ))}
+          </ul>
+          <h5>資格（{extraction.result.qualifications.length}件）</h5>
+          <ul>
+            {extraction.result.qualifications.map((qualification, index) => (
+              <li key={`${qualification.name}-${index}`}>
+                <strong>{qualification.name}</strong>
+                {qualification.issuer ? ` — ${qualification.issuer}` : ''}
+                <small>根拠: {qualification.evidence}</small>
+              </li>
+            ))}
+          </ul>
+          {extraction.result.uncertainties.length ? (
+            <>
+              <h5>要確認事項</h5>
+              <ul>
+                {extraction.result.uncertainties.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {extraction.status === 'completed' ? (
+            <div className="button-row">
+              <button
+                className="primary-button"
+                disabled={saving}
+                onClick={() => void reviewExtraction('approved')}
+              >
+                構造化結果を承認
+              </button>
+              <button
+                className="secondary-button"
+                disabled={saving}
+                onClick={() => void reviewExtraction('rejected')}
+              >
+                却下
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
     </section>
   );
 }

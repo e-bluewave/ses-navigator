@@ -53,6 +53,11 @@ import { registerProfitabilityRoutes } from './modules/profitability/profitabili
 import { SupabaseSalesKpiRepository } from './modules/sales-kpi/sales-kpi-repository.js';
 import type { SalesKpiRepository } from './modules/sales-kpi/sales-kpi-repository.js';
 import { registerSalesKpiRoutes } from './modules/sales-kpi/sales-kpi-routes.js';
+import { SupabaseResumeExtractionRepository } from './modules/resume-extractions/resume-extraction-repository.js';
+import type { ResumeExtractionRepository } from './modules/resume-extractions/resume-extraction-repository.js';
+import { OpenAIResumeExtractor } from './modules/resume-extractions/resume-extraction-service.js';
+import type { ResumeExtractor } from './modules/resume-extractions/resume-extraction-service.js';
+import { registerResumeExtractionRoutes } from './modules/resume-extractions/resume-extraction-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -72,6 +77,8 @@ export interface AppDependencies {
   expenses?: ExpenseRepository;
   profitability?: ProfitabilityRepository;
   salesKpi?: SalesKpiRepository;
+  resumeExtractions?: ResumeExtractionRepository;
+  resumeExtractor?: ResumeExtractor;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -158,6 +165,11 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerSalesKpiRoutes(
     app,
     dependencies.salesKpi ?? new SupabaseSalesKpiRepository(),
+  );
+  registerResumeExtractionRoutes(
+    app,
+    dependencies.resumeExtractions ?? new SupabaseResumeExtractionRepository(),
+    dependencies.resumeExtractor ?? new OpenAIResumeExtractor(),
   );
 
   return app;

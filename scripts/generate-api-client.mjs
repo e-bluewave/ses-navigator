@@ -93,6 +93,9 @@ const requiredContractFragments = [
   'operationId: saveEngineerCareerHistory',
   'operationId: listEngineerResumes',
   'operationId: addEngineerResumeVersion',
+  'operationId: createResumeExtraction',
+  'operationId: getLatestResumeExtraction',
+  'operationId: reviewResumeExtraction',
   'enum: [draft, open, on_hold, closed, cancelled]',
   'enum: [recruiting, paused, filled, ended]',
   'required: [items, page]',
@@ -337,6 +340,68 @@ export interface EngineerResumeVersionInput {
 }
 export interface EngineerResumeList {
   items: EngineerResume[];
+}
+export interface ResumeExtractionResult {
+  profile: {
+    summary: string | null;
+    nearestStation: string | null;
+    availableFrom: string | null;
+  };
+  careerHistories: Array<{
+    projectName: string;
+    clientName: string | null;
+    roleName: string | null;
+    industry: string | null;
+    overview: string | null;
+    responsibilities: string | null;
+    achievements: string | null;
+    startedOn: string | null;
+    endedOn: string | null;
+    evidence: string;
+  }>;
+  skills: Array<{
+    name: string;
+    experienceMonths: number | null;
+    proficiencyLevel: string | null;
+    lastUsedOn: string | null;
+    evidence: string;
+  }>;
+  qualifications: Array<{
+    name: string;
+    issuer: string | null;
+    acquiredOn: string | null;
+    expiresOn: string | null;
+    evidence: string;
+  }>;
+  preferences: {
+    desiredRoles: string[];
+    desiredLocations: string[];
+    desiredContractTypes: string[];
+    minimumRate: number | null;
+    availableFrom: string | null;
+  };
+  uncertainties: string[];
+  confidenceScore: number;
+}
+export interface ResumeExtraction {
+  id: string;
+  resumeVersionId: string;
+  aiExecutionId: string;
+  status:
+    'pending' | 'processing' | 'completed' | 'approved' | 'rejected' | 'failed';
+  provider: string;
+  modelName: string;
+  promptVersion: string;
+  result: ResumeExtractionResult | null;
+  errorMessage: string | null;
+  reviewNotes: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
+export interface ResumeExtractionReviewInput {
+  decision: 'approved' | 'rejected';
+  correctedResult: ResumeExtractionResult | null;
+  notes: string | null;
 }
 export interface EngineerSkill {
   id: string;

@@ -621,6 +621,13 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     addEngineerResumeVersion: vi.fn(() =>
       Promise.reject(new Error('not configured')),
     ),
+    createResumeExtraction: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    getLatestResumeExtraction: vi.fn(() => Promise.resolve(null)),
+    reviewResumeExtraction: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listProjects: vi.fn(() =>
       Promise.resolve({
         items: [project],
