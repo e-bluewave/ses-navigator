@@ -6,6 +6,8 @@ import type {
   ProjectInput,
   ProjectList,
   ProjectAuditList,
+  ProjectExtraction,
+  ProjectExtractionReviewInput,
   Company,
   CompanyInput,
   CompanyList,
@@ -99,6 +101,19 @@ import type {
 } from './generated.js';
 
 export interface ProjectsApi {
+  createProjectExtraction(
+    projectId: string,
+    sourceText: string,
+    sourceTitle: string | null,
+  ): Promise<ProjectExtraction>;
+  getLatestProjectExtraction(
+    projectId: string,
+  ): Promise<ProjectExtraction | null>;
+  reviewProjectExtraction(
+    projectId: string,
+    extractionId: string,
+    input: ProjectExtractionReviewInput,
+  ): Promise<ProjectExtraction>;
   getSalesKpiDashboard(query: SalesKpiQuery): Promise<SalesKpiDashboard>;
   getAuthContext(): Promise<AuthContext>;
   getProfitabilityDashboard(
@@ -461,6 +476,25 @@ export function createProjectsApi(options: {
         'PUT',
         input,
         rowVersion,
+      );
+    },
+    createProjectExtraction(projectId, sourceText, sourceTitle) {
+      return send<ProjectExtraction>(
+        `/projects/${encodeURIComponent(projectId)}/extractions`,
+        'POST',
+        { sourceText, sourceTitle },
+      );
+    },
+    getLatestProjectExtraction(projectId) {
+      return get<ProjectExtraction | null>(
+        `/projects/${encodeURIComponent(projectId)}/extractions/latest`,
+      );
+    },
+    reviewProjectExtraction(projectId, extractionId, input) {
+      return send<ProjectExtraction>(
+        `/projects/${encodeURIComponent(projectId)}/extractions/${encodeURIComponent(extractionId)}/review`,
+        'POST',
+        input,
       );
     },
     transitionExpenseStatus(id, rowVersion, input) {

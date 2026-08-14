@@ -14,6 +14,7 @@ import type {
   ProjectStatus,
   RecruitmentStatus,
   ProjectInput,
+  ProjectExtraction,
   Engineer,
   EngineerInput,
   EngineerStatus,
@@ -7601,6 +7602,7 @@ function EngineerDetail({
       active = false;
     };
   }, [api, id, onUnauthorized]);
+
   async function removeEngineer(event: FormEvent) {
     event.preventDefault();
     if (!engineer) return;
@@ -7623,6 +7625,7 @@ function EngineerDetail({
       setAuditError(true);
     }
   }
+
   async function loadPrivate() {
     setPrivateError(false);
     try {
@@ -10403,6 +10406,224 @@ function ProjectList({
   );
 }
 
+function ProjectExtractionPanel({
+  api,
+  projectId,
+  onApplied,
+}: {
+  api: ProjectsApi;
+  projectId: string;
+  onApplied: (project: Project) => void;
+}) {
+  const [sourceTitle, setSourceTitle] = useState('案件メール');
+  const [sourceText, setSourceText] = useState('');
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [extraction, setExtraction] = useState<ProjectExtraction | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .getLatestProjectExtraction(projectId)
+      .then((result) => active && setExtraction(result))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [api, projectId]);
+
+  async function extractProject(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      setExtraction(
+        await api.createProjectExtraction(
+          projectId,
+          sourceText,
+          sourceTitle.trim() || null,
+        ),
+      );
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reviewExtraction(decision: 'approved' | 'rejected') {
+    if (!extraction) return;
+    setSaving(true);
+    setError(null);
+    try {
+      setExtraction(
+        await api.reviewProjectExtraction(projectId, extraction.id, {
+          decision,
+          correctedResult: null,
+          notes: reviewNotes.trim() || null,
+        }),
+      );
+      if (decision === 'approved') onApplied(await api.getProject(projectId));
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section
+      className="audit-panel"
+      aria-labelledby="project-extraction-heading"
+    >
+      <h3 id="project-extraction-heading">AI案件情報取り込み</h3>
+      <p>
+        メール・添付の本文から案件条件を抽出します。承認するまで案件情報には反映されません。
+      </p>
+      {error ? <ErrorNotice error={error} /> : null}
+      <form onSubmit={(event) => void extractProject(event)}>
+        <label>
+          原文タイトル
+          <input
+            maxLength={300}
+            value={sourceTitle}
+            onChange={(event) => setSourceTitle(event.target.value)}
+          />
+        </label>
+        <label>
+          案件情報の原文
+          <textarea
+            required
+            minLength={50}
+            maxLength={100000}
+            rows={10}
+            value={sourceText}
+            onChange={(event) => setSourceText(event.target.value)}
+          />
+        </label>
+        <button
+          className="primary-button"
+          disabled={saving || sourceText.trim().length < 50}
+        >
+          {saving ? '解析中…' : 'AIで案件情報を構造化'}
+        </button>
+      </form>
+      {extraction?.result ? (
+        <section aria-label="AI案件構造化結果">
+          <p>
+            状態: {extraction.status}／信頼度:{' '}
+            {Math.round(extraction.result.confidenceScore * 100)}%
+          </p>
+          <h4>{extraction.result.projectName ?? '案件名未抽出'}</h4>
+          <p>{extraction.result.summary ?? '概要未抽出'}</p>
+          <p>
+            期間: {extraction.result.startOn ?? '未確認'}〜
+            {extraction.result.endOn ?? '未確認'}／募集人数:{' '}
+            {extraction.result.openings ?? '未確認'}
+          </p>
+          <h5>必須スキル</h5>
+          <ul>
+            {extraction.result.requiredSkills.map((skill, index) => (
+              <li key={`${skill.name}-${index}`}>
+                <strong>{skill.name}</strong>
+                <small>根拠: {skill.evidence}</small>
+              </li>
+            ))}
+          </ul>
+          <h5>尚可スキル</h5>
+          <ul>
+            {extraction.result.preferredSkills.map((skill, index) => (
+              <li key={`${skill.name}-${index}`}>
+                <strong>{skill.name}</strong>
+                <small>根拠: {skill.evidence}</small>
+              </li>
+            ))}
+          </ul>
+          <p>
+            単価:{' '}
+            {extraction.result.commercial.rateMin == null
+              ? '未確認'
+              : money(
+                  extraction.result.commercial.rateMin,
+                  extraction.result.commercial.currencyCode,
+                )}
+            〜
+            {extraction.result.commercial.rateMax == null
+              ? '未確認'
+              : money(
+                  extraction.result.commercial.rateMax,
+                  extraction.result.commercial.currencyCode,
+                )}
+            ／精算:{' '}
+            {extraction.result.commercial.settlementLowerHours ?? '未確認'}〜
+            {extraction.result.commercial.settlementUpperHours ?? '未確認'}時間
+          </p>
+          <p>
+            勤務地: {extraction.result.workConditions.workplace ?? '未確認'}
+            ／勤務形態:{' '}
+            {extraction.result.workConditions.remoteType ?? '未確認'}
+          </p>
+          {extraction.result.companyCandidates.length ? (
+            <>
+              <h5>会社・担当者候補（自動統合しません）</h5>
+              <ul>
+                {extraction.result.companyCandidates.map((candidate, index) => (
+                  <li key={`${candidate.name}-${index}`}>
+                    <strong>{candidate.name}</strong>
+                    {candidate.contactName ? ` — ${candidate.contactName}` : ''}
+                    <small>根拠: {candidate.evidence}</small>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {extraction.result.uncertainties.length ? (
+            <>
+              <h5>要確認事項</h5>
+              <ul>
+                {extraction.result.uncertainties.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {extraction.status === 'completed' ? (
+            <>
+              <label>
+                レビューコメント（任意）
+                <textarea
+                  maxLength={2000}
+                  value={reviewNotes}
+                  onChange={(event) => setReviewNotes(event.target.value)}
+                />
+              </label>
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={saving}
+                  onClick={() => void reviewExtraction('approved')}
+                >
+                  抽出結果を承認・反映
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={saving}
+                  onClick={() => void reviewExtraction('rejected')}
+                >
+                  却下
+                </button>
+              </div>
+            </>
+          ) : null}
+        </section>
+      ) : null}
+    </section>
+  );
+}
+
 function ProjectDetail({
   api,
   id,
@@ -10524,6 +10745,11 @@ function ProjectDetail({
               value={formatDateTime(project.updatedAt)}
             />
           </dl>
+          <ProjectExtractionPanel
+            api={api}
+            projectId={id}
+            onApplied={setProject}
+          />
           {showDelete ? (
             <form
               className="delete-panel"
