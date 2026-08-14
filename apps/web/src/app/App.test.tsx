@@ -17,6 +17,7 @@ import type {
   InterviewInput,
   Proposal,
   Project,
+  ProjectExtraction,
   Contract,
   ContractInput,
   Engagement,
@@ -42,6 +43,66 @@ const project: Project = {
   plannedEndOn: null,
   updatedAt: '2026-08-08T12:00:00Z',
   rowVersion: 2,
+};
+
+const projectExtraction: ProjectExtraction = {
+  id: '12121212-1212-4212-8212-121212121212',
+  projectId: project.id,
+  aiExecutionId: '13131313-1313-4313-8313-131313131313',
+  status: 'completed',
+  provider: 'openai',
+  modelName: 'gpt-5.6-luna',
+  promptVersion: 'project-extraction-v1',
+  result: {
+    projectName: '官公庁向け基幹システム刷新',
+    summary: 'TypeScriptを用いた基幹システム刷新案件です。',
+    responsibilities: '設計、実装、テスト',
+    openings: 2,
+    startOn: '2026-10-01',
+    endOn: null,
+    requiredSkills: [
+      { name: 'TypeScript', requiredMonths: 36, evidence: '実務経験3年以上' },
+    ],
+    preferredSkills: [],
+    commercial: {
+      rateMin: 700000,
+      rateMax: 850000,
+      currencyCode: 'JPY',
+      taxTreatment: '税別',
+      settlementLowerHours: 140,
+      settlementUpperHours: 180,
+      paymentTermsDays: 30,
+      contractType: '準委任',
+      commercialFlow: null,
+      restrictions: [],
+    },
+    workConditions: {
+      workplace: '東京都千代田区',
+      prefecture: '東京都',
+      nearestStation: '東京駅',
+      remoteType: 'hybrid',
+      remoteDaysPerWeek: 3,
+      workStartTime: '09:00',
+      workEndTime: '18:00',
+    },
+    interviewCount: 2,
+    interviewScheduleText: null,
+    companyCandidates: [
+      {
+        name: 'サンプル株式会社',
+        relationType: 'エンド顧客',
+        contactName: null,
+        evidence: 'エンド顧客：サンプル株式会社',
+      },
+    ],
+    uncertainties: ['終了日は原文に記載されていません。'],
+    confidenceScore: 0.91,
+  },
+  errorMessage: null,
+  reviewNotes: null,
+  reviewedAt: null,
+  appliedAt: null,
+  createdAt: '2026-08-14T01:00:00Z',
 };
 
 const proposal: Proposal = {
@@ -470,6 +531,13 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    createProjectExtraction: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    getLatestProjectExtraction: vi.fn(() => Promise.resolve(null)),
+    reviewProjectExtraction: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     getSalesKpiDashboard: vi.fn(() =>
       Promise.resolve({
         fromDate: '2026-01-01',
@@ -2138,6 +2206,63 @@ describe('App', () => {
       screen.getByText('基幹業務を刷新する案件です。'),
     ).toBeInTheDocument();
     expect(getProject).toHaveBeenCalledWith(project.id);
+  });
+
+  it('extracts project source text and applies it after approval', async () => {
+    window.history.replaceState({}, '', `/projects/${project.id}`);
+    const createProjectExtraction = vi.fn(() =>
+      Promise.resolve(projectExtraction),
+    );
+    const reviewProjectExtraction = vi.fn(() =>
+      Promise.resolve({
+        ...projectExtraction,
+        status: 'applied' as const,
+        reviewNotes: '根拠を確認済み',
+        reviewedAt: '2026-08-14T01:05:00Z',
+        appliedAt: '2026-08-14T01:05:00Z',
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({ createProjectExtraction, reviewProjectExtraction })}
+      />,
+    );
+
+    fireEvent.change(await screen.findByLabelText('案件情報の原文'), {
+      target: {
+        value:
+          '案件名は官公庁向け基幹システム刷新です。TypeScriptの実務経験3年以上が必須です。単価は70万円から85万円です。',
+      },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'AIで案件情報を構造化' }),
+    );
+
+    expect(
+      await screen.findByRole('heading', {
+        name: '官公庁向け基幹システム刷新',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('根拠: 実務経験3年以上')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('レビューコメント（任意）'), {
+      target: { value: '根拠を確認済み' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: '抽出結果を承認・反映' }),
+    );
+
+    await waitFor(() =>
+      expect(reviewProjectExtraction).toHaveBeenCalledWith(
+        project.id,
+        projectExtraction.id,
+        {
+          decision: 'approved',
+          correctedResult: null,
+          notes: '根拠を確認済み',
+        },
+      ),
+    );
   });
 
   it('soft-deletes a project with a required reason', async () => {

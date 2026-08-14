@@ -487,6 +487,83 @@ export interface ProjectInput {
   plannedEndOn: string | null;
 }
 
+export interface ProjectExtractionResult {
+  projectName: string | null;
+  summary: string | null;
+  responsibilities: string | null;
+  openings: number | null;
+  startOn: string | null;
+  endOn: string | null;
+  requiredSkills: Array<{
+    name: string;
+    requiredMonths: number | null;
+    evidence: string;
+  }>;
+  preferredSkills: Array<{
+    name: string;
+    requiredMonths: number | null;
+    evidence: string;
+  }>;
+  commercial: {
+    rateMin: number | null;
+    rateMax: number | null;
+    currencyCode: string;
+    taxTreatment: string | null;
+    settlementLowerHours: number | null;
+    settlementUpperHours: number | null;
+    paymentTermsDays: number | null;
+    contractType: string | null;
+    commercialFlow: string | null;
+    restrictions: string[];
+  };
+  workConditions: {
+    workplace: string | null;
+    prefecture: string | null;
+    nearestStation: string | null;
+    remoteType: 'onsite' | 'hybrid' | 'remote' | 'negotiable' | null;
+    remoteDaysPerWeek: number | null;
+    workStartTime: string | null;
+    workEndTime: string | null;
+  };
+  interviewCount: number | null;
+  interviewScheduleText: string | null;
+  companyCandidates: Array<{
+    name: string;
+    relationType: string | null;
+    contactName: string | null;
+    evidence: string;
+  }>;
+  uncertainties: string[];
+  confidenceScore: number;
+}
+export interface ProjectExtraction {
+  id: string;
+  projectId: string;
+  aiExecutionId: string;
+  status:
+    | 'pending'
+    | 'processing'
+    | 'completed'
+    | 'failed'
+    | 'reviewed'
+    | 'applied'
+    | 'rejected';
+  provider: string;
+  modelName: string;
+  promptVersion: string;
+  result: ProjectExtractionResult | null;
+  errorMessage: string | null;
+  reviewNotes: string | null;
+  reviewedAt: string | null;
+  appliedAt: string | null;
+  createdAt: string;
+}
+export interface ProjectExtractionReviewInput {
+  decision: 'approved' | 'rejected';
+  correctedResult: ProjectExtractionResult | null;
+  notes: string | null;
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string; requestId: string };
 }

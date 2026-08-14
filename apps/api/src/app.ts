@@ -58,6 +58,11 @@ import type { ResumeExtractionRepository } from './modules/resume-extractions/re
 import { OpenAIResumeExtractor } from './modules/resume-extractions/resume-extraction-service.js';
 import type { ResumeExtractor } from './modules/resume-extractions/resume-extraction-service.js';
 import { registerResumeExtractionRoutes } from './modules/resume-extractions/resume-extraction-routes.js';
+import { SupabaseProjectExtractionRepository } from './modules/project-extractions/project-extraction-repository.js';
+import type { ProjectExtractionRepository } from './modules/project-extractions/project-extraction-repository.js';
+import { OpenAIProjectExtractor } from './modules/project-extractions/project-extraction-service.js';
+import type { ProjectExtractor } from './modules/project-extractions/project-extraction-service.js';
+import { registerProjectExtractionRoutes } from './modules/project-extractions/project-extraction-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -79,6 +84,8 @@ export interface AppDependencies {
   salesKpi?: SalesKpiRepository;
   resumeExtractions?: ResumeExtractionRepository;
   resumeExtractor?: ResumeExtractor;
+  projectExtractions?: ProjectExtractionRepository;
+  projectExtractor?: ProjectExtractor;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -170,6 +177,12 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
     app,
     dependencies.resumeExtractions ?? new SupabaseResumeExtractionRepository(),
     dependencies.resumeExtractor ?? new OpenAIResumeExtractor(),
+  );
+  registerProjectExtractionRoutes(
+    app,
+    dependencies.projectExtractions ??
+      new SupabaseProjectExtractionRepository(),
+    dependencies.projectExtractor ?? new OpenAIProjectExtractor(),
   );
 
   return app;

@@ -2404,6 +2404,59 @@ paths:
               schema: { $ref: '#/components/schemas/ProjectAuditList' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /projects/{id}/extractions:
+    post:
+      operationId: createProjectExtraction
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectExtractionInput' }
+      responses:
+        '201':
+          description: Project extraction completed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectExtraction' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /projects/{id}/extractions/latest:
+    get:
+      operationId: getLatestProjectExtraction
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Latest project extraction, or null when not requested
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/ProjectExtraction' }
+                  - { type: 'null' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /projects/{id}/extractions/{extractionId}/review:
+    post:
+      operationId: reviewProjectExtraction
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: extractionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectExtractionReviewInput' }
+      responses:
+        '200':
+          description: Project extraction reviewed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectExtraction' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -3629,6 +3682,114 @@ components:
         recruitmentStatus: { $ref: '#/components/schemas/RecruitmentStatus' }
         plannedStartOn: { type: [string, 'null'], format: date }
         plannedEndOn: { type: [string, 'null'], format: date }
+    ProjectExtractionInput:
+      type: object
+      additionalProperties: false
+      required: [sourceText, sourceTitle]
+      properties:
+        sourceText: { type: string, minLength: 50, maxLength: 100000 }
+        sourceTitle: { type: [string, 'null'], maxLength: 300 }
+    ProjectExtractionSkill:
+      type: object
+      additionalProperties: false
+      required: [name, requiredMonths, evidence]
+      properties:
+        name: { type: string }
+        requiredMonths: { type: [integer, 'null'], minimum: 0 }
+        evidence: { type: string }
+    ProjectExtractionResult:
+      type: object
+      additionalProperties: false
+      required: [projectName, summary, responsibilities, openings, startOn, endOn, requiredSkills, preferredSkills, commercial, workConditions, interviewCount, interviewScheduleText, companyCandidates, uncertainties, confidenceScore]
+      properties:
+        projectName: { type: [string, 'null'] }
+        summary: { type: [string, 'null'] }
+        responsibilities: { type: [string, 'null'] }
+        openings: { type: [integer, 'null'], minimum: 1 }
+        startOn: { type: [string, 'null'], format: date }
+        endOn: { type: [string, 'null'], format: date }
+        requiredSkills:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectExtractionSkill' }
+        preferredSkills:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectExtractionSkill' }
+        commercial:
+          type: object
+          additionalProperties: false
+          required: [rateMin, rateMax, currencyCode, taxTreatment, settlementLowerHours, settlementUpperHours, paymentTermsDays, contractType, commercialFlow, restrictions]
+          properties:
+            rateMin: { type: [number, 'null'], minimum: 0 }
+            rateMax: { type: [number, 'null'], minimum: 0 }
+            currencyCode: { type: string }
+            taxTreatment: { type: [string, 'null'] }
+            settlementLowerHours: { type: [number, 'null'], minimum: 0 }
+            settlementUpperHours: { type: [number, 'null'], minimum: 0 }
+            paymentTermsDays: { type: [integer, 'null'], minimum: 0 }
+            contractType: { type: [string, 'null'] }
+            commercialFlow: { type: [string, 'null'] }
+            restrictions: { type: array, items: { type: string } }
+        workConditions:
+          type: object
+          additionalProperties: false
+          required: [workplace, prefecture, nearestStation, remoteType, remoteDaysPerWeek, workStartTime, workEndTime]
+          properties:
+            workplace: { type: [string, 'null'] }
+            prefecture: { type: [string, 'null'] }
+            nearestStation: { type: [string, 'null'] }
+            remoteType:
+              type: [string, 'null']
+              enum: [onsite, hybrid, remote, negotiable, null]
+            remoteDaysPerWeek: { type: [integer, 'null'], minimum: 0, maximum: 7 }
+            workStartTime: { type: [string, 'null'] }
+            workEndTime: { type: [string, 'null'] }
+        interviewCount: { type: [integer, 'null'], minimum: 0 }
+        interviewScheduleText: { type: [string, 'null'] }
+        companyCandidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, relationType, contactName, evidence]
+            properties:
+              name: { type: string }
+              relationType: { type: [string, 'null'] }
+              contactName: { type: [string, 'null'] }
+              evidence: { type: string }
+        uncertainties: { type: array, items: { type: string } }
+        confidenceScore: { type: number, minimum: 0, maximum: 1 }
+    ProjectExtraction:
+      type: object
+      additionalProperties: false
+      required: [id, projectId, aiExecutionId, status, provider, modelName, promptVersion, result, errorMessage, reviewNotes, reviewedAt, appliedAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        aiExecutionId: { type: string, format: uuid }
+        status: { type: string, enum: [pending, processing, completed, failed, reviewed, applied, rejected] }
+        provider: { type: string }
+        modelName: { type: string }
+        promptVersion: { type: string }
+        result:
+          oneOf:
+            - { $ref: '#/components/schemas/ProjectExtractionResult' }
+            - { type: 'null' }
+        errorMessage: { type: [string, 'null'] }
+        reviewNotes: { type: [string, 'null'] }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        appliedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    ProjectExtractionReviewInput:
+      type: object
+      additionalProperties: false
+      required: [decision, correctedResult, notes]
+      properties:
+        decision: { type: string, enum: [approved, rejected] }
+        correctedResult:
+          oneOf:
+            - { $ref: '#/components/schemas/ProjectExtractionResult' }
+            - { type: 'null' }
+        notes: { type: [string, 'null'], maxLength: 2000 }
     ProjectDeleteInput:
       type: object
       required: [reason]
