@@ -129,6 +129,22 @@ export interface InvoiceStatusTransitionInput {
   reason: string | null;
 }
 
+export interface InvoicePaymentInput {
+  paymentType: 'receipt' | 'payment' | 'refund' | 'offset' | 'other';
+  paymentDate: string;
+  amount: number;
+  currency: string;
+  paymentMethod:
+    | 'bank_transfer'
+    | 'cash'
+    | 'credit_card'
+    | 'direct_debit'
+    | 'offset'
+    | 'other'
+    | null;
+  bankFeeAmount: number;
+}
+
 export interface InvoiceListQuery {
   limit: number;
   cursor?: { issueDate: string; updatedAt: string; id: string };
@@ -170,6 +186,21 @@ export interface InvoiceRepository {
     id: string,
     rowVersion: number,
     input: InvoiceStatusTransitionInput,
+    requestId: string,
+  ): Promise<Invoice | null>;
+  registerPayment(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: InvoicePaymentInput,
+    requestId: string,
+  ): Promise<Invoice | null>;
+  reversePayment(
+    accessToken: string,
+    id: string,
+    paymentId: string,
+    rowVersion: number,
+    reason: string,
     requestId: string,
   ): Promise<Invoice | null>;
 }
@@ -435,6 +466,59 @@ export class SupabaseInvoiceRepository implements InvoiceRepository {
     );
     const saved = (await response.json()) as { id: string } | null;
     return saved ? this.findById(token, saved.id) : null;
+  }
+
+  async registerPayment(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: InvoicePaymentInput,
+    requestId: string,
+  ): Promise<Invoice | null> {
+    const response = await this.request(
+      token,
+      '/rpc/register_invoice_payment',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          p_invoice_id: id,
+          p_row_version: rowVersion,
+          p_payment: {
+            payment_type: input.paymentType,
+            payment_date: input.paymentDate,
+            amount: input.amount,
+            currency: input.currency,
+            payment_method: input.paymentMethod,
+            bank_fee_amount: input.bankFeeAmount,
+          },
+          p_request_id: requestId,
+        }),
+      },
+    );
+    const saved = (await response.json()) as { invoice_id: string } | null;
+    return saved ? this.findById(token, saved.invoice_id) : null;
+  }
+
+  async reversePayment(
+    token: string,
+    id: string,
+    paymentId: string,
+    rowVersion: number,
+    reason: string,
+    requestId: string,
+  ): Promise<Invoice | null> {
+    const response = await this.request(token, '/rpc/reverse_invoice_payment', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_invoice_id: id,
+        p_payment_id: paymentId,
+        p_row_version: rowVersion,
+        p_reason: reason,
+        p_request_id: requestId,
+      }),
+    });
+    const saved = (await response.json()) as { invoice_id: string } | null;
+    return saved ? this.findById(token, saved.invoice_id) : null;
   }
 
   private async save(

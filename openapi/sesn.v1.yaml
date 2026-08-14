@@ -155,6 +155,76 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /invoices/{id}/payments:
+    post:
+      operationId: registerInvoicePayment
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InvoicePaymentInput' }
+      responses:
+        '200':
+          description: Payment registered and invoice settlement recalculated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invoice' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /invoices/{id}/payments/{paymentId}/reversal:
+    post:
+      operationId: reverseInvoicePayment
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: paymentId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InvoicePaymentReversalInput' }
+      responses:
+        '200':
+          description: Payment reversed and invoice settlement recalculated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invoice' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /work-logs:
     post:
       operationId: createWorkLog
@@ -3359,6 +3429,46 @@ components:
       properties:
         status: { type: string, enum: [issued, sent, cancelled, void] }
         reason: { type: [string, 'null'], maxLength: 1000 }
+    InvoicePaymentInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          paymentType,
+          paymentDate,
+          amount,
+          currency,
+          paymentMethod,
+          bankFeeAmount,
+        ]
+      properties:
+        paymentType:
+          { type: string, enum: [receipt, payment, refund, offset, other] }
+        paymentDate: { type: string, format: date }
+        amount: { type: number, exclusiveMinimum: 0 }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        paymentMethod:
+          oneOf:
+            - {
+                type: string,
+                enum:
+                  [
+                    bank_transfer,
+                    cash,
+                    credit_card,
+                    direct_debit,
+                    offset,
+                    other,
+                  ],
+              }
+            - { type: 'null' }
+        bankFeeAmount: { type: number, minimum: 0 }
+    InvoicePaymentReversalInput:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1000 }
     EngagementStatus:
       type: string
       enum: [draft, preparing, active, ending, ended, cancelled]

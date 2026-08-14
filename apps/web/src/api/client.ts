@@ -73,6 +73,8 @@ import type {
   InvoiceOptions,
   InvoiceInput,
   InvoiceStatusTransitionInput,
+  InvoicePaymentInput,
+  InvoicePaymentReversalInput,
 } from './generated.js';
 
 export interface ProjectsApi {
@@ -90,6 +92,17 @@ export interface ProjectsApi {
     id: string,
     rowVersion: number,
     input: InvoiceStatusTransitionInput,
+  ): Promise<Invoice>;
+  registerInvoicePayment(
+    id: string,
+    rowVersion: number,
+    input: InvoicePaymentInput,
+  ): Promise<Invoice>;
+  reverseInvoicePayment(
+    id: string,
+    paymentId: string,
+    rowVersion: number,
+    input: InvoicePaymentReversalInput,
   ): Promise<Invoice>;
   listWorkLogs(query?: ListWorkLogsQuery): Promise<WorkLogList>;
   getWorkLog(id: string): Promise<WorkLog>;
@@ -364,6 +377,22 @@ export function createProjectsApi(options: {
     transitionInvoiceStatus(id, rowVersion, input) {
       return send<Invoice>(
         `/invoices/${encodeURIComponent(id)}/status`,
+        'POST',
+        input,
+        rowVersion,
+      );
+    },
+    registerInvoicePayment(id, rowVersion, input) {
+      return send<Invoice>(
+        `/invoices/${encodeURIComponent(id)}/payments`,
+        'POST',
+        input,
+        rowVersion,
+      );
+    },
+    reverseInvoicePayment(id, paymentId, rowVersion, input) {
+      return send<Invoice>(
+        `/invoices/${encodeURIComponent(id)}/payments/${encodeURIComponent(paymentId)}/reversal`,
         'POST',
         input,
         rowVersion,
