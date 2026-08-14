@@ -7,6 +7,41 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /profitability:
+    get:
+      operationId: getProfitabilityDashboard
+      parameters:
+        - {
+            name: fromMonth,
+            in: query,
+            required: true,
+            schema: { type: string, format: date },
+          }
+        - {
+            name: toMonth,
+            in: query,
+            required: true,
+            schema: { type: string, format: date },
+          }
+        - {
+            name: currency,
+            in: query,
+            schema: { type: string, pattern: '^[A-Z]{3}$', default: JPY },
+          }
+      responses:
+        '200':
+          description: Currency-safe profitability dashboard
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: '#/components/schemas/ProfitabilityDashboard' },
+                },
+            }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /expenses:
     get:
       operationId: listExpenses
@@ -2303,6 +2338,74 @@ components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
+    ProfitabilityMonth:
+      type: object
+      required:
+        [
+          periodMonth,
+          revenue,
+          purchaseCost,
+          expenseCost,
+          grossProfit,
+          grossMarginRate,
+          cashIn,
+          cashOut,
+          receivableBalance,
+          payableBalance,
+          salesInvoiceCount,
+          purchaseInvoiceCount,
+          expenseCount,
+        ]
+      properties:
+        periodMonth: { type: string, format: date }
+        revenue: { type: number }
+        purchaseCost: { type: number }
+        expenseCost: { type: number }
+        grossProfit: { type: number }
+        grossMarginRate: { type: [number, 'null'] }
+        cashIn: { type: number }
+        cashOut: { type: number }
+        receivableBalance: { type: number }
+        payableBalance: { type: number }
+        salesInvoiceCount: { type: integer }
+        purchaseInvoiceCount: { type: integer }
+        expenseCount: { type: integer }
+    ProfitabilityDashboard:
+      type: object
+      required:
+        [
+          fromMonth,
+          toMonth,
+          currency,
+          revenue,
+          purchaseCost,
+          expenseCost,
+          grossProfit,
+          grossMarginRate,
+          cashIn,
+          cashOut,
+          receivableBalance,
+          payableBalance,
+          monthly,
+        ]
+      properties:
+        fromMonth: { type: string, format: date }
+        toMonth: { type: string, format: date }
+        currency: { type: string }
+        revenue: { type: number }
+        purchaseCost: { type: number }
+        expenseCost: { type: number }
+        grossProfit: { type: number }
+        grossMarginRate: { type: [number, 'null'] }
+        cashIn: { type: number }
+        cashOut: { type: number }
+        receivableBalance: { type: number }
+        payableBalance: { type: number }
+        monthly:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/ProfitabilityMonth' },
+          }
     ExpenseType:
       type: string
       enum: [transportation, lodging, communication, equipment, meal, other]
