@@ -205,26 +205,103 @@ begin
 end;
 $$;
 
-select private.install_authorization_policies(
-  'app.engagements',
-  'deleted_at is null and app.can_access_engagement(id, ''contract.read'', ''view'')',
-  'tenant_id = app.current_tenant_id() and created_by = auth.uid() and app.can_access_contract(contract_id, ''contract.manage'', ''edit'')',
-  'deleted_at is null and app.can_access_engagement(id, ''contract.manage'', ''edit'')'
-);
+-- The migration-only policy installer from migration 112 is deliberately
+-- dropped before that migration commits. These new tables therefore install
+-- their equivalent policies explicitly instead of depending on that helper.
+alter table app.engagements enable row level security;
+alter table app.engagements force row level security;
 
-select private.install_authorization_policies(
-  'app.engagement_status_histories',
-  'app.can_access_engagement(engagement_id, ''contract.read'', ''view'')',
-  'app.can_access_engagement(engagement_id, ''contract.manage'', ''edit'')',
-  'app.can_access_engagement(engagement_id, ''contract.manage'', ''edit'')'
-);
+create policy authorization_select
+  on app.engagements
+  for select
+  to authenticated
+  using (
+    deleted_at is null
+    and app.can_access_engagement(id, 'contract.read', 'view')
+  );
 
-select private.install_authorization_policies(
-  'app.engagement_conditions',
-  'app.can_access_engagement(engagement_id, ''contract.read'', ''view'')',
-  'app.can_access_engagement(engagement_id, ''contract.manage'', ''edit'')',
-  'app.can_access_engagement(engagement_id, ''contract.manage'', ''edit'')'
-);
+create policy authorization_insert
+  on app.engagements
+  for insert
+  to authenticated
+  with check (
+    tenant_id = app.current_tenant_id()
+    and created_by = auth.uid()
+    and app.can_access_contract(contract_id, 'contract.manage', 'edit')
+  );
+
+create policy authorization_update
+  on app.engagements
+  for update
+  to authenticated
+  using (
+    deleted_at is null
+    and app.can_access_engagement(id, 'contract.manage', 'edit')
+  )
+  with check (
+    deleted_at is null
+    and app.can_access_engagement(id, 'contract.manage', 'edit')
+  );
+
+alter table app.engagement_status_histories enable row level security;
+alter table app.engagement_status_histories force row level security;
+
+create policy authorization_select
+  on app.engagement_status_histories
+  for select
+  to authenticated
+  using (
+    app.can_access_engagement(engagement_id, 'contract.read', 'view')
+  );
+
+create policy authorization_insert
+  on app.engagement_status_histories
+  for insert
+  to authenticated
+  with check (
+    app.can_access_engagement(engagement_id, 'contract.manage', 'edit')
+  );
+
+create policy authorization_update
+  on app.engagement_status_histories
+  for update
+  to authenticated
+  using (
+    app.can_access_engagement(engagement_id, 'contract.manage', 'edit')
+  )
+  with check (
+    app.can_access_engagement(engagement_id, 'contract.manage', 'edit')
+  );
+
+alter table app.engagement_conditions enable row level security;
+alter table app.engagement_conditions force row level security;
+
+create policy authorization_select
+  on app.engagement_conditions
+  for select
+  to authenticated
+  using (
+    app.can_access_engagement(engagement_id, 'contract.read', 'view')
+  );
+
+create policy authorization_insert
+  on app.engagement_conditions
+  for insert
+  to authenticated
+  with check (
+    app.can_access_engagement(engagement_id, 'contract.manage', 'edit')
+  );
+
+create policy authorization_update
+  on app.engagement_conditions
+  for update
+  to authenticated
+  using (
+    app.can_access_engagement(engagement_id, 'contract.manage', 'edit')
+  )
+  with check (
+    app.can_access_engagement(engagement_id, 'contract.manage', 'edit')
+  );
 
 create or replace function public.win_proposal_and_create_drafts(
   p_proposal_id uuid,

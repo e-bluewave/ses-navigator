@@ -19,6 +19,7 @@ import type {
   Project,
   Contract,
   ContractInput,
+  Engagement,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -130,6 +131,53 @@ const contract: Contract = {
   rowVersion: 1,
 };
 
+const engagement: Engagement = {
+  id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  engagementNo: 'ENG-000001',
+  contractId: contract.id,
+  proposalId: proposal.id,
+  engineerId: proposal.engineerId,
+  engineerName: '青波 太郎',
+  contractTitle: contract.title,
+  status: 'active',
+  plannedStartDate: '2026-09-01',
+  plannedEndDate: '2027-02-28',
+  actualStartDate: '2026-09-01',
+  actualEndDate: null,
+  roleName: 'バックエンドエンジニア',
+  workLocation: '東京都',
+  remoteFrequency: '週3日',
+  updatedAt: '2026-09-01T00:00:00Z',
+  rowVersion: 2,
+  previousEngagementId: null,
+  conditions: [
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      versionNo: 1,
+      effectiveFrom: '2026-09-01',
+      effectiveTo: null,
+      monthlySalesAmount: 900000,
+      monthlyCostAmount: 650000,
+      currency: 'JPY',
+      settlementLowerHours: 140,
+      settlementUpperHours: 180,
+      workLocation: '東京都',
+      remoteFrequency: '週3日',
+      notes: '初回条件',
+      createdAt: '2026-08-14T00:00:00Z',
+    },
+  ],
+  statusHistories: [
+    {
+      id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+      fromStatus: 'preparing',
+      toStatus: 'active',
+      changeReason: '参画開始',
+      changedAt: '2026-09-01T00:00:00Z',
+    },
+  ],
+};
+
 const company: Company = {
   id: '22222222-2222-4222-8222-222222222222',
   managementNo: 'CO-000001',
@@ -211,6 +259,10 @@ function auth(current: AuthSession | null = session): AuthService {
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
     getAuthContext: vi.fn(() => Promise.resolve({ requiresMfa: false })),
+    listEngagements: vi.fn(() =>
+      Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
+    ),
+    getEngagement: vi.fn(() => Promise.reject(new Error('not configured'))),
     listContracts: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -320,6 +372,52 @@ beforeEach(() => window.history.replaceState({}, '', '/projects'));
 afterEach(cleanup);
 
 describe('App', () => {
+  it('lists engagements and opens conditions and status history', async () => {
+    window.history.replaceState({}, '', '/engagements');
+    const client = api({
+      listEngagements: vi.fn(() =>
+        Promise.resolve({
+          items: [engagement],
+          page: { limit: 50, nextCursor: null },
+        }),
+      ),
+      getEngagement: vi.fn(() => Promise.resolve(engagement)),
+    });
+    render(<App auth={auth()} api={client} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'ENG-000001' }));
+    expect(await screen.findByText('条件履歴')).toBeInTheDocument();
+    expect(screen.getByText(/900,000 JPY/)).toBeInTheDocument();
+    expect(screen.getByText(/参画開始/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: contract.title }),
+    ).toBeInTheDocument();
+  });
+
+  it('filters engagement list by query and status', async () => {
+    window.history.replaceState({}, '', '/engagements');
+    const listEngagements = vi.fn(() =>
+      Promise.resolve({
+        items: [engagement],
+        page: { limit: 50, nextCursor: null },
+      }),
+    );
+    render(<App auth={auth()} api={api({ listEngagements })} />);
+    await screen.findByText('ENG-000001');
+    fireEvent.change(
+      screen.getByLabelText('参画番号、契約件名または技術者名で検索'),
+      { target: { value: '青波' } },
+    );
+    fireEvent.change(screen.getByLabelText('参画状態'), {
+      target: { value: 'active' },
+    });
+    await waitFor(() =>
+      expect(listEngagements).toHaveBeenLastCalledWith({
+        q: '青波',
+        status: 'active',
+      }),
+    );
+  });
+
   it('lists safe contract summaries and opens restricted detail', async () => {
     window.history.replaceState({}, '', '/contracts');
     const client = api({
@@ -591,6 +689,12 @@ describe('App', () => {
     expect(
       screen.getByRole('link', { name: '契約下書きを確認' }),
     ).toHaveAttribute('href', `/contracts/${contract.id}`);
+    expect(
+      screen.getByRole('link', { name: '参画下書きを確認' }),
+    ).toHaveAttribute(
+      'href',
+      '/engagements/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
   });
   it('renders the engineer list and opens public detail', async () => {
     window.history.replaceState({}, '', '/engineers');
