@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ApiError } from '../../shared/errors.js';
 import type {
+  WorkLogInput,
   WorkLogRepository,
   WorkLogStatus,
 } from './work-log-repository.js';
@@ -20,6 +21,66 @@ export function registerWorkLogRoutes(
   app: FastifyInstance,
   repository: WorkLogRepository,
 ): void {
+  app.post(
+    '/api/v1/work-logs',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const input = parseInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const item = await repository.create(
+        request.user.accessToken,
+        input,
+        request.id,
+      );
+      if (!item) throw conflict();
+      return reply.code(201).header('etag', `"${item.rowVersion}"`).send(item);
+    },
+  );
+
+  app.put(
+    '/api/v1/work-logs/:id',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const input = parseInput(request.body);
+      await requireManage(repository, request.user.accessToken);
+      const item = await repository.update(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        input,
+        request.id,
+      );
+      if (!item) throw conflict();
+      return reply.header('etag', `"${item.rowVersion}"`).send(item);
+    },
+  );
+
+  app.post(
+    '/api/v1/work-logs/:id/status',
+    { preHandler: (request) => app.authenticate(request) },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      if (!uuidPattern.test(id)) throw invalid('id must be a UUID');
+      const rowVersion = parseIfMatch(request.headers['if-match']);
+      const input = parseTransition(request.body);
+      if (input.status === 'submitted')
+        await requireManage(repository, request.user.accessToken);
+      else await requireApprove(repository, request.user.accessToken);
+      const item = await repository.transitionStatus(
+        request.user.accessToken,
+        id,
+        rowVersion,
+        input,
+        request.id,
+      );
+      if (!item) throw conflict();
+      return reply.header('etag', `"${item.rowVersion}"`).send(item);
+    },
+  );
+
   app.get(
     '/api/v1/work-logs',
     { preHandler: (request) => app.authenticate(request) },
@@ -90,6 +151,172 @@ export function registerWorkLogRoutes(
 async function requireRead(repository: WorkLogRepository, token: string) {
   if (!(await repository.canRead(token)))
     throw new ApiError(403, 'forbidden', 'contract.read is required');
+}
+
+async function requireManage(repository: WorkLogRepository, token: string) {
+  if (!(await repository.canManage(token)))
+    throw new ApiError(403, 'forbidden', 'contract.manage is required');
+}
+
+async function requireApprove(repository: WorkLogRepository, token: string) {
+  if (!(await repository.canApprove(token)))
+    throw new ApiError(403, 'forbidden', 'contract.approve is required');
+}
+
+function parseInput(value: unknown): WorkLogInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const body = value as Record<string, unknown>;
+  const uuid = (name: string) => {
+    const value = body[name];
+    if (typeof value !== 'string' || !uuidPattern.test(value))
+      throw invalid(`${name} must be a UUID`);
+    return value;
+  };
+  if (typeof body.workMonth !== 'string' || !monthPattern.test(body.workMonth))
+    throw invalid('workMonth must be the first day of a month');
+  const optionalNumber = (name: string) => {
+    const value = body[name];
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0)
+      throw invalid(`${name} is invalid`);
+    return value;
+  };
+  const absenceHours = optionalNumber('absenceHours') ?? 0;
+  const notes = optionalText(body.notes, 'notes', 5000);
+  if (!Array.isArray(body.details) || body.details.length > 31)
+    throw invalid('details is invalid');
+  const dates = new Set<string>();
+  const month = body.workMonth.slice(0, 7);
+  const details = body.details.map((value, index) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value))
+      throw invalid(`details[${index}] is invalid`);
+    const detail = value as Record<string, unknown>;
+    if (
+      typeof detail.workDate !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(detail.workDate) ||
+      detail.workDate.slice(0, 7) !== month ||
+      Number.isNaN(Date.parse(`${detail.workDate}T00:00:00Z`)) ||
+      dates.has(detail.workDate)
+    )
+      throw invalid(`details[${index}].workDate is invalid`);
+    dates.add(detail.workDate);
+    if (
+      typeof detail.workType !== 'string' ||
+      ![
+        'work',
+        'paid_leave',
+        'absence',
+        'holiday',
+        'training',
+        'other',
+      ].includes(detail.workType)
+    )
+      throw invalid(`details[${index}].workType is invalid`);
+    const time = (name: string) => {
+      const item = detail[name];
+      if (item === null || item === undefined || item === '') return null;
+      if (
+        typeof item !== 'string' ||
+        !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(item)
+      )
+        throw invalid(`details[${index}].${name} is invalid`);
+      return item;
+    };
+    const startTime = time('startTime');
+    const endTime = time('endTime');
+    if (
+      (startTime === null) !== (endTime === null) ||
+      (startTime && endTime && endTime <= startTime)
+    )
+      throw invalid(`details[${index}] time range is invalid`);
+    const number = (name: string, integer = false, max = 24) => {
+      const item = detail[name];
+      if (
+        typeof item !== 'number' ||
+        !Number.isFinite(item) ||
+        item < 0 ||
+        item > max ||
+        (integer && !Number.isInteger(item))
+      )
+        throw invalid(`details[${index}].${name} is invalid`);
+      return item;
+    };
+    return {
+      workDate: detail.workDate,
+      workType: detail.workType as WorkLogInput['details'][number]['workType'],
+      startTime,
+      endTime,
+      breakMinutes: number('breakMinutes', true, 1440),
+      workHours: number('workHours'),
+      overtimeHours: number('overtimeHours'),
+      description: optionalText(
+        detail.description,
+        `details[${index}].description`,
+        1000,
+      ),
+    };
+  });
+  return {
+    contractId: uuid('contractId'),
+    engineerId: uuid('engineerId'),
+    workMonth: body.workMonth,
+    scheduledDays: optionalNumber('scheduledDays'),
+    scheduledHours: optionalNumber('scheduledHours'),
+    absenceHours,
+    notes,
+    details,
+  };
+}
+
+function parseTransition(value: unknown) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw invalid('body is invalid');
+  const body = value as Record<string, unknown>;
+  if (
+    typeof body.status !== 'string' ||
+    !['submitted', 'approved', 'rejected', 'locked'].includes(body.status)
+  )
+    throw invalid('status is invalid');
+  const reason = optionalText(body.reason, 'reason', 1000);
+  const approvedByName = optionalText(
+    body.approvedByName,
+    'approvedByName',
+    300,
+  );
+  if (body.status === 'rejected' && reason === null)
+    throw invalid('reason is required');
+  if (body.status === 'approved' && approvedByName === null)
+    throw invalid('approvedByName is required');
+  return {
+    status: body.status as 'submitted' | 'approved' | 'rejected' | 'locked',
+    reason,
+    approvedByName,
+  };
+}
+
+function optionalText(value: unknown, name: string, max: number) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string' || value.length > max)
+    throw invalid(`${name} is invalid`);
+  return value.trim() || null;
+}
+
+function parseIfMatch(value: string | string[] | undefined) {
+  if (value === undefined)
+    throw new ApiError(428, 'precondition_required', 'If-Match is required');
+  const raw = Array.isArray(value) ? value[0] : value;
+  const match = raw?.match(/^(?:W\/)?"?(\d+)"?$/);
+  if (!match || Number(match[1]) < 1) throw invalid('If-Match is invalid');
+  return Number(match[1]);
+}
+
+function conflict() {
+  return new ApiError(
+    409,
+    'conflict',
+    'Work log was changed or its contract and approval state are unavailable',
+  );
 }
 
 function parseCursor(value: unknown) {

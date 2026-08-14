@@ -35,6 +35,60 @@ describe('generated projects API client', () => {
     });
   });
 
+  it('sends work log create, versioned update, and approval transition', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ id: 'work-log-1' }), { status: 200 }),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    const input = {
+      contractId: '11111111-1111-4111-8111-111111111111',
+      engineerId: '22222222-2222-4222-8222-222222222222',
+      workMonth: '2026-08-01',
+      scheduledDays: 20,
+      scheduledHours: 160,
+      absenceHours: 0,
+      notes: null,
+      details: [
+        {
+          workDate: '2026-08-03',
+          workType: 'work' as const,
+          startTime: '09:00',
+          endTime: '18:00',
+          breakMinutes: 60,
+          workHours: 8,
+          overtimeHours: 0,
+          description: null,
+        },
+      ],
+    };
+    await api.createWorkLog(input);
+    await api.updateWorkLog('work-log-1', 2, input);
+    await api.transitionWorkLogStatus('work-log-1', 3, {
+      status: 'approved',
+      reason: '確認済み',
+      approvedByName: '顧客担当者',
+    });
+    expect(request.mock.calls[0]![0]).toBe('/api/v1/work-logs');
+    expect(request.mock.calls[1]![1]).toMatchObject({
+      method: 'PUT',
+      headers: { 'if-match': '"2"' },
+    });
+    expect(request.mock.calls[2]![0]).toBe(
+      '/api/v1/work-logs/work-log-1/status',
+    );
+    expect(request.mock.calls[2]![1]).toMatchObject({
+      method: 'POST',
+      headers: { 'if-match': '"3"' },
+    });
+  });
+
   it('lists and reads engagements with bearer authentication', async () => {
     const request = vi
       .fn()

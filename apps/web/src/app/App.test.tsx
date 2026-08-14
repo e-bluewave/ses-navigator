@@ -22,6 +22,7 @@ import type {
   Engagement,
   EngagementInput,
   WorkLog,
+  WorkLogInput,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -214,6 +215,23 @@ const workLog: WorkLog = {
       rowVersion: 1,
     },
   ],
+  statusHistories: [
+    {
+      id: '13131313-1313-4313-8313-131313131313',
+      fromStatus: 'submitted',
+      toStatus: 'approved',
+      changeReason: '顧客承認済み',
+      changedAt: '2026-09-03T00:00:00Z',
+    },
+  ],
+  approval: {
+    id: '14141414-1414-4414-8414-141414141414',
+    status: 'approved',
+    requestedAt: '2026-09-01T00:00:00Z',
+    completedAt: '2026-09-03T00:00:00Z',
+    requestNote: '確認をお願いします',
+    decisionNote: '顧客承認済み',
+  },
 };
 
 const company: Company = {
@@ -301,6 +319,11 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
     getWorkLog: vi.fn(() => Promise.reject(new Error('not configured'))),
+    createWorkLog: vi.fn(() => Promise.reject(new Error('not configured'))),
+    updateWorkLog: vi.fn(() => Promise.reject(new Error('not configured'))),
+    transitionWorkLogStatus: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listEngagements: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -465,6 +488,124 @@ describe('App', () => {
         q: '青波',
         status: 'approved',
         workMonth: '2026-08-01',
+      }),
+    );
+  });
+
+  it('creates a monthly work log draft with a daily record', async () => {
+    window.history.replaceState({}, '', '/work-logs/new');
+    const created = { ...workLog, status: 'draft' as const, rowVersion: 1 };
+    const createWorkLog = vi
+      .fn<(input: WorkLogInput) => Promise<WorkLog>>()
+      .mockResolvedValue(created);
+    render(<App auth={auth()} api={api({ createWorkLog })} />);
+    fireEvent.change(await screen.findByLabelText('契約ID'), {
+      target: { value: workLog.contractId },
+    });
+    fireEvent.change(screen.getByLabelText('技術者ID'), {
+      target: { value: workLog.engineerId },
+    });
+    fireEvent.change(screen.getByLabelText('対象月'), {
+      target: { value: '2026-08' },
+    });
+    fireEvent.change(screen.getByLabelText('勤務日'), {
+      target: { value: '2026-08-03' },
+    });
+    fireEvent.change(screen.getByLabelText('開始時刻'), {
+      target: { value: '09:00' },
+    });
+    fireEvent.change(screen.getByLabelText('終了時刻'), {
+      target: { value: '18:00' },
+    });
+    fireEvent.change(screen.getByLabelText('作業内容'), {
+      target: { value: '設計・実装' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '月次実績を登録' }));
+    await waitFor(() => expect(createWorkLog).toHaveBeenCalledOnce());
+    const saved = createWorkLog.mock.calls[0]![0];
+    expect(saved.workMonth).toBe('2026-08-01');
+    expect(saved.details[0]).toMatchObject({
+      workDate: '2026-08-03',
+      workHours: 8,
+      description: '設計・実装',
+    });
+  });
+
+  it('submits a draft monthly work log with optimistic locking', async () => {
+    const draft = {
+      ...workLog,
+      status: 'draft' as const,
+      approval: null,
+      rowVersion: 2,
+    };
+    window.history.replaceState({}, '', `/work-logs/${draft.id}`);
+    const transitionWorkLogStatus = vi.fn(() =>
+      Promise.resolve({
+        ...draft,
+        status: 'submitted' as const,
+        rowVersion: 3,
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getWorkLog: () => Promise.resolve(draft),
+          transitionWorkLogStatus,
+        })}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('次の月次実績状態'), {
+      target: { value: 'submitted' },
+    });
+    fireEvent.change(screen.getByLabelText('変更理由'), {
+      target: { value: '確認をお願いします' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: '月次実績の状態を更新' }),
+    );
+    await waitFor(() =>
+      expect(transitionWorkLogStatus).toHaveBeenCalledWith(draft.id, 2, {
+        status: 'submitted',
+        reason: '確認をお願いします',
+        approvedByName: null,
+      }),
+    );
+  });
+
+  it('approves a submitted monthly work log with approver name', async () => {
+    const submitted = {
+      ...workLog,
+      status: 'submitted' as const,
+      customerApprovedAt: null,
+      approvedByName: null,
+      rowVersion: 4,
+    };
+    window.history.replaceState({}, '', `/work-logs/${submitted.id}`);
+    const transitionWorkLogStatus = vi.fn(() => Promise.resolve(workLog));
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getWorkLog: () => Promise.resolve(submitted),
+          transitionWorkLogStatus,
+        })}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('次の月次実績状態'), {
+      target: { value: 'approved' },
+    });
+    fireEvent.change(screen.getByLabelText('顧客承認者名'), {
+      target: { value: '顧客担当者' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: '月次実績の状態を更新' }),
+    );
+    await waitFor(() =>
+      expect(transitionWorkLogStatus).toHaveBeenCalledWith(submitted.id, 4, {
+        status: 'approved',
+        reason: null,
+        approvedByName: '顧客担当者',
       }),
     );
   });

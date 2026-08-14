@@ -65,12 +65,25 @@ import type {
   WorkLog,
   WorkLogList,
   ListWorkLogsQuery,
+  WorkLogInput,
+  WorkLogStatusTransitionInput,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAuthContext(): Promise<AuthContext>;
   listWorkLogs(query?: ListWorkLogsQuery): Promise<WorkLogList>;
   getWorkLog(id: string): Promise<WorkLog>;
+  createWorkLog(input: WorkLogInput): Promise<WorkLog>;
+  updateWorkLog(
+    id: string,
+    rowVersion: number,
+    input: WorkLogInput,
+  ): Promise<WorkLog>;
+  transitionWorkLogStatus(
+    id: string,
+    rowVersion: number,
+    input: WorkLogStatusTransitionInput,
+  ): Promise<WorkLog>;
   listEngagements(query?: ListEngagementsQuery): Promise<EngagementList>;
   getEngagement(id: string): Promise<Engagement>;
   createEngagement(input: EngagementInput): Promise<Engagement>;
@@ -311,6 +324,25 @@ export function createProjectsApi(options: {
     },
     getWorkLog(id) {
       return get<WorkLog>(`/work-logs/${encodeURIComponent(id)}`);
+    },
+    createWorkLog(input) {
+      return send<WorkLog>('/work-logs', 'POST', input);
+    },
+    updateWorkLog(id, rowVersion, input) {
+      return send<WorkLog>(
+        `/work-logs/${encodeURIComponent(id)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    transitionWorkLogStatus(id, rowVersion, input) {
+      return send<WorkLog>(
+        `/work-logs/${encodeURIComponent(id)}/status`,
+        'POST',
+        input,
+        rowVersion,
+      );
     },
     listEngagements(query = {}) {
       const params = new URLSearchParams();
