@@ -578,6 +578,48 @@ export interface WorkLog extends WorkLogSummary {
   approvedByName: string | null;
   notes: string | null;
   details: WorkLogDetailItem[];
+  statusHistories: WorkLogStatusHistory[];
+  approval: WorkLogApproval | null;
+}
+export interface WorkLogStatusHistory {
+  id: string;
+  fromStatus: WorkLogStatus | null;
+  toStatus: WorkLogStatus;
+  changeReason: string | null;
+  changedAt: string;
+}
+export interface WorkLogApproval {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: string | null;
+  completedAt: string | null;
+  requestNote: string | null;
+  decisionNote: string | null;
+}
+export interface WorkLogDetailInput {
+  workDate: string;
+  workType: WorkType;
+  startTime: string | null;
+  endTime: string | null;
+  breakMinutes: number;
+  workHours: number;
+  overtimeHours: number;
+  description: string | null;
+}
+export interface WorkLogInput {
+  contractId: string;
+  engineerId: string;
+  workMonth: string;
+  scheduledDays: number | null;
+  scheduledHours: number | null;
+  absenceHours: number;
+  notes: string | null;
+  details: WorkLogDetailInput[];
+}
+export interface WorkLogStatusTransitionInput {
+  status: Exclude<WorkLogStatus, 'draft'>;
+  reason: string | null;
+  approvedByName: string | null;
 }
 export interface WorkLogList {
   items: WorkLogSummary[];

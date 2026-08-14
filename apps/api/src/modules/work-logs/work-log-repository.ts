@@ -40,10 +40,46 @@ export interface WorkLogDetailItem {
   rowVersion: number;
 }
 
+export interface WorkLogStatusHistory {
+  id: string;
+  fromStatus: WorkLogStatus | null;
+  toStatus: WorkLogStatus;
+  changeReason: string | null;
+  changedAt: string;
+}
+
+export interface WorkLogApproval {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: string | null;
+  completedAt: string | null;
+  requestNote: string | null;
+  decisionNote: string | null;
+}
+
 export interface WorkLog extends WorkLogSummary {
   approvedByName: string | null;
   notes: string | null;
   details: WorkLogDetailItem[];
+  statusHistories: WorkLogStatusHistory[];
+  approval: WorkLogApproval | null;
+}
+
+export interface WorkLogInput {
+  contractId: string;
+  engineerId: string;
+  workMonth: string;
+  scheduledDays: number | null;
+  scheduledHours: number | null;
+  absenceHours: number;
+  notes: string | null;
+  details: Array<Omit<WorkLogDetailItem, 'id' | 'updatedAt' | 'rowVersion'>>;
+}
+
+export interface WorkLogStatusTransitionInput {
+  status: Exclude<WorkLogStatus, 'draft'>;
+  reason: string | null;
+  approvedByName: string | null;
 }
 
 export interface WorkLogListQuery {
@@ -61,11 +97,32 @@ export interface WorkLogListResult {
 
 export interface WorkLogRepository {
   canRead(accessToken: string): Promise<boolean>;
+  canManage(accessToken: string): Promise<boolean>;
+  canApprove(accessToken: string): Promise<boolean>;
   list(
     accessToken: string,
     query: WorkLogListQuery,
   ): Promise<WorkLogListResult>;
   findById(accessToken: string, id: string): Promise<WorkLog | null>;
+  create(
+    accessToken: string,
+    input: WorkLogInput,
+    requestId: string,
+  ): Promise<WorkLog | null>;
+  update(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: WorkLogInput,
+    requestId: string,
+  ): Promise<WorkLog | null>;
+  transitionStatus(
+    accessToken: string,
+    id: string,
+    rowVersion: number,
+    input: WorkLogStatusTransitionInput,
+    requestId: string,
+  ): Promise<WorkLog | null>;
 }
 
 type WorkLogSummaryRow = {
@@ -103,6 +160,21 @@ type WorkLogRow = WorkLogSummaryRow & {
     updated_at: string;
     row_version: number;
   }>;
+  status_histories: Array<{
+    id: string;
+    from_status: WorkLogStatus | null;
+    to_status: WorkLogStatus;
+    change_reason: string | null;
+    changed_at: string;
+  }>;
+  approval: {
+    id: string;
+    status: 'pending' | 'approved' | 'rejected';
+    requested_at: string | null;
+    completed_at: string | null;
+    request_note: string | null;
+    decision_note: string | null;
+  } | null;
 };
 
 type WorkLogListRow = {
@@ -119,6 +191,22 @@ export class SupabaseWorkLogRepository implements WorkLogRepository {
     const response = await this.request(token, '/rpc/has_permission', {
       method: 'POST',
       body: JSON.stringify({ required_permission: 'contract.read' }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async canManage(token: string): Promise<boolean> {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'contract.manage' }),
+    });
+    return (await response.json()) === true;
+  }
+
+  async canApprove(token: string): Promise<boolean> {
+    const response = await this.request(token, '/rpc/has_permission', {
+      method: 'POST',
+      body: JSON.stringify({ required_permission: 'contract.approve' }),
     });
     return (await response.json()) === true;
   }
@@ -165,6 +253,88 @@ export class SupabaseWorkLogRepository implements WorkLogRepository {
     if (response.status === 403) return null;
     const row = (await response.json()) as WorkLogRow | null;
     return row ? toWorkLog(row) : null;
+  }
+
+  async create(
+    token: string,
+    input: WorkLogInput,
+    requestId: string,
+  ): Promise<WorkLog | null> {
+    return this.save(token, null, 0, input, requestId);
+  }
+
+  async update(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: WorkLogInput,
+    requestId: string,
+  ): Promise<WorkLog | null> {
+    return this.save(token, id, rowVersion, input, requestId);
+  }
+
+  async transitionStatus(
+    token: string,
+    id: string,
+    rowVersion: number,
+    input: WorkLogStatusTransitionInput,
+    requestId: string,
+  ): Promise<WorkLog | null> {
+    const response = await this.request(
+      token,
+      '/rpc/transition_work_log_status',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          p_work_log_id: id,
+          p_row_version: rowVersion,
+          p_to_status: input.status,
+          p_reason: input.reason,
+          p_approved_by_name: input.approvedByName,
+          p_request_id: requestId,
+        }),
+      },
+    );
+    const saved = (await response.json()) as { id: string } | null;
+    return saved ? this.findById(token, saved.id) : null;
+  }
+
+  private async save(
+    token: string,
+    id: string | null,
+    rowVersion: number,
+    input: WorkLogInput,
+    requestId: string,
+  ): Promise<WorkLog | null> {
+    const response = await this.request(token, '/rpc/save_work_log', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_work_log_id: id,
+        p_row_version: rowVersion,
+        p_work_log: {
+          contract_id: input.contractId,
+          engineer_id: input.engineerId,
+          work_month: input.workMonth,
+          scheduled_days: input.scheduledDays,
+          scheduled_hours: input.scheduledHours,
+          absence_hours: input.absenceHours,
+          notes: input.notes,
+        },
+        p_details: input.details.map((detail) => ({
+          work_date: detail.workDate,
+          work_type: detail.workType,
+          start_time: detail.startTime,
+          end_time: detail.endTime,
+          break_minutes: detail.breakMinutes,
+          work_hours: detail.workHours,
+          overtime_hours: detail.overtimeHours,
+          description: detail.description,
+        })),
+        p_request_id: requestId,
+      }),
+    });
+    const saved = (await response.json()) as { id: string } | null;
+    return saved ? this.findById(token, saved.id) : null;
   }
 
   private async request(
@@ -235,5 +405,22 @@ function toWorkLog(row: WorkLogRow): WorkLog {
       updatedAt: detail.updated_at,
       rowVersion: detail.row_version,
     })),
+    statusHistories: row.status_histories.map((history) => ({
+      id: history.id,
+      fromStatus: history.from_status,
+      toStatus: history.to_status,
+      changeReason: history.change_reason,
+      changedAt: history.changed_at,
+    })),
+    approval: row.approval
+      ? {
+          id: row.approval.id,
+          status: row.approval.status,
+          requestedAt: row.approval.requested_at,
+          completedAt: row.approval.completed_at,
+          requestNote: row.approval.request_note,
+          decisionNote: row.approval.decision_note,
+        }
+      : null,
   };
 }

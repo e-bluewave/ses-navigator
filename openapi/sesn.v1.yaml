@@ -8,6 +8,23 @@ security:
   - bearerAuth: []
 paths:
   /work-logs:
+    post:
+      operationId: createWorkLog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkLogInput' }
+      responses:
+        '201':
+          description: Monthly work-log draft created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkLog' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
     get:
       operationId: listWorkLogs
       parameters:
@@ -38,6 +55,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /work-logs/{id}:
+    put:
+      operationId: updateWorkLog
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkLogInput' }
+      responses:
+        '200':
+          description: Monthly work-log draft updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkLog' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
     get:
       operationId: getWorkLog
       parameters:
@@ -57,6 +105,39 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /work-logs/{id}/status:
+    post:
+      operationId: transitionWorkLogStatus
+      parameters:
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: '#/components/schemas/WorkLogStatusTransitionInput' }
+      responses:
+        '200':
+          description: Monthly work-log status transitioned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkLog' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /engagements:
     post:
       operationId: createEngagement
@@ -2743,13 +2824,102 @@ components:
       allOf:
         - { $ref: '#/components/schemas/WorkLogSummary' }
         - type: object
-          required: [approvedByName, notes, details]
+          required: [approvedByName, notes, details, statusHistories, approval]
           properties:
             approvedByName: { type: [string, 'null'] }
             notes: { type: [string, 'null'] }
             details:
               type: array
               items: { $ref: '#/components/schemas/WorkLogDetailItem' }
+            statusHistories:
+              type: array
+              items: { $ref: '#/components/schemas/WorkLogStatusHistory' }
+            approval:
+              oneOf:
+                - { $ref: '#/components/schemas/WorkLogApproval' }
+                - { type: 'null' }
+    WorkLogStatusHistory:
+      type: object
+      additionalProperties: false
+      required: [id, fromStatus, toStatus, changeReason, changedAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus:
+          oneOf:
+            - { $ref: '#/components/schemas/WorkLogStatus' }
+            - { type: 'null' }
+        toStatus: { $ref: '#/components/schemas/WorkLogStatus' }
+        changeReason: { type: [string, 'null'] }
+        changedAt: { type: string, format: date-time }
+    WorkLogApproval:
+      type: object
+      additionalProperties: false
+      required:
+        [id, status, requestedAt, completedAt, requestNote, decisionNote]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, approved, rejected] }
+        requestedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        requestNote: { type: [string, 'null'] }
+        decisionNote: { type: [string, 'null'] }
+    WorkLogDetailInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          workDate,
+          workType,
+          startTime,
+          endTime,
+          breakMinutes,
+          workHours,
+          overtimeHours,
+          description,
+        ]
+      properties:
+        workDate: { type: string, format: date }
+        workType: { $ref: '#/components/schemas/WorkType' }
+        startTime: { type: [string, 'null'], format: time }
+        endTime: { type: [string, 'null'], format: time }
+        breakMinutes: { type: integer, minimum: 0, maximum: 1440 }
+        workHours: { type: number, minimum: 0, maximum: 24 }
+        overtimeHours: { type: number, minimum: 0, maximum: 24 }
+        description: { type: [string, 'null'], maxLength: 1000 }
+    WorkLogInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          contractId,
+          engineerId,
+          workMonth,
+          scheduledDays,
+          scheduledHours,
+          absenceHours,
+          notes,
+          details,
+        ]
+      properties:
+        contractId: { type: string, format: uuid }
+        engineerId: { type: string, format: uuid }
+        workMonth: { type: string, format: date }
+        scheduledDays: { type: [number, 'null'], minimum: 0 }
+        scheduledHours: { type: [number, 'null'], minimum: 0 }
+        absenceHours: { type: number, minimum: 0 }
+        notes: { type: [string, 'null'], maxLength: 5000 }
+        details:
+          type: array
+          maxItems: 31
+          items: { $ref: '#/components/schemas/WorkLogDetailInput' }
+    WorkLogStatusTransitionInput:
+      type: object
+      additionalProperties: false
+      required: [status, reason, approvedByName]
+      properties:
+        status: { type: string, enum: [submitted, approved, rejected, locked] }
+        reason: { type: [string, 'null'], maxLength: 1000 }
+        approvedByName: { type: [string, 'null'], maxLength: 300 }
     WorkLogList:
       type: object
       additionalProperties: false

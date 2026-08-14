@@ -51,6 +51,7 @@ import type {
   EngagementSummary,
   EngagementStatus,
   WorkLog,
+  WorkLogInput,
   WorkLogSummary,
   WorkLogStatus,
   WorkType,
@@ -167,6 +168,8 @@ const workTypeLabels: Record<WorkType, string> = {
 type Route =
   | { page: 'work-logs' }
   | { page: 'work-log-detail'; id: string }
+  | { page: 'work-log-new' }
+  | { page: 'work-log-edit'; id: string }
   | { page: 'engagements' }
   | { page: 'engagement-detail'; id: string }
   | { page: 'engagement-new' }
@@ -201,6 +204,16 @@ type Route =
 
 function currentRoute(): Route {
   if (window.location.pathname === '/work-logs') return { page: 'work-logs' };
+  if (window.location.pathname === '/work-logs/new')
+    return { page: 'work-log-new' };
+  const workLogEdit = window.location.pathname.match(
+    /^\/work-logs\/([^/]+)\/edit$/,
+  );
+  if (workLogEdit)
+    return {
+      page: 'work-log-edit',
+      id: decodeURIComponent(workLogEdit[1]!),
+    };
   const workLog = window.location.pathname.match(/^\/work-logs\/([^/]+)$/);
   if (workLog)
     return {
@@ -321,10 +334,12 @@ export function App({ auth, api }: { auth: AuthService; api?: ProjectsApi }) {
 function WorkLogListView({
   api,
   onOpen,
+  onCreate,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   onOpen: (id: string) => void;
+  onCreate: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [items, setItems] = useState<WorkLogSummary[]>([]);
@@ -371,6 +386,9 @@ function WorkLogListView({
           <h2>月次実績</h2>
           <p>契約の認可境界を引き継いだ勤務実績を表示します。</p>
         </div>
+        <button className="primary-button" onClick={onCreate}>
+          月次実績を登録
+        </button>
       </div>
       <div className="filter-row">
         <input
@@ -453,16 +471,25 @@ function WorkLogDetail({
   id,
   onBack,
   onOpenContract,
+  onEdit,
   onUnauthorized,
 }: {
   api: ProjectsApi;
   id: string;
   onBack: () => void;
   onOpenContract: (id: string) => void;
+  onEdit: () => void;
   onUnauthorized: () => Promise<void>;
 }) {
   const [item, setItem] = useState<WorkLog | null>(null);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [nextStatus, setNextStatus] = useState<
+    Exclude<WorkLogStatus, 'draft'> | ''
+  >('');
+  const [reason, setReason] = useState('');
+  const [approvedByName, setApprovedByName] = useState('');
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     void api
       .getWorkLog(id)
@@ -478,6 +505,38 @@ function WorkLogDetail({
           );
       });
   }, [api, id, onUnauthorized]);
+  async function transition(event: FormEvent) {
+    event.preventDefault();
+    if (!item || !nextStatus) return;
+    setSaving(true);
+    setActionError('');
+    try {
+      const updated = await api.transitionWorkLogStatus(
+        item.id,
+        item.rowVersion,
+        {
+          status: nextStatus,
+          reason: reason.trim() || null,
+          approvedByName: approvedByName.trim() || null,
+        },
+      );
+      setItem(updated);
+      setNextStatus('');
+      setReason('');
+      setApprovedByName('');
+    } catch (failure) {
+      if (failure instanceof ApiClientError && failure.status === 401)
+        await onUnauthorized();
+      else
+        setActionError(
+          failure instanceof Error
+            ? failure.message
+            : '月次実績の状態を更新できませんでした。',
+        );
+    } finally {
+      setSaving(false);
+    }
+  }
   if (error)
     return (
       <section className="content-panel">
@@ -500,9 +559,16 @@ function WorkLogDetail({
           <h2>{item.workMonth.slice(0, 7)} 月次実績</h2>
           <p>{item.engineerName}</p>
         </div>
-        <button className="secondary-button" onClick={onBack}>
-          月次実績一覧へ戻る
-        </button>
+        <div className="filter-row">
+          {['draft', 'rejected'].includes(item.status) ? (
+            <button className="primary-button" onClick={onEdit}>
+              編集
+            </button>
+          ) : null}
+          <button className="secondary-button" onClick={onBack}>
+            月次実績一覧へ戻る
+          </button>
+        </div>
       </div>
       <dl className="detail-grid">
         <dt>契約</dt>
@@ -567,6 +633,418 @@ function WorkLogDetail({
         </tbody>
       </table>
       {item.details.length === 0 ? <p>日次実績はありません。</p> : null}
+      <h3>承認状況</h3>
+      <p>
+        {item.approval
+          ? `${item.approval.status} / ${item.approval.requestedAt ?? '日時未記録'}`
+          : '承認依頼はありません。'}
+      </p>
+      <h3>状態履歴</h3>
+      <ul>
+        {item.statusHistories.map((history) => (
+          <li key={history.id}>
+            {history.changedAt}: {workLogStatusLabels[history.toStatus]}
+            {history.changeReason ? ` / ${history.changeReason}` : ''}
+          </li>
+        ))}
+      </ul>
+      {item.status !== 'locked' ? (
+        <form
+          className="project-form"
+          onSubmit={(event) => void transition(event)}
+        >
+          <h3>提出・承認</h3>
+          {actionError ? <p role="alert">{actionError}</p> : null}
+          <label>
+            次の月次実績状態
+            <select
+              required
+              value={nextStatus}
+              onChange={(event) =>
+                setNextStatus(
+                  event.target.value as Exclude<WorkLogStatus, 'draft'> | '',
+                )
+              }
+            >
+              <option value="">選択してください</option>
+              {item.status === 'draft' || item.status === 'rejected' ? (
+                <option value="submitted">承認依頼を提出</option>
+              ) : item.status === 'submitted' ? (
+                <>
+                  <option value="approved">承認</option>
+                  <option value="rejected">差戻し</option>
+                </>
+              ) : (
+                <option value="locked">月次実績を締める</option>
+              )}
+            </select>
+          </label>
+          <label>
+            変更理由
+            <textarea
+              maxLength={1000}
+              required={nextStatus === 'rejected'}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </label>
+          {nextStatus === 'approved' ? (
+            <label>
+              顧客承認者名
+              <input
+                required
+                maxLength={300}
+                value={approvedByName}
+                onChange={(event) => setApprovedByName(event.target.value)}
+              />
+            </label>
+          ) : null}
+          <button className="primary-button" disabled={saving || !nextStatus}>
+            {saving ? '更新中…' : '月次実績の状態を更新'}
+          </button>
+        </form>
+      ) : null}
+    </section>
+  );
+}
+
+function WorkLogForm({
+  api,
+  id,
+  onCancel,
+  onSaved,
+}: {
+  api: ProjectsApi;
+  id?: string;
+  onCancel: () => void;
+  onSaved: (id: string) => void;
+}) {
+  const emptyDetail: WorkLogInput['details'][number] = {
+    workDate: '',
+    workType: 'work',
+    startTime: null,
+    endTime: null,
+    breakMinutes: 60,
+    workHours: 8,
+    overtimeHours: 0,
+    description: null,
+  };
+  const [input, setInput] = useState<WorkLogInput>({
+    contractId: '',
+    engineerId: '',
+    workMonth: '',
+    scheduledDays: null,
+    scheduledHours: null,
+    absenceHours: 0,
+    notes: null,
+    details: [{ ...emptyDetail }],
+  });
+  const [rowVersion, setRowVersion] = useState(0);
+  const [loading, setLoading] = useState(Boolean(id));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!id) return;
+    void api
+      .getWorkLog(id)
+      .then((item) => {
+        setInput({
+          contractId: item.contractId,
+          engineerId: item.engineerId,
+          workMonth: item.workMonth,
+          scheduledDays: item.scheduledDays,
+          scheduledHours: item.scheduledHours,
+          absenceHours: item.absenceHours,
+          notes: item.notes,
+          details: item.details.map((detail) => ({
+            workDate: detail.workDate,
+            workType: detail.workType,
+            startTime: detail.startTime?.slice(0, 5) ?? null,
+            endTime: detail.endTime?.slice(0, 5) ?? null,
+            breakMinutes: detail.breakMinutes,
+            workHours: detail.workHours,
+            overtimeHours: detail.overtimeHours,
+            description: detail.description,
+          })),
+        });
+        setRowVersion(item.rowVersion);
+      })
+      .catch((failure: unknown) =>
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : '月次実績を読み込めませんでした。',
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [api, id]);
+  const set = <K extends keyof WorkLogInput>(key: K, value: WorkLogInput[K]) =>
+    setInput((current) => ({ ...current, [key]: value }));
+  const setDetail = <K extends keyof WorkLogInput['details'][number]>(
+    index: number,
+    key: K,
+    value: WorkLogInput['details'][number][K],
+  ) =>
+    setInput((current) => ({
+      ...current,
+      details: current.details.map((detail, itemIndex) =>
+        itemIndex === index ? { ...detail, [key]: value } : detail,
+      ),
+    }));
+  const nullableNumber = (value: string) =>
+    value === '' ? null : Number(value);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const saved = id
+        ? await api.updateWorkLog(id, rowVersion, input)
+        : await api.createWorkLog(input);
+      onSaved(saved.id);
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : '月次実績を保存できませんでした。',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  if (loading)
+    return (
+      <section className="content-panel" role="status">
+        月次実績を読み込んでいます…
+      </section>
+    );
+  return (
+    <section className="content-panel">
+      <h2>{id ? '月次実績を編集' : '月次実績を登録'}</h2>
+      {error ? <p role="alert">{error}</p> : null}
+      <form className="project-form" onSubmit={(event) => void submit(event)}>
+        <label>
+          契約ID
+          <input
+            required
+            disabled={Boolean(id)}
+            value={input.contractId}
+            onChange={(event) => set('contractId', event.target.value)}
+          />
+        </label>
+        <label>
+          技術者ID
+          <input
+            required
+            disabled={Boolean(id)}
+            value={input.engineerId}
+            onChange={(event) => set('engineerId', event.target.value)}
+          />
+        </label>
+        <label>
+          対象月
+          <input
+            required
+            type="month"
+            disabled={Boolean(id)}
+            value={input.workMonth.slice(0, 7)}
+            onChange={(event) =>
+              set(
+                'workMonth',
+                event.target.value ? `${event.target.value}-01` : '',
+              )
+            }
+          />
+        </label>
+        <label>
+          予定日数
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={input.scheduledDays ?? ''}
+            onChange={(event) =>
+              set('scheduledDays', nullableNumber(event.target.value))
+            }
+          />
+        </label>
+        <label>
+          予定時間
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={input.scheduledHours ?? ''}
+            onChange={(event) =>
+              set('scheduledHours', nullableNumber(event.target.value))
+            }
+          />
+        </label>
+        <label>
+          欠勤時間
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            value={input.absenceHours}
+            onChange={(event) =>
+              set('absenceHours', Number(event.target.value))
+            }
+          />
+        </label>
+        <label>
+          備考
+          <textarea
+            maxLength={5000}
+            value={input.notes ?? ''}
+            onChange={(event) => set('notes', event.target.value || null)}
+          />
+        </label>
+        <fieldset>
+          <legend>日次実績</legend>
+          {input.details.map((detail, index) => (
+            <div className="project-form" key={`${index}-${detail.workDate}`}>
+              <h4>日次実績 {index + 1}</h4>
+              <label>
+                勤務日
+                <input
+                  required
+                  type="date"
+                  value={detail.workDate}
+                  onChange={(event) =>
+                    setDetail(index, 'workDate', event.target.value)
+                  }
+                />
+              </label>
+              <label>
+                勤務区分
+                <select
+                  value={detail.workType}
+                  onChange={(event) =>
+                    setDetail(index, 'workType', event.target.value as WorkType)
+                  }
+                >
+                  {Object.entries(workTypeLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                開始時刻
+                <input
+                  type="time"
+                  value={detail.startTime ?? ''}
+                  onChange={(event) =>
+                    setDetail(index, 'startTime', event.target.value || null)
+                  }
+                />
+              </label>
+              <label>
+                終了時刻
+                <input
+                  type="time"
+                  value={detail.endTime ?? ''}
+                  onChange={(event) =>
+                    setDetail(index, 'endTime', event.target.value || null)
+                  }
+                />
+              </label>
+              <label>
+                休憩時間（分）
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  max="1440"
+                  value={detail.breakMinutes}
+                  onChange={(event) =>
+                    setDetail(index, 'breakMinutes', Number(event.target.value))
+                  }
+                />
+              </label>
+              <label>
+                勤務時間
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  max="24"
+                  step="0.01"
+                  value={detail.workHours}
+                  onChange={(event) =>
+                    setDetail(index, 'workHours', Number(event.target.value))
+                  }
+                />
+              </label>
+              <label>
+                残業時間
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  max="24"
+                  step="0.01"
+                  value={detail.overtimeHours}
+                  onChange={(event) =>
+                    setDetail(
+                      index,
+                      'overtimeHours',
+                      Number(event.target.value),
+                    )
+                  }
+                />
+              </label>
+              <label>
+                作業内容
+                <textarea
+                  maxLength={1000}
+                  value={detail.description ?? ''}
+                  onChange={(event) =>
+                    setDetail(index, 'description', event.target.value || null)
+                  }
+                />
+              </label>
+              {input.details.length > 1 ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() =>
+                    set(
+                      'details',
+                      input.details.filter(
+                        (_, itemIndex) => itemIndex !== index,
+                      ),
+                    )
+                  }
+                >
+                  この日次実績を削除
+                </button>
+              ) : null}
+            </div>
+          ))}
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={input.details.length >= 31}
+            onClick={() =>
+              set('details', [...input.details, { ...emptyDetail }])
+            }
+          >
+            日次実績を追加
+          </button>
+        </fieldset>
+        <div className="filter-row">
+          <button className="primary-button" disabled={saving}>
+            {saving ? '保存中…' : id ? '月次実績を保存' : '月次実績を登録'}
+          </button>
+          <button type="button" className="secondary-button" onClick={onCancel}>
+            キャンセル
+          </button>
+        </div>
+      </form>
     </section>
   );
 }
@@ -3796,6 +4274,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         <WorkLogListView
           api={api}
           onOpen={(id) => navigate(`/work-logs/${id}`)}
+          onCreate={() => navigate('/work-logs/new')}
           onUnauthorized={signOut}
         />
       ) : route.page === 'work-log-detail' ? (
@@ -3804,7 +4283,21 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           id={route.id}
           onBack={() => navigate('/work-logs')}
           onOpenContract={(id) => navigate(`/contracts/${id}`)}
+          onEdit={() => navigate(`/work-logs/${route.id}/edit`)}
           onUnauthorized={signOut}
+        />
+      ) : route.page === 'work-log-new' || route.page === 'work-log-edit' ? (
+        <WorkLogForm
+          api={api}
+          {...(route.page === 'work-log-edit' ? { id: route.id } : {})}
+          onCancel={() =>
+            navigate(
+              route.page === 'work-log-edit'
+                ? `/work-logs/${route.id}`
+                : '/work-logs',
+            )
+          }
+          onSaved={(id) => navigate(`/work-logs/${id}`)}
         />
       ) : route.page === 'engagements' ? (
         <EngagementListView
