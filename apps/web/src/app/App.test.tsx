@@ -15,6 +15,7 @@ import type {
   Engineer,
   Interview,
   InterviewInput,
+  InterviewSummary,
   Proposal,
   Project,
   ProjectExtraction,
@@ -258,6 +259,64 @@ const interview: Interview = {
   statusHistory: [],
   updatedAt: '2026-08-11T00:00:00Z',
   rowVersion: 1,
+};
+
+const interviewSummary: InterviewSummary = {
+  aiExecutionId: '20202020-2020-4020-8020-202020202020',
+  interviewId: interview.id,
+  proposalId: proposal.id,
+  interviewRowVersion: 2,
+  status: 'review_required',
+  provider: 'openai',
+  modelName: 'gpt-5.6-luna',
+  promptVersion: 'interview.summarize.v1',
+  errorCode: null,
+  errorMessage: null,
+  result: {
+    summary: '技術評価は良好で、参画開始日の確認が必要です。',
+    facts: ['顧客がTypeScript経験を確認した。'],
+    evaluations: [
+      {
+        source: '社内評価',
+        text: '技術面を高く評価した。',
+        evidence: 'technicalRating=5',
+      },
+    ],
+    concerns: [
+      {
+        text: '参画開始日が未確認である。',
+        evidence: '面談メモに確定記載がない。',
+        severity: 'medium',
+      },
+    ],
+    actionItems: [
+      {
+        title: '参画開始日を確認する',
+        description: '顧客と技術者へ開始可能日を確認する。',
+        dueAt: null,
+        priority: 'high',
+        evidence: '参画開始日が未確認。',
+      },
+    ],
+    openQuestions: ['参画開始日はいつか。'],
+    statusSuggestions: [
+      {
+        status: 'offered',
+        reason: '面談結果がpassである。',
+        evidence: 'outcome=pass',
+      },
+    ],
+    safetyWarnings: [],
+  },
+  originalResult: null,
+  reviewStatus: 'pending',
+  reviewComment: null,
+  reviewedAt: null,
+  reviewRowVersion: 1,
+  generatedTaskIds: [],
+  requestedAt: '2026-08-22T00:00:00Z',
+  completedAt: '2026-08-22T00:00:10Z',
+  rowVersion: 2,
 };
 
 const contract: Contract = {
@@ -792,6 +851,13 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     saveInterviewResult: vi.fn(() =>
       Promise.reject(new Error('not configured')),
     ),
+    createInterviewSummary: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    getLatestInterviewSummary: vi.fn(() => Promise.resolve(null)),
+    reviewInterviewSummary: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     listProposals: vi.fn(() =>
       Promise.resolve({ items: [], page: { limit: 50, nextCursor: null } }),
     ),
@@ -1145,8 +1211,12 @@ describe('App', () => {
         },
       ),
     );
+    const changedAt = new Date('2026-08-14T01:00:00Z').toLocaleString('ja-JP');
     expect(
-      await screen.findByText(/2026\/8\/14.*売上締め/),
+      await screen.findByText(
+        (content) =>
+          content.includes(changedAt) && content.includes('売上締め'),
+      ),
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('会計期間の対象月'), {
@@ -1845,6 +1915,74 @@ describe('App', () => {
     expect(screen.getByText('予定確定')).toBeInTheDocument();
     expect(screen.getByText('経歴書を確認する')).toBeInTheDocument();
     expect(screen.getByText('候補日時')).toBeInTheDocument();
+  });
+
+  it('generates an interview summary and creates only a selected task', async () => {
+    window.history.replaceState({}, '', `/interviews/${interview.id}`);
+    const completed = {
+      ...interview,
+      status: 'completed' as const,
+      outcome: {
+        id: '21212121-2121-4121-8121-212121212121',
+        outcome: 'pass' as const,
+        decidedAt: '2026-08-20T03:00:00Z',
+        decisionSource: 'customer' as const,
+        reason: '技術評価良好',
+        nextAction: '開始日確認',
+        nextActionDueAt: null,
+        updatedAt: '2026-08-20T03:00:00Z',
+        rowVersion: 1,
+      },
+      rowVersion: 2,
+    };
+    const createInterviewSummary = vi
+      .fn<ProjectsApi['createInterviewSummary']>()
+      .mockResolvedValue(interviewSummary);
+    const reviewInterviewSummary = vi
+      .fn<ProjectsApi['reviewInterviewSummary']>()
+      .mockResolvedValue({
+        ...interviewSummary,
+        status: 'succeeded',
+        reviewStatus: 'approved',
+        reviewRowVersion: 2,
+        generatedTaskIds: ['22222222-3333-4333-8333-222222222222'],
+      });
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getInterview: vi.fn(() => Promise.resolve(completed)),
+          createInterviewSummary,
+          reviewInterviewSummary,
+        })}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: '面談を要約する' }),
+    );
+    expect(
+      await screen.findByDisplayValue(
+        '技術評価は良好で、参画開始日の確認が必要です。',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('提案状態の変更候補（自動反映なし）'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('承認時にタスク化'));
+    fireEvent.click(screen.getByRole('button', { name: '要約を承認' }));
+    await waitFor(() => expect(reviewInterviewSummary).toHaveBeenCalledOnce());
+    expect(reviewInterviewSummary).toHaveBeenCalledWith(
+      interview.id,
+      interviewSummary.aiExecutionId,
+      1,
+      {
+        decision: 'approve',
+        editedResult: null,
+        acceptedActionItemIndexes: [1],
+        reviewComment: null,
+      },
+    );
+    expect(await screen.findByText(/作成済みタスク:/)).toBeInTheDocument();
   });
 
   it('creates a tentative interview with a schedule candidate', async () => {

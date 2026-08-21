@@ -73,6 +73,11 @@ import type { ProposalMessageDraftRepository } from './modules/proposal-message-
 import { registerProposalMessageDraftRoutes } from './modules/proposal-message-drafts/proposal-message-draft-routes.js';
 import { OpenAIProposalMessageComposer } from './modules/proposal-message-drafts/proposal-message-draft-service.js';
 import type { ProposalMessageComposer } from './modules/proposal-message-drafts/proposal-message-draft-service.js';
+import { SupabaseInterviewSummaryRepository } from './modules/interview-summaries/interview-summary-repository.js';
+import type { InterviewSummaryRepository } from './modules/interview-summaries/interview-summary-repository.js';
+import { registerInterviewSummaryRoutes } from './modules/interview-summaries/interview-summary-routes.js';
+import { OpenAIInterviewSummarizer } from './modules/interview-summaries/interview-summary-service.js';
+import type { InterviewSummarizer } from './modules/interview-summaries/interview-summary-service.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -100,6 +105,8 @@ export interface AppDependencies {
   projectMatchExplainer?: ProjectMatchExplainer;
   proposalMessageDrafts?: ProposalMessageDraftRepository;
   proposalMessageComposer?: ProposalMessageComposer;
+  interviewSummaries?: InterviewSummaryRepository;
+  interviewSummarizer?: InterviewSummarizer;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -208,6 +215,11 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
     dependencies.proposalMessageDrafts ??
       new SupabaseProposalMessageDraftRepository(),
     dependencies.proposalMessageComposer ?? new OpenAIProposalMessageComposer(),
+  );
+  registerInterviewSummaryRoutes(
+    app,
+    dependencies.interviewSummaries ?? new SupabaseInterviewSummaryRepository(),
+    dependencies.interviewSummarizer ?? new OpenAIInterviewSummarizer(),
   );
 
   return app;

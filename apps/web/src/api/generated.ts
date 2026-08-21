@@ -1577,6 +1577,75 @@ export interface InterviewInput {
   notes: string | null;
   scheduleCandidates: InterviewScheduleCandidateInput[];
 }
+export interface InterviewSummaryCreateInput {
+  additionalInstructions?: string | null;
+}
+export interface InterviewSummaryEvaluation {
+  source: string;
+  text: string;
+  evidence: string;
+}
+export interface InterviewSummaryConcern {
+  text: string;
+  evidence: string;
+  severity: 'low' | 'medium' | 'high';
+}
+export interface InterviewSummaryActionItem {
+  title: string;
+  description: string;
+  dueAt: string | null;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  evidence: string;
+}
+export interface InterviewSummaryStatusSuggestion {
+  status: 'interviewing' | 'offered' | 'won' | 'lost' | 'withdrawn';
+  reason: string;
+  evidence: string;
+}
+export interface InterviewSummaryGeneration {
+  summary: string;
+  facts: string[];
+  evaluations: InterviewSummaryEvaluation[];
+  concerns: InterviewSummaryConcern[];
+  actionItems: InterviewSummaryActionItem[];
+  openQuestions: string[];
+  statusSuggestions: InterviewSummaryStatusSuggestion[];
+  safetyWarnings: string[];
+}
+export interface InterviewSummaryReviewInput {
+  decision: 'approve' | 'reject';
+  editedResult: InterviewSummaryGeneration | null;
+  acceptedActionItemIndexes: number[];
+  reviewComment: string | null;
+}
+export interface InterviewSummary {
+  aiExecutionId: string;
+  interviewId: string;
+  proposalId: string;
+  interviewRowVersion: number;
+  status: string;
+  provider: string;
+  modelName: string;
+  promptVersion: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+  result: InterviewSummaryGeneration | null;
+  originalResult: InterviewSummaryGeneration | null;
+  reviewStatus:
+    | 'pending'
+    | 'approved'
+    | 'rejected'
+    | 'partially_approved'
+    | 'changes_requested'
+    | null;
+  reviewComment: string | null;
+  reviewedAt: string | null;
+  reviewRowVersion: number | null;
+  generatedTaskIds: string[];
+  requestedAt: string;
+  completedAt: string | null;
+  rowVersion: number;
+}
 export interface InterviewList {
   items: Interview[];
   page: { limit: number; nextCursor: string | null };

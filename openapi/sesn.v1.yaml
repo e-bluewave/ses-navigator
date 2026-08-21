@@ -1121,6 +1121,73 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /interviews/{id}/ai/summary:
+    post:
+      operationId: createInterviewSummary
+      description: Generates a structured interview summary for human review. It never creates tasks or changes proposal status directly.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InterviewSummaryCreateInput' }
+      responses:
+        '201':
+          description: Generated interview summary awaiting review
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InterviewSummary' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /interviews/{id}/ai/summary/latest:
+    get:
+      operationId: getLatestInterviewSummary
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Latest accessible interview summary or null
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/InterviewSummary' }
+                  - { type: 'null' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /interviews/{interviewId}/ai/summary/{executionId}/review:
+    post:
+      operationId: reviewInterviewSummary
+      description: Approves or rejects a summary. Only explicitly selected action items become tasks; proposal status remains unchanged.
+      parameters:
+        - { name: interviewId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: executionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: If-Match, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InterviewSummaryReviewInput' }
+      responses:
+        '200':
+          description: Reviewed summary and generated task identifiers
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InterviewSummary' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /proposals:
     post:
       operationId: createProposal
@@ -5524,6 +5591,175 @@ components:
           maxItems: 10
           items:
             { $ref: '#/components/schemas/InterviewScheduleCandidateInput' }
+    InterviewSummaryCreateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        additionalInstructions: { type: [string, 'null'], maxLength: 2000 }
+    InterviewSummaryEvaluation:
+      type: object
+      additionalProperties: false
+      required: [source, text, evidence]
+      properties:
+        source: { type: string, minLength: 1, maxLength: 200 }
+        text: { type: string, minLength: 1, maxLength: 2000 }
+        evidence: { type: string, minLength: 1, maxLength: 2000 }
+    InterviewSummaryConcern:
+      type: object
+      additionalProperties: false
+      required: [text, evidence, severity]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 2000 }
+        evidence: { type: string, minLength: 1, maxLength: 2000 }
+        severity: { type: string, enum: [low, medium, high] }
+    InterviewSummaryActionItem:
+      type: object
+      additionalProperties: false
+      required: [title, description, dueAt, priority, evidence]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 5000 }
+        dueAt: { type: [string, 'null'], format: date-time }
+        priority: { type: string, enum: [low, normal, high, urgent] }
+        evidence: { type: string, minLength: 1, maxLength: 2000 }
+    InterviewSummaryStatusSuggestion:
+      type: object
+      additionalProperties: false
+      required: [status, reason, evidence]
+      properties:
+        status:
+          { type: string, enum: [interviewing, offered, won, lost, withdrawn] }
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+        evidence: { type: string, minLength: 1, maxLength: 2000 }
+    InterviewSummaryGeneration:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          summary,
+          facts,
+          evaluations,
+          concerns,
+          actionItems,
+          openQuestions,
+          statusSuggestions,
+          safetyWarnings,
+        ]
+      properties:
+        summary: { type: string, minLength: 1, maxLength: 10000 }
+        facts:
+          type: array
+          maxItems: 100
+          items: { type: string, minLength: 1, maxLength: 2000 }
+        evaluations:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/InterviewSummaryEvaluation' }
+        concerns:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/InterviewSummaryConcern' }
+        actionItems:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/InterviewSummaryActionItem' }
+        openQuestions:
+          type: array
+          maxItems: 100
+          items: { type: string, minLength: 1, maxLength: 2000 }
+        statusSuggestions:
+          type: array
+          maxItems: 20
+          items:
+            { $ref: '#/components/schemas/InterviewSummaryStatusSuggestion' }
+        safetyWarnings:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 2000 }
+    InterviewSummaryReviewInput:
+      type: object
+      additionalProperties: false
+      required:
+        [decision, editedResult, acceptedActionItemIndexes, reviewComment]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        editedResult:
+          oneOf:
+            - { $ref: '#/components/schemas/InterviewSummaryGeneration' }
+            - { type: 'null' }
+        acceptedActionItemIndexes:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+        reviewComment: { type: [string, 'null'], maxLength: 2000 }
+    InterviewSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          aiExecutionId,
+          interviewId,
+          proposalId,
+          interviewRowVersion,
+          status,
+          provider,
+          modelName,
+          promptVersion,
+          errorCode,
+          errorMessage,
+          result,
+          originalResult,
+          reviewStatus,
+          reviewComment,
+          reviewedAt,
+          reviewRowVersion,
+          generatedTaskIds,
+          requestedAt,
+          completedAt,
+          rowVersion,
+        ]
+      properties:
+        aiExecutionId: { type: string, format: uuid }
+        interviewId: { type: string, format: uuid }
+        proposalId: { type: string, format: uuid }
+        interviewRowVersion: { type: integer, minimum: 1 }
+        status: { type: string }
+        provider: { type: string }
+        modelName: { type: string }
+        promptVersion: { type: string }
+        errorCode: { type: [string, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+        result:
+          oneOf:
+            - { $ref: '#/components/schemas/InterviewSummaryGeneration' }
+            - { type: 'null' }
+        originalResult:
+          oneOf:
+            - { $ref: '#/components/schemas/InterviewSummaryGeneration' }
+            - { type: 'null' }
+        reviewStatus:
+          {
+            type: [string, 'null'],
+            enum:
+              [
+                pending,
+                approved,
+                rejected,
+                partially_approved,
+                changes_requested,
+                null,
+              ],
+          }
+        reviewComment: { type: [string, 'null'] }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        reviewRowVersion: { type: [integer, 'null'], minimum: 1 }
+        generatedTaskIds:
+          type: array
+          items: { type: string, format: uuid }
+        requestedAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
     InterviewList:
       type: object
       required: [items, page]
