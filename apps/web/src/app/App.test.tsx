@@ -19,6 +19,7 @@ import type {
   Project,
   ProjectExtraction,
   ProjectEngineerMatch,
+  ProposalMessageDraft,
   Contract,
   ContractInput,
   Engagement,
@@ -187,6 +188,46 @@ const proposal: Proposal = {
   validityDate: '2026-08-31',
   updatedAt: '2026-08-11T00:00:00Z',
   rowVersion: 1,
+};
+
+const proposalMessageDraft: ProposalMessageDraft = {
+  id: '17171717-1717-4717-8717-171717171717',
+  proposalId: proposal.id,
+  projectId: project.id,
+  engineerId: proposal.engineerId,
+  channel: 'email',
+  status: 'draft',
+  subject: 'TypeScriptエンジニアのご提案',
+  bodyText: 'ご担当者様\n案件に合致する技術者をご提案します。',
+  messageTemplateId: null,
+  currentVersionId: '18181818-1818-4818-8818-181818181818',
+  currentVersionNo: 1,
+  currentGenerationSource: 'ai',
+  approvedVersionId: null,
+  approvedAt: null,
+  aiExecutionId: '19191919-1919-4919-8919-191919191919',
+  aiStatus: 'review_required',
+  aiErrorCode: null,
+  aiErrorMessage: null,
+  promptVersion: 'proposal.compose.v1',
+  modelProvider: 'openai',
+  modelName: 'gpt-5.6-luna',
+  reviewStatus: 'pending',
+  reviewComment: null,
+  generation: {
+    subject: 'TypeScriptエンジニアのご提案',
+    bodyText: 'ご担当者様\n案件に合致する技術者をご提案します。',
+    engineerIntroduction: 'TypeScript経験を持つ技術者です。',
+    confirmationItems: ['参画開始日をご確認ください。'],
+    evidence: [{ claim: 'TypeScript経験', source: '経歴書版1' }],
+    policyChecks: [],
+  },
+  recipients: [
+    { type: 'to', name: '営業担当者', address: 'sales@example.com' },
+  ],
+  createdAt: '2026-08-14T03:00:00Z',
+  updatedAt: '2026-08-14T03:01:00Z',
+  rowVersion: 2,
 };
 
 const interview: Interview = {
@@ -596,6 +637,16 @@ function auth(current: AuthSession | null = session): AuthService {
 
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
+    createProposalMessageDraft: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    getLatestProposalMessageDraft: vi.fn(() => Promise.resolve(null)),
+    updateProposalMessageDraft: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    reviewProposalMessageDraft: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     createProjectEngineerMatch: vi.fn(() =>
       Promise.reject(new Error('not configured')),
     ),
@@ -1905,6 +1956,66 @@ describe('App', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '提案を登録' }));
     await waitFor(() => expect(createProposal).toHaveBeenCalledOnce());
+  });
+  it('generates, edits, and approves a proposal email without sending it', async () => {
+    const ready = {
+      ...proposal,
+      status: 'draft' as const,
+      destinationContactId: '20202020-2020-4020-8020-202020202020',
+      resumeVersionId: '21212121-2121-4121-8121-212121212121',
+      requirementVersionId: '22222222-2222-4222-8222-222222222223',
+    };
+    const created = { ...proposalMessageDraft, proposalId: ready.id };
+    const edited = {
+      ...created,
+      subject: '編集済み件名',
+      currentVersionNo: 2,
+      currentGenerationSource: 'manual' as const,
+      rowVersion: 3,
+    };
+    const approved = {
+      ...edited,
+      status: 'approved' as const,
+      approvedVersionId: edited.currentVersionId,
+      approvedAt: '2026-08-14T03:02:00Z',
+      reviewStatus: 'approved',
+      rowVersion: 4,
+    };
+    const createProposalMessageDraft = vi.fn(() => Promise.resolve(created));
+    const updateProposalMessageDraft = vi.fn(() => Promise.resolve(edited));
+    const reviewProposalMessageDraft = vi.fn(() => Promise.resolve(approved));
+    window.history.replaceState({}, '', `/proposals/${ready.id}`);
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getProposal: () => Promise.resolve(ready),
+          createProposalMessageDraft,
+          updateProposalMessageDraft,
+          reviewProposalMessageDraft,
+        })}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('提案メール追加指示'), {
+      target: { value: '簡潔にしてください' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '下書きを生成' }));
+    await waitFor(() =>
+      expect(createProposalMessageDraft).toHaveBeenCalledWith(ready.id, {
+        tone: 'standard',
+        additionalInstructions: '簡潔にしてください',
+      }),
+    );
+    fireEvent.change(await screen.findByLabelText('提案メール件名'), {
+      target: { value: '編集済み件名' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '編集版を保存' }));
+    await waitFor(() => expect(updateProposalMessageDraft).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: '現在版を承認' }));
+    await waitFor(() => expect(reviewProposalMessageDraft).toHaveBeenCalled());
+    expect(
+      await screen.findByText(/送信処理はまだ実行されていません/),
+    ).toBeInTheDocument();
   });
   it('transitions proposal status with optimistic locking', async () => {
     window.history.replaceState({}, '', `/proposals/${proposal.id}`);

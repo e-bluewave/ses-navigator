@@ -1382,6 +1382,70 @@ export interface ProposalWinResult {
   engagementId: string;
   created: boolean;
 }
+export interface ProposalMessageDraftCreateInput {
+  messageTemplateId?: string | null;
+  tone?: 'formal' | 'standard' | 'concise';
+  additionalInstructions?: string | null;
+}
+export interface ProposalMessageDraftEditInput {
+  subject: string;
+  bodyText: string;
+}
+export interface ProposalMessageDraftReviewInput {
+  decision: 'approve' | 'reject';
+  reviewComment: string | null;
+}
+export interface ProposalMessageGeneration {
+  subject: string;
+  bodyText: string;
+  engineerIntroduction: string;
+  confirmationItems: string[];
+  evidence: Array<{ claim: string; source: string }>;
+  policyChecks: Array<{
+    category:
+      | 'prohibited_expression'
+      | 'unverified_claim'
+      | 'privacy'
+      | 'template_requirement';
+    severity: 'info' | 'warning' | 'error';
+    text: string;
+    explanation: string;
+  }>;
+}
+export interface ProposalMessageDraft {
+  id: string;
+  proposalId: string;
+  projectId: string;
+  engineerId: string;
+  channel: 'email';
+  status: 'draft' | 'approved' | 'cancelled' | 'queued' | 'sent' | 'failed';
+  subject: string;
+  bodyText: string;
+  messageTemplateId: string | null;
+  currentVersionId: string | null;
+  currentVersionNo: number | null;
+  currentGenerationSource: 'manual' | 'template' | 'ai' | 'import' | null;
+  approvedVersionId: string | null;
+  approvedAt: string | null;
+  aiExecutionId: string;
+  aiStatus: string;
+  aiErrorCode: string | null;
+  aiErrorMessage: string | null;
+  promptVersion: string;
+  modelProvider: string;
+  modelName: string;
+  reviewStatus: string | null;
+  reviewComment: string | null;
+  generation: ProposalMessageGeneration | null;
+  recipients: Array<{
+    type: 'to' | 'cc' | 'bcc';
+    name: string | null;
+    address: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+  rowVersion: number;
+}
 export interface ProposalList {
   items: Proposal[];
   page: { limit: number; nextCursor: string | null };

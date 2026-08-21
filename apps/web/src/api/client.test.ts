@@ -623,6 +623,49 @@ describe('generated projects API client', () => {
     });
   });
 
+  it('calls proposal message generation, edit, and review endpoints', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() => Promise.resolve(new Response(JSON.stringify({ id: 'message-1' }))));
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    await api.createProposalMessageDraft('proposal-1', {
+      tone: 'concise',
+      additionalInstructions: '要点のみ',
+    });
+    await api.getLatestProposalMessageDraft('proposal-1');
+    await api.updateProposalMessageDraft('proposal-1', 'message-1', 2, {
+      subject: '編集済み',
+      bodyText: '編集済み本文',
+    });
+    await api.reviewProposalMessageDraft('proposal-1', 'message-1', 3, {
+      decision: 'approve',
+      reviewComment: '確認済み',
+    });
+    expect(request.mock.calls[0]![0]).toBe(
+      '/api/v1/proposals/proposal-1/ai/message-drafts',
+    );
+    expect(request.mock.calls[1]![0]).toBe(
+      '/api/v1/proposals/proposal-1/ai/message-drafts/latest',
+    );
+    expect(request.mock.calls[2]![0]).toBe(
+      '/api/v1/proposals/proposal-1/ai/message-drafts/message-1',
+    );
+    expect(request.mock.calls[2]![1]).toMatchObject({
+      method: 'PUT',
+      headers: { 'if-match': '"2"' },
+    });
+    expect(request.mock.calls[3]![0]).toBe(
+      '/api/v1/proposals/proposal-1/ai/message-drafts/message-1/review',
+    );
+    expect(request.mock.calls[3]![1]).toMatchObject({
+      method: 'POST',
+      headers: { 'if-match': '"3"' },
+    });
+  });
+
   it('lists and reads engineers with bearer authentication', async () => {
     const request = vi.fn().mockImplementation(() =>
       Promise.resolve(

@@ -51,6 +51,10 @@ import type {
   ProposalList,
   ProposalStatusTransitionInput,
   ProposalWinResult,
+  ProposalMessageDraft,
+  ProposalMessageDraftCreateInput,
+  ProposalMessageDraftEditInput,
+  ProposalMessageDraftReviewInput,
   ListProposalsQuery,
   Interview,
   InterviewInput,
@@ -255,6 +259,25 @@ export interface ProjectsApi {
     input: ProposalStatusTransitionInput,
   ): Promise<Proposal>;
   winProposal(id: string, rowVersion: number): Promise<ProposalWinResult>;
+  createProposalMessageDraft(
+    id: string,
+    input?: ProposalMessageDraftCreateInput,
+  ): Promise<ProposalMessageDraft>;
+  getLatestProposalMessageDraft(
+    id: string,
+  ): Promise<ProposalMessageDraft | null>;
+  updateProposalMessageDraft(
+    proposalId: string,
+    messageId: string,
+    rowVersion: number,
+    input: ProposalMessageDraftEditInput,
+  ): Promise<ProposalMessageDraft>;
+  reviewProposalMessageDraft(
+    proposalId: string,
+    messageId: string,
+    rowVersion: number,
+    input: ProposalMessageDraftReviewInput,
+  ): Promise<ProposalMessageDraft>;
   listEngineerCareerHistories(id: string): Promise<EngineerCareerHistoryList>;
   saveEngineerCareerHistory(
     id: string,
@@ -789,6 +812,34 @@ export function createProjectsApi(options: {
         {},
         rowVersion,
         { 'idempotency-key': createIdempotencyKey() },
+      );
+    },
+    createProposalMessageDraft(id, input = {}) {
+      return send<ProposalMessageDraft>(
+        `/proposals/${encodeURIComponent(id)}/ai/message-drafts`,
+        'POST',
+        input,
+      );
+    },
+    getLatestProposalMessageDraft(id) {
+      return get<ProposalMessageDraft | null>(
+        `/proposals/${encodeURIComponent(id)}/ai/message-drafts/latest`,
+      );
+    },
+    updateProposalMessageDraft(proposalId, messageId, rowVersion, input) {
+      return send<ProposalMessageDraft>(
+        `/proposals/${encodeURIComponent(proposalId)}/ai/message-drafts/${encodeURIComponent(messageId)}`,
+        'PUT',
+        input,
+        rowVersion,
+      );
+    },
+    reviewProposalMessageDraft(proposalId, messageId, rowVersion, input) {
+      return send<ProposalMessageDraft>(
+        `/proposals/${encodeURIComponent(proposalId)}/ai/message-drafts/${encodeURIComponent(messageId)}/review`,
+        'POST',
+        input,
+        rowVersion,
       );
     },
     listEngineerCareerHistories(id) {
