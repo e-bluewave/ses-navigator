@@ -53,6 +53,9 @@ import { registerProfitabilityRoutes } from './modules/profitability/profitabili
 import { SupabaseSalesKpiRepository } from './modules/sales-kpi/sales-kpi-repository.js';
 import type { SalesKpiRepository } from './modules/sales-kpi/sales-kpi-repository.js';
 import { registerSalesKpiRoutes } from './modules/sales-kpi/sales-kpi-routes.js';
+import { SupabaseAiOperationsRepository } from './modules/ai-operations/ai-operations-repository.js';
+import type { AiOperationsRepository } from './modules/ai-operations/ai-operations-repository.js';
+import { registerAiOperationsRoutes } from './modules/ai-operations/ai-operations-routes.js';
 import { SupabaseResumeExtractionRepository } from './modules/resume-extractions/resume-extraction-repository.js';
 import type { ResumeExtractionRepository } from './modules/resume-extractions/resume-extraction-repository.js';
 import { OpenAIResumeExtractor } from './modules/resume-extractions/resume-extraction-service.js';
@@ -97,6 +100,7 @@ export interface AppDependencies {
   expenses?: ExpenseRepository;
   profitability?: ProfitabilityRepository;
   salesKpi?: SalesKpiRepository;
+  aiOperations?: AiOperationsRepository;
   resumeExtractions?: ResumeExtractionRepository;
   resumeExtractor?: ResumeExtractor;
   projectExtractions?: ProjectExtractionRepository;
@@ -193,6 +197,10 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerSalesKpiRoutes(
     app,
     dependencies.salesKpi ?? new SupabaseSalesKpiRepository(),
+  );
+  registerAiOperationsRoutes(
+    app,
+    dependencies.aiOperations ?? new SupabaseAiOperationsRepository(),
   );
   registerResumeExtractionRoutes(
     app,

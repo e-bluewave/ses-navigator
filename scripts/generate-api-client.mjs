@@ -5,6 +5,7 @@ const outputPath = new URL('../apps/web/src/api/generated.ts', import.meta.url);
 const contract = await readFile(contractPath, 'utf8');
 
 const requiredContractFragments = [
+  'operationId: getAiOperationsDashboard',
   'operationId: getSalesKpiDashboard',
   'operationId: getProfitabilityDashboard',
   'operationId: listExpenses',
@@ -976,6 +977,86 @@ export interface ListWorkLogsQuery {
   workMonth?: string;
   cursor?: string;
   limit?: number;
+}
+
+export interface AiUsageDay {
+  usageDate: string;
+  executionCount: number;
+  succeededCount: number;
+  failedCount: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+}
+export interface AiTypeUsage {
+  executionType: string;
+  executionCount: number;
+  succeededCount: number;
+  failedCount: number;
+  successRate: number | null;
+  totalTokens: number;
+}
+export interface AiModelUsage {
+  provider: string;
+  modelName: string;
+  currency: string;
+  executionCount: number;
+  failedCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCost: number;
+  costRecordedCount: number;
+}
+export interface AiCostByCurrency {
+  currency: string;
+  estimatedCost: number;
+  recordedCount: number;
+}
+export interface AiRecentFailure {
+  id: string;
+  executionType: string;
+  provider: string;
+  modelName: string;
+  errorCode: string | null;
+  requestedAt: string;
+  completedAt: string | null;
+}
+export interface AiOperationsDashboard {
+  fromDate: string;
+  toDate: string;
+  executionCount: number;
+  succeededCount: number;
+  failedCount: number;
+  activeCount: number;
+  reviewRequiredCount: number;
+  successRate: number | null;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  tokenRecordedCount: number;
+  costRecordedCount: number;
+  costCoverageRate: number | null;
+  averageLatencyMs: number | null;
+  p95LatencyMs: number | null;
+  pendingReviewCount: number;
+  reviewedCount: number;
+  approvedCount: number;
+  partiallyApprovedCount: number;
+  rejectedCount: number;
+  changesRequestedCount: number;
+  approvalRate: number | null;
+  feedbackCount: number;
+  averageRating: number | null;
+  issueFeedbackCount: number;
+  unsafeFeedbackCount: number;
+  daily: AiUsageDay[];
+  typeUsage: AiTypeUsage[];
+  modelUsage: AiModelUsage[];
+  costByCurrency: AiCostByCurrency[];
+  recentFailures: AiRecentFailure[];
+}
+export interface AiOperationsQuery {
+  fromDate: string;
+  toDate: string;
 }
 
 export interface SalesKpiMonth {

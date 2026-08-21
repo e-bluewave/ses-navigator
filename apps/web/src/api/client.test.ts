@@ -90,6 +90,22 @@ describe('generated projects API client', () => {
       '/api/v1/sales-kpi?fromDate=2026-01-01&toDate=2026-08-14&contractExpiryDays=60',
     );
   });
+  it('calls the AI operations dashboard endpoint', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() => Promise.resolve(new Response(JSON.stringify({ daily: [] }))));
+    const api = createProjectsApi({
+      getAccessToken: () => 'token',
+      fetch: request,
+    });
+    await api.getAiOperationsDashboard({
+      fromDate: '2026-08-01',
+      toDate: '2026-08-22',
+    });
+    expect(request.mock.calls[0]![0]).toBe(
+      '/api/v1/ai-operations?fromDate=2026-08-01&toDate=2026-08-22',
+    );
+  });
   it('calls the profitability dashboard endpoint', async () => {
     const request = vi.fn<
       (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>

@@ -89,6 +89,7 @@ import { MfaPage } from '../auth/MfaPage.js';
 import { PasswordUpdatePage } from '../auth/PasswordUpdatePage.js';
 import type { AuthService } from '../auth/auth-client.js';
 import { HomeDashboardView } from './HomeDashboardView.js';
+import { AiOperationsView } from './AiOperationsView.js';
 
 const projectStatusLabels: Record<ProjectStatus, string> = {
   draft: '下書き',
@@ -210,6 +211,7 @@ const invoiceTypeLabels: Record<InvoiceType, string> = {
 
 type Route =
   | { page: 'home' }
+  | { page: 'ai-operations' }
   | { page: 'sales-kpi' }
   | { page: 'profitability' }
   | { page: 'expenses' }
@@ -264,6 +266,8 @@ function currentRoute(): Route {
   )
     return { page: 'home' };
   if (window.location.pathname === '/sales-kpi') return { page: 'sales-kpi' };
+  if (window.location.pathname === '/ai-operations')
+    return { page: 'ai-operations' };
   if (window.location.pathname === '/profitability')
     return { page: 'profitability' };
   if (window.location.pathname === '/expenses') return { page: 'expenses' };
@@ -7609,6 +7613,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         </button>
         <button
           className="secondary-button"
+          onClick={() => navigate('/ai-operations')}
+        >
+          AI運用
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/profitability')}
         >
           粗利・収支
@@ -7706,6 +7716,8 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         />
       ) : route.page === 'sales-kpi' ? (
         <SalesKpiView api={api} onUnauthorized={signOut} />
+      ) : route.page === 'ai-operations' ? (
+        <AiOperationsView api={api} onUnauthorized={signOut} />
       ) : route.page === 'profitability' ? (
         <ProfitabilityView api={api} onUnauthorized={signOut} />
       ) : route.page === 'expenses' ? (
