@@ -27,6 +27,8 @@ jobs:
       - run: pnpm smoke:auth-project:check
       - run: pnpm security:data-api:check
       - run: pnpm security:service-rpc:check
+      - run: pnpm security:supabase-config
+      - run: pnpm security:supabase-config:check
       - run: pnpm contract:check
       - run: pnpm client:check
       - run: pnpm build

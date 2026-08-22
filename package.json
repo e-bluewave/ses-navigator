@@ -19,6 +19,8 @@
     "security:data-api:check": "node --test scripts/data-api-security-regression.test.mjs",
     "security:service-rpc": "node scripts/service-role-rpc-security-regression.mjs",
     "security:service-rpc:check": "node --test scripts/service-role-rpc-security-regression.test.mjs",
+    "security:supabase-config": "node scripts/check-supabase-config.mjs",
+    "security:supabase-config:check": "node --test scripts/check-supabase-config.test.mjs",
     "smoke:auth-project": "node scripts/auth-project-smoke.mjs",
     "smoke:auth-project:check": "node --test scripts/auth-project-smoke.test.mjs",
     "test": "pnpm -r test",
