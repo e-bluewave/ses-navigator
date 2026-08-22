@@ -60,6 +60,9 @@ import type {
   InterviewInput,
   InterviewResultInput,
   InterviewList,
+  InterviewSummary,
+  InterviewSummaryCreateInput,
+  InterviewSummaryReviewInput,
   ListInterviewsQuery,
   Contract,
   ContractInput,
@@ -245,6 +248,17 @@ export interface ProjectsApi {
     rowVersion: number,
     input: InterviewResultInput,
   ): Promise<Interview>;
+  createInterviewSummary(
+    id: string,
+    input?: InterviewSummaryCreateInput,
+  ): Promise<InterviewSummary>;
+  getLatestInterviewSummary(id: string): Promise<InterviewSummary | null>;
+  reviewInterviewSummary(
+    interviewId: string,
+    executionId: string,
+    reviewRowVersion: number,
+    input: InterviewSummaryReviewInput,
+  ): Promise<InterviewSummary>;
   listProposals(query?: ListProposalsQuery): Promise<ProposalList>;
   getProposal(id: string): Promise<Proposal>;
   createProposal(input: ProposalInput): Promise<Proposal>;
@@ -772,6 +786,26 @@ export function createProjectsApi(options: {
         'POST',
         input,
         rowVersion,
+      );
+    },
+    createInterviewSummary(id, input = {}) {
+      return send<InterviewSummary>(
+        `/interviews/${encodeURIComponent(id)}/ai/summary`,
+        'POST',
+        input,
+      );
+    },
+    getLatestInterviewSummary(id) {
+      return get<InterviewSummary | null>(
+        `/interviews/${encodeURIComponent(id)}/ai/summary/latest`,
+      );
+    },
+    reviewInterviewSummary(interviewId, executionId, reviewRowVersion, input) {
+      return send<InterviewSummary>(
+        `/interviews/${encodeURIComponent(interviewId)}/ai/summary/${encodeURIComponent(executionId)}/review`,
+        'POST',
+        input,
+        reviewRowVersion,
       );
     },
     listProposals(query = {}) {

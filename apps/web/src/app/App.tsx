@@ -44,6 +44,8 @@ import type {
   InterviewParticipantInput,
   InterviewStatus,
   InterviewType,
+  InterviewSummary,
+  InterviewSummaryGeneration,
   Contract,
   ContractInput,
   ContractPartyInput,
@@ -5520,6 +5522,372 @@ function InterviewDetail({
         <dt>版番号</dt>
         <dd>{item.rowVersion}</dd>
       </dl>
+      <InterviewSummaryPanel
+        api={api}
+        interviewId={item.id}
+        canGenerate={item.status === 'completed'}
+      />
+    </section>
+  );
+}
+
+function InterviewSummaryPanel({
+  api,
+  interviewId,
+  canGenerate,
+}: {
+  api: ProjectsApi;
+  interviewId: string;
+  canGenerate: boolean;
+}) {
+  const [summary, setSummary] = useState<InterviewSummary | null>(null);
+  const [edited, setEdited] = useState<InterviewSummaryGeneration | null>(null);
+  const [instructions, setInstructions] = useState('');
+  const [reviewComment, setReviewComment] = useState('');
+  const [selectedActions, setSelectedActions] = useState<number[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .getLatestInterviewSummary(interviewId)
+      .then((result) => {
+        if (active) setSummary(result);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [api, interviewId]);
+
+  useEffect(() => {
+    setEdited(summary?.result ? structuredClone(summary.result) : null);
+    setSelectedActions([]);
+  }, [summary]);
+
+  async function generate() {
+    setBusy(true);
+    setError(null);
+    try {
+      setSummary(
+        await api.createInterviewSummary(interviewId, {
+          additionalInstructions: instructions.trim() || null,
+        }),
+      );
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function updateAction(
+    index: number,
+    field: 'title' | 'description' | 'dueAt' | 'priority' | 'evidence',
+    value: string,
+  ) {
+    setEdited((current) => {
+      if (!current) return current;
+      const actionItems = current.actionItems.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]:
+                field === 'dueAt'
+                  ? value.trim() || null
+                  : field === 'priority'
+                    ? (value as typeof item.priority)
+                    : value,
+            }
+          : item,
+      );
+      return { ...current, actionItems };
+    });
+  }
+
+  async function review(decision: 'approve' | 'reject') {
+    if (!summary || !edited || summary.reviewRowVersion === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const wasEdited =
+        JSON.stringify(edited) !== JSON.stringify(summary.result);
+      setSummary(
+        await api.reviewInterviewSummary(
+          interviewId,
+          summary.aiExecutionId,
+          summary.reviewRowVersion,
+          {
+            decision,
+            editedResult: decision === 'approve' && wasEdited ? edited : null,
+            acceptedActionItemIndexes:
+              decision === 'approve' ? selectedActions : [],
+            reviewComment: reviewComment.trim() || null,
+          },
+        ),
+      );
+      setReviewComment('');
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pending = summary?.reviewStatus === 'pending';
+  return (
+    <section
+      className="audit-panel"
+      aria-labelledby="interview-summary-heading"
+    >
+      <h3 id="interview-summary-heading">AI面談要約・タスク候補</h3>
+      <p>
+        面談内容を区分して要約します。承認時も、選択した候補だけがタスクになり、提案状態は変更されません。
+      </p>
+      {error ? <ErrorNotice error={error} /> : null}
+      {!canGenerate ? (
+        <p role="status">面談結果を「実施済み」で保存すると生成できます。</p>
+      ) : null}
+      <label>
+        追加指示
+        <textarea
+          aria-label="面談要約追加指示"
+          maxLength={2000}
+          value={instructions}
+          onChange={(event) => setInstructions(event.target.value)}
+        />
+      </label>
+      <button
+        type="button"
+        className="primary-button"
+        disabled={busy || !canGenerate || pending}
+        onClick={() => void generate()}
+      >
+        {busy ? '処理中…' : summary ? '新しく要約する' : '面談を要約する'}
+      </button>
+
+      {summary ? (
+        <section aria-label="AI面談要約内容">
+          <p>
+            AI状態: {summary.status}／レビュー:{' '}
+            {summary.reviewStatus ?? '生成中'}
+          </p>
+          {summary.errorMessage ? (
+            <p role="alert">AI生成エラー: {summary.errorMessage}</p>
+          ) : null}
+          {edited ? (
+            <>
+              <label>
+                要約
+                <textarea
+                  aria-label="AI面談要約"
+                  maxLength={10000}
+                  value={edited.summary}
+                  disabled={!pending || busy}
+                  onChange={(event) =>
+                    setEdited({ ...edited, summary: event.target.value })
+                  }
+                />
+              </label>
+              <h4>事実</h4>
+              {edited.facts.length ? (
+                <ul>
+                  {edited.facts.map((fact) => (
+                    <li key={fact}>{fact}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>なし</p>
+              )}
+              <h4>評価</h4>
+              {edited.evaluations.length ? (
+                <ul>
+                  {edited.evaluations.map((evaluation, index) => (
+                    <li key={`${evaluation.source}-${index}`}>
+                      {evaluation.source}: {evaluation.text}（根拠:{' '}
+                      {evaluation.evidence}）
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>なし</p>
+              )}
+              <h4>懸念</h4>
+              {edited.concerns.length ? (
+                <ul>
+                  {edited.concerns.map((concern, index) => (
+                    <li key={`${concern.text}-${index}`}>
+                      [{concern.severity}] {concern.text}（根拠:{' '}
+                      {concern.evidence}）
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>なし</p>
+              )}
+              <h4>タスク候補</h4>
+              {edited.actionItems.length ? (
+                <div className="stacked-list">
+                  {edited.actionItems.map((action, index) => (
+                    <fieldset key={`${action.title}-${index}`}>
+                      <legend>候補 {index + 1}</legend>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selectedActions.includes(index + 1)}
+                          disabled={!pending || busy}
+                          onChange={(event) =>
+                            setSelectedActions((current) =>
+                              event.target.checked
+                                ? [...current, index + 1].sort((a, b) => a - b)
+                                : current.filter(
+                                    (value) => value !== index + 1,
+                                  ),
+                            )
+                          }
+                        />
+                        承認時にタスク化
+                      </label>
+                      <label>
+                        件名
+                        <input
+                          value={action.title}
+                          maxLength={200}
+                          disabled={!pending || busy}
+                          onChange={(event) =>
+                            updateAction(index, 'title', event.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        内容
+                        <textarea
+                          value={action.description}
+                          maxLength={5000}
+                          disabled={!pending || busy}
+                          onChange={(event) =>
+                            updateAction(
+                              index,
+                              'description',
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </label>
+                      <label>
+                        期限（ISO 8601・未確定なら空欄）
+                        <input
+                          value={action.dueAt ?? ''}
+                          disabled={!pending || busy}
+                          onChange={(event) =>
+                            updateAction(index, 'dueAt', event.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        優先度
+                        <select
+                          value={action.priority}
+                          disabled={!pending || busy}
+                          onChange={(event) =>
+                            updateAction(index, 'priority', event.target.value)
+                          }
+                        >
+                          <option value="low">低</option>
+                          <option value="normal">通常</option>
+                          <option value="high">高</option>
+                          <option value="urgent">緊急</option>
+                        </select>
+                      </label>
+                      <label>
+                        根拠
+                        <textarea
+                          value={action.evidence}
+                          maxLength={2000}
+                          disabled={!pending || busy}
+                          onChange={(event) =>
+                            updateAction(index, 'evidence', event.target.value)
+                          }
+                        />
+                      </label>
+                    </fieldset>
+                  ))}
+                </div>
+              ) : (
+                <p>なし</p>
+              )}
+              <h4>未確認事項</h4>
+              {edited.openQuestions.length ? (
+                <ul>
+                  {edited.openQuestions.map((question) => (
+                    <li key={question}>{question}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>なし</p>
+              )}
+              <h4>提案状態の変更候補（自動反映なし）</h4>
+              {edited.statusSuggestions.length ? (
+                <ul>
+                  {edited.statusSuggestions.map((suggestion, index) => (
+                    <li key={`${suggestion.status}-${index}`}>
+                      {proposalStatusLabels[suggestion.status]}:{' '}
+                      {suggestion.reason}（根拠: {suggestion.evidence}）
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>なし</p>
+              )}
+              {edited.safetyWarnings.length ? (
+                <>
+                  <h4>安全上の注意</h4>
+                  <ul>
+                    {edited.safetyWarnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </>
+          ) : null}
+          {pending ? (
+            <div className="filter-row">
+              <label>
+                レビューコメント
+                <textarea
+                  aria-label="面談要約レビューコメント"
+                  maxLength={2000}
+                  value={reviewComment}
+                  onChange={(event) => setReviewComment(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={busy || !edited?.summary.trim()}
+                onClick={() => void review('approve')}
+              >
+                要約を承認
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={busy || !reviewComment.trim()}
+                onClick={() => void review('reject')}
+              >
+                却下
+              </button>
+            </div>
+          ) : null}
+          {summary.generatedTaskIds.length ? (
+            <p role="status">
+              作成済みタスク: {summary.generatedTaskIds.join(', ')}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
     </section>
   );
 }

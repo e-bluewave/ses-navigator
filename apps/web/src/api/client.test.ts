@@ -666,6 +666,43 @@ describe('generated projects API client', () => {
     });
   });
 
+  it('calls interview summary generation, read, and review endpoints', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ aiExecutionId: 'execution-1' })),
+      ),
+    );
+    const api = createProjectsApi({
+      getAccessToken: () => 'access-token',
+      fetch: request,
+    });
+    await api.createInterviewSummary('interview-1', {
+      additionalInstructions: '簡潔にまとめる',
+    });
+    await api.getLatestInterviewSummary('interview-1');
+    await api.reviewInterviewSummary('interview-1', 'execution-1', 2, {
+      decision: 'approve',
+      editedResult: null,
+      acceptedActionItemIndexes: [1],
+      reviewComment: '確認済み',
+    });
+    expect(request.mock.calls[0]![0]).toBe(
+      '/api/v1/interviews/interview-1/ai/summary',
+    );
+    expect(request.mock.calls[1]![0]).toBe(
+      '/api/v1/interviews/interview-1/ai/summary/latest',
+    );
+    expect(request.mock.calls[2]![0]).toBe(
+      '/api/v1/interviews/interview-1/ai/summary/execution-1/review',
+    );
+    expect(request.mock.calls[2]![1]).toMatchObject({
+      method: 'POST',
+      headers: { 'if-match': '"2"' },
+    });
+  });
+
   it('lists and reads engineers with bearer authentication', async () => {
     const request = vi.fn().mockImplementation(() =>
       Promise.resolve(
