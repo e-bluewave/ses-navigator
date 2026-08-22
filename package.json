@@ -27,6 +27,8 @@
     "security:data-api-runtime:check": "node --test scripts/data-api-runtime-boundary-regression.test.mjs",
     "security:data-api:all": "node scripts/data-api-security-suite.mjs",
     "security:data-api:all:check": "node --test scripts/data-api-security-suite.test.mjs",
+    "security:client-secrets": "node scripts/check-client-secret-boundary.mjs",
+    "security:client-secrets:check": "node --test scripts/check-client-secret-boundary.test.mjs",
     "security:service-rpc": "node scripts/service-role-rpc-security-regression.mjs",
     "security:service-rpc:check": "node --test scripts/service-role-rpc-security-regression.test.mjs",
     "security:supabase-config": "node scripts/check-supabase-config.mjs",
