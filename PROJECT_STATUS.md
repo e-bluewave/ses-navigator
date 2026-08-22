@@ -66,6 +66,7 @@
 - Data API実機検証37/37 PASS、cleanup完了、Migration 118・119回帰確認PASS
 - 6限定Viewをanon・権限あり・権限なしで確認する18件のData APIセキュリティ回帰をNodeで自動実行
 - Service Roleの6限定View拒否と限定RPCの主体・Tenant・返却形・秘匿化を確認する19件のセキュリティ回帰をNodeで自動実行
+- Supabase Data APIの公開スキーマ、追加search_path、最大返却件数とDashboard設定スナップショットの差分をCIで自動検査
 - Migration 120でRLS・FK判定用インデックスを追加
 - Migration 121で`private.redact_sensitive_jsonb(jsonb)`のvolatilityを`stable`へ修正
 - Migration 122で58実テーブルへ`row_version`と自動加算Triggerを追加
@@ -133,7 +134,7 @@
 ## 現在作業中
 
 - Supabase Authの実環境結合確認（実行待ち）
-- Data APIのRLS・権限マトリクス自動回帰（限定View・限定RPC実装済み／書込操作は未実装）
+- Supabase公開スキーマ設定の環境差分検知（ローカル・CI実装済み／Dashboard実値確認待ち）
 
 # 開発進捗
 
@@ -210,13 +211,17 @@ docs/
 
 1. 検証環境の値を設定し、Auth・案件参照の実環境スモークテストを実行する
 2. Migration 148〜157を検証環境へ適用する
-3. Data API検証データを準備し、Node版18件＋19件セキュリティ回帰を実環境で実行する
-4. AI予算の初期値を実測利用量に基づいて設定し、警告・停止動作を確認する
+3. DashboardのExposed schemas実値を取得し、設定ガードでリポジトリ値と照合する
+4. Data API検証データを準備し、Node版18件＋19件セキュリティ回帰を実環境で実行する
+5. AI予算の初期値を実測利用量に基づいて設定し、警告・停止動作を確認する
 
 # 更新履歴
 
 ## 2026-08-22
 
+- PR #71を`Main`へマージし、Service Role・限定RPCの19件セキュリティ回帰を追加
+- `supabase/config.toml`のExposed schemasを`public`・`graphql_public`だけに固定し、内部スキーマ混入をCIで拒否する設定ガードを追加
+- DashboardのExposed schemas値を任意入力して、GitHub管理値との環境差分を検出できるようにする
 - PR #70を`Main`へマージし、限定ViewのData APIセキュリティ回帰ランナーを追加
 - Service Roleの一般View拒否6件、限定RPCの主体境界2件、正常取得5件、存在秘匿6件をNodeで自動化
 - 監査レスポンスの秘密値混入と、Publishable keyのSecret key欄への誤設定を自動拒否する

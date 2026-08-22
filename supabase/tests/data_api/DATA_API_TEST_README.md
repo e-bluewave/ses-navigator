@@ -58,6 +58,16 @@ pnpm security:service-rpc
 
 合格時はそれぞれ`VALIDATION_PASSED`、18/18と`SERVICE_ROLE_AND_RPC_VALIDATION_PASSED`、19/19を出力する。実環境の認証情報を使わない判定ロジックの自動テストは`pnpm security:data-api:check`と`pnpm security:service-rpc:check`で実行する。
 
+## 公開スキーマ設定の確認
+
+ローカルとCIでは次を実行し、`supabase/config.toml`の公開範囲を検証する。
+
+```text
+pnpm security:supabase-config
+```
+
+DashboardのExposed schemasを確認した場合は、その値をカンマ区切りで`SESN_REMOTE_EXPOSED_SCHEMAS`へ設定して同じコマンドを実行する。期待値は`public,graphql_public`であり、秘密情報は含まれない。未指定時はローカル設定だけを検証し、結果の`remoteChecked`は`false`になる。
+
 ## 現在の検証状態
 
 - `01_precheck.sql`：`READY`
