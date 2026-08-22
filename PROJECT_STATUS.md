@@ -68,6 +68,7 @@
 - Service Roleの6限定View拒否と限定RPCの主体・Tenant・返却形・秘匿化を確認する19件のセキュリティ回帰をNodeで自動実行
 - Supabase Data APIの公開スキーマ、追加search_path、最大返却件数とDashboard設定スナップショットの差分をCIで自動検査
 - Data APIの22リクエスト実装を、テーブルは`app`、限定View/RPCは`public`へProfileヘッダーで明示ルーティング
+- 実データを変更せず、`app`・`public`到達、anon拒否、許可済み0件更新、未許可更新拒否、内部スキーマ非公開を確認する8件の実環境回帰ランナー
 - APIロールへの直接書込みGRANTをMigration全体から再構成し、レビュー済み10テーブル以外の追加とanon・public面への書込みをCIで拒否
 - API実装が呼ぶ81 RPCとauthenticatedの公開RPC、Service Roleの限定1 RPC、anon・PUBLICの拒否をMigration全体から再構成してCIで照合
 - Migration 120でRLS・FK判定用インデックスを追加
@@ -137,7 +138,7 @@
 ## 現在作業中
 
 - Supabase Authの実環境結合確認（実行待ち）
-- Data APIの権限回帰（表書込み・RPC公開面・スキーマルーティングの静的ガード実装済み／実環境の拒否・許可シナリオは未実装）
+- Data APIの権限回帰（表書込み・RPC公開面・スキーマルーティングの静的ガードと8件の実環境ランナー実装済み／実環境実行待ち）
 
 # 開発進捗
 
@@ -215,13 +216,16 @@ docs/
 1. 検証環境の値を設定し、Auth・案件参照の実環境スモークテストを実行する
 2. Migration 158を検証環境へ適用する
 3. DashboardのExposed schemasを`public,graphql_public,app`へ設定し、設定ガードでリポジトリ値と照合する
-4. Data API検証データを準備し、Node版18件＋19件セキュリティ回帰を実環境で実行する
+4. Node版18件＋19件＋8件のData APIセキュリティ回帰を実環境で実行する
 5. AI予算の初期値を実測利用量に基づいて設定し、警告・停止動作を確認する
 
 # 更新履歴
 
 ## 2026-08-22
 
+- PR #75を`Main`へマージし、Data APIの`app`・`public`スキーマルーティングを修正
+- ランダムUUIDの存在確認後に0件更新を行い、データを変更せず直接書込みGRANTの許可・拒否を確認する8件の実環境ランナーを追加
+- anonの`app`・`public`拒否、authenticatedの認証補助RPC、Service Role限定RPC拒否、`audit`非公開も同時に検証
 - PR #74を`Main`へマージし、Data API認証補助RPCとRPC公開面ガードを追加
 - Data APIの業務テーブル参照先を`app`、限定View/RPC参照先を`public`へProfileヘッダーで明示する共通ルーティングを追加
 - `app`をExposed schemasへ追加しつつ、GRANT・RLSで公開対象を限定し、`audit`・`private`・`integration`・`storage`は非公開を維持

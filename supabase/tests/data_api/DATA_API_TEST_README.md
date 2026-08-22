@@ -98,6 +98,16 @@ pnpm security:data-api-routing
 
 DashboardのExposed schemasには`public`・`graphql_public`・`app`を設定する。`audit`・`private`・`integration`・`storage`は追加しない。
 
+## 実環境のスキーマ・書込み境界確認
+
+Node版実環境検証と同じUser A環境変数を設定し、次を実行する。
+
+```text
+pnpm security:data-api-runtime
+```
+
+この検査は、anon拒否、`app`リレーションと`public` RPCの到達、レビュー済み更新面、未許可更新拒否、Service Role限定RPC拒否、`audit`非公開を8件確認する。更新確認には毎回生成するランダムUUIDを使い、対象が0件であることを確認した後に0件更新するため、実データは変更しない。合格時は`DATA_API_RUNTIME_BOUNDARY_PASSED`、8/8を出力する。
+
 ## 現在の検証状態
 
 - `01_precheck.sql`：`READY`
@@ -105,6 +115,7 @@ DashboardのExposed schemasには`public`・`graphql_public`・`app`を設定す
 - `03_validation.ps1`：18/18 PASS
 - `04_service_role_rpc_validation.ps1`：19/19 PASS
 - Data API総合検証：37/37 PASS
+- Data APIスキーマ・書込み境界：実行待ち（8件）
 - `05_cleanup.sql`：`CLEANUP_PASSED`（検証データ残存0件）
 - Migration 118・119 SQL回帰確認：3/3 PASS
 - Migration 118・119適用後の6 View簡易回帰確認：6/6 PASS
