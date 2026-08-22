@@ -57,7 +57,7 @@
 - `docs/08_テーブル設計.md`
 - `docs/13_残課題・改善バックログ.md`
 - Decision Log DL-001〜DL-225相当
-- Migration 001〜147を欠番なく作成・リモートDBへ適用
+- Migration 001〜157を欠番なく作成・リモートDBへ適用
 - テナント、複数組織、ロール、権限、期限付き共有の権限基盤
 - 会社・担当者・技術者・案件・提案の所有組織対応
 - `app` 104テーブルと`audit` 2テーブルのRLS有効化・強制
@@ -68,6 +68,7 @@
 - Service Roleの6限定View拒否と限定RPCの主体・Tenant・返却形・秘匿化を確認する19件のセキュリティ回帰をNodeで自動実行
 - Supabase Data APIの公開スキーマ、追加search_path、最大返却件数とDashboard設定スナップショットの差分をCIで自動検査
 - APIロールへの直接書込みGRANTをMigration全体から再構成し、レビュー済み10テーブル以外の追加とanon・public面への書込みをCIで拒否
+- API実装が呼ぶ81 RPCとauthenticatedの公開RPC、Service Roleの限定1 RPC、anon・PUBLICの拒否をMigration全体から再構成してCIで照合
 - Migration 120でRLS・FK判定用インデックスを追加
 - Migration 121で`private.redact_sensitive_jsonb(jsonb)`のvolatilityを`stable`へ修正
 - Migration 122で58実テーブルへ`row_version`と自動加算Triggerを追加
@@ -135,7 +136,7 @@
 ## 現在作業中
 
 - Supabase Authの実環境結合確認（実行待ち）
-- Data APIの書込み権限回帰（静的GRANTガード実装済み／実環境の拒否・許可シナリオは未実装）
+- Data APIの権限回帰（表書込み・RPC公開面の静的ガード実装済み／実環境の拒否・許可シナリオは未実装）
 
 # 開発進捗
 
@@ -211,7 +212,7 @@ docs/
 # 次にやること
 
 1. 検証環境の値を設定し、Auth・案件参照の実環境スモークテストを実行する
-2. Migration 148〜157を検証環境へ適用する
+2. Migration 158を検証環境へ適用する
 3. DashboardのExposed schemas実値を取得し、設定ガードでリポジトリ値と照合する
 4. Data API検証データを準備し、Node版18件＋19件セキュリティ回帰を実環境で実行する
 5. AI予算の初期値を実測利用量に基づいて設定し、警告・停止動作を確認する
@@ -220,6 +221,9 @@ docs/
 
 ## 2026-08-22
 
+- PR #73を`Main`へマージし、Data API直接書込み公開面ガードを追加
+- Migration 158でAPIが利用する認証補助3関数を`public`の最小権限ラッパーとして公開し、内部`app`スキーマを非公開のまま維持
+- APIが呼ぶ81 RPC、レビュー済み未接続2 RPC、Service Role限定1 RPC、anon・PUBLIC 0 RPCをMigration全体から再構成してCIで固定
 - PR #72を`Main`へマージし、Supabase公開スキーマ設定ガードを追加
 - Migration全体のGRANT・REVOKEを適用順に再構成し、authenticatedの直接書込みをレビュー済み10テーブルへ固定するCIガードを追加
 - anonの直接書込みとService Roleの`public`リレーション書込みをゼロに固定し、追加・削除は明示的なレビューを必須にする
