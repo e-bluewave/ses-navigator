@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { isMainModule } from './cli-entry.mjs';
 
 const allowedSchemas = ['app', 'graphql_public', 'public'];
 const allowedSearchPath = ['extensions', 'public'];
@@ -134,7 +135,7 @@ function compareExact(failures, label, actual, expected) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   runSupabaseConfigCheck().catch((error) => {
     console.error(
       error instanceof Error ? error.message : 'Supabase config check failed',

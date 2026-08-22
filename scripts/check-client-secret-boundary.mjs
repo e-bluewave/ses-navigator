@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join, relative } from 'node:path';
+import { isMainModule } from './cli-entry.mjs';
 
 const FORBIDDEN_PATTERNS = [
   {
@@ -97,7 +98,7 @@ function isTextFile(name) {
   return name.startsWith('.env') || TEXT_EXTENSIONS.has(extname(name));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   runClientSecretBoundaryCheck().catch((error) => {
     console.error(
       error instanceof Error ? error.message : 'Client secret check failed',

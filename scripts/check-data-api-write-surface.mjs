@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isMainModule } from './cli-entry.mjs';
 
 const writePrivileges = [
   'delete',
@@ -171,7 +172,7 @@ function sortManifest(value) {
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   runDataApiWriteSurfaceCheck().catch((error) => {
     console.error(
       error instanceof Error ? error.message : 'Write surface check failed',
