@@ -108,6 +108,16 @@ pnpm security:data-api-runtime
 
 この検査は、anon拒否、`app`リレーションと`public` RPCの到達、レビュー済み更新面、未許可更新拒否、Service Role限定RPC拒否、`audit`非公開を8件確認する。更新確認には毎回生成するランダムUUIDを使い、対象が0件であることを確認した後に0件更新するため、実データは変更しない。合格時は`DATA_API_RUNTIME_BOUNDARY_PASSED`、8/8を出力する。
 
+## 実環境回帰の一括実行
+
+限定View 18件、Service Role・限定RPC 19件、スキーマ・書込み境界8件を一括実行する場合は、User A・User B・Secret keyを含む前述の全環境変数を設定して次を実行する。
+
+```text
+pnpm security:data-api:all
+```
+
+通信前に環境変数とSecret key種別を検査し、各ステージを順番に実行する。途中で失敗した場合は後続ステージを実行しない。合格時は`DATA_API_SECURITY_SUITE_PASSED`、45/45を出力する。
+
 ## 現在の検証状態
 
 - `01_precheck.sql`：`READY`
