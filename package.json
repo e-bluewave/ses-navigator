@@ -17,6 +17,8 @@
     "lint": "eslint .",
     "security:data-api": "node scripts/data-api-security-regression.mjs",
     "security:data-api:check": "node --test scripts/data-api-security-regression.test.mjs",
+    "security:service-rpc": "node scripts/service-role-rpc-security-regression.mjs",
+    "security:service-rpc:check": "node --test scripts/service-role-rpc-security-regression.test.mjs",
     "smoke:auth-project": "node scripts/auth-project-smoke.mjs",
     "smoke:auth-project:check": "node --test scripts/auth-project-smoke.test.mjs",
     "test": "pnpm -r test",

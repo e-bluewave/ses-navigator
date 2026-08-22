@@ -5,12 +5,12 @@
 - Repository：`e-bluewave/ses-navigator`
 - Branch：`ddl-initial`
 - Supabase Project Ref：`zsgauwmkvvezdxvmcmdf`
-- 前提：`03_validation.ps1`が18件すべて合格済み
+- 前提：`pnpm security:data-api`または`03_validation.ps1`が18件すべて合格済み
 - 対象RPC：`public.service_get_sensitive_record(uuid,text,uuid)`
 
 ## 検証順序
 
-`04_service_role_rpc_validation.ps1`は、次の順序を固定する。
+推奨する`pnpm security:service-rpc`と従来の`04_service_role_rpc_validation.ps1`は、次の順序を固定する。
 
 1. `service_role`による利用者向け6 Viewの拒否
 2. 上記6件がすべて合格した場合だけ限定RPCを検証
@@ -78,6 +78,14 @@ Secret key／service_role keyは次の場所へ残さない。
 スクリプトはキーを伏せ字で対話入力し、プロセス終了時に参照を破棄する。
 
 ## Windowsでの実行
+
+リポジトリのルートで、必要な環境変数を現在のプロセスへ設定した後に次を実行する方法を推奨する。変数名は`DATA_API_TEST_README.md`を参照する。
+
+```powershell
+pnpm security:service-rpc
+```
+
+従来の伏せ字対話入力方式が必要な場合は次のPowerShell版を利用する。
 
 1. `04_service_role_rpc_validation.ps1`をWindowsへ保存する。
 2. PowerShellを開く。

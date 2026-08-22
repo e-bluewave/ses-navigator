@@ -14,7 +14,7 @@
 | 1 | `01_precheck.sql` | 既存環境・権限・衝突の読み取り専用確認 |
 | 2 | `02_setup.sql` | 固定IDの検証データを単一トランザクションで作成 |
 | 3 | `pnpm security:data-api`（推奨）または`03_validation.ps1` | anon・User A・User Bで6 Viewを実HTTP検証 |
-| 4 | `04_service_role_rpc_validation.ps1` | service_roleのView拒否後に限定RPCを検証 |
+| 4 | `pnpm security:service-rpc`（推奨）または`04_service_role_rpc_validation.ps1` | service_roleのView拒否後に限定RPCを検証 |
 | 5 | `05_cleanup.sql` | 固定IDの検証データと検証専用User Bを原子的に削除 |
 
 各PowerShellスクリプトの詳細は、同じディレクトリの手順書を参照する。
@@ -47,11 +47,16 @@ Node版は秘密情報を環境変数からのみ受け取り、結果JSONへ含
 - `SESN_TEST_USER_B_EMAIL`
 - `SESN_TEST_USER_B_PASSWORD`
 
+Service Role・限定RPC検証では、上記のURL・Publishable key・User A情報に加えて次を設定する。
+
+- `SESN_SUPABASE_SECRET_KEY`
+
 ```text
 pnpm security:data-api
+pnpm security:service-rpc
 ```
 
-合格時は`VALIDATION_PASSED`、18/18を出力する。実環境の認証情報を使わない判定ロジックの自動テストは`pnpm security:data-api:check`で実行する。
+合格時はそれぞれ`VALIDATION_PASSED`、18/18と`SERVICE_ROLE_AND_RPC_VALIDATION_PASSED`、19/19を出力する。実環境の認証情報を使わない判定ロジックの自動テストは`pnpm security:data-api:check`と`pnpm security:service-rpc:check`で実行する。
 
 ## 現在の検証状態
 

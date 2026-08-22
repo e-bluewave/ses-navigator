@@ -26,6 +26,7 @@ jobs:
       - run: pnpm test
       - run: pnpm smoke:auth-project:check
       - run: pnpm security:data-api:check
+      - run: pnpm security:service-rpc:check
       - run: pnpm contract:check
       - run: pnpm client:check
       - run: pnpm build
