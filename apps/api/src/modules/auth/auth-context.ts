@@ -1,3 +1,4 @@
+import { dataApiSchemaHeaders } from '../../shared/supabase-schema.js';
 import { requiredEnv } from '../../plugins/authentication.js';
 import { ApiError } from '../../shared/errors.js';
 
@@ -23,6 +24,7 @@ export class SupabaseAuthContextRepository implements AuthContextRepository {
         headers: {
           apikey: requiredEnv('SUPABASE_ANON_KEY'),
           authorization: `Bearer ${token}`,
+          ...dataApiSchemaHeaders(`/rpc/${name}`),
           'content-type': 'application/json',
         },
         body: JSON.stringify(body),

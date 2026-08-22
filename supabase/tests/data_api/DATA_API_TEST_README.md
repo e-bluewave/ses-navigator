@@ -66,7 +66,7 @@ pnpm security:service-rpc
 pnpm security:supabase-config
 ```
 
-DashboardのExposed schemasを確認した場合は、その値をカンマ区切りで`SESN_REMOTE_EXPOSED_SCHEMAS`へ設定して同じコマンドを実行する。期待値は`public,graphql_public`であり、秘密情報は含まれない。未指定時はローカル設定だけを検証し、結果の`remoteChecked`は`false`になる。
+DashboardのExposed schemasを確認した場合は、その値をカンマ区切りで`SESN_REMOTE_EXPOSED_SCHEMAS`へ設定して同じコマンドを実行する。期待値は`public,graphql_public,app`であり、秘密情報は含まれない。未指定時はローカル設定だけを検証し、結果の`remoteChecked`は`false`になる。
 
 ## 書込み公開面の確認
 
@@ -86,7 +86,17 @@ APIソースが実際に呼ぶRPCと、Migration適用後のFunction実行権限
 pnpm security:data-api-rpcs
 ```
 
-この検査もDB接続や秘密情報を必要としない。APIが未許可RPCを呼ぶ変更、未レビューRPCのauthenticated公開、Service Role限定RPCの追加、anon・PUBLICへの実行許可を検出すると失敗する。認証補助RPCはMigration 158の`public`ラッパーを経由し、内部`app`スキーマはData APIへ公開しない。
+この検査もDB接続や秘密情報を必要としない。APIが未許可RPCを呼ぶ変更、未レビューRPCのauthenticated公開、Service Role限定RPCの追加、anon・PUBLICへの実行許可を検出すると失敗する。認証補助RPCはMigration 158の`public`ラッパーを経由する。
+
+## スキーマルーティングの確認
+
+業務テーブルを`app`、限定View/RPCを`public`へ振り分けるProfileヘッダーが全Data API実装に適用されていることを確認する。
+
+```text
+pnpm security:data-api-routing
+```
+
+DashboardのExposed schemasには`public`・`graphql_public`・`app`を設定する。`audit`・`private`・`integration`・`storage`は追加しない。
 
 ## 現在の検証状態
 

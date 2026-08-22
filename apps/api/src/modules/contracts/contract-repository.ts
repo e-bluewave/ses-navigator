@@ -1,3 +1,4 @@
+import { dataApiSchemaHeaders } from '../../shared/supabase-schema.js';
 import { requiredEnv } from '../../plugins/authentication.js';
 import { ApiError } from '../../shared/errors.js';
 
@@ -419,6 +420,7 @@ export class SupabaseContractRepository implements ContractRepository {
         headers: {
           apikey: requiredEnv('SUPABASE_ANON_KEY'),
           authorization: `Bearer ${token}`,
+          ...dataApiSchemaHeaders(path),
           'content-type': 'application/json',
           accept: 'application/json',
           ...(init.headers ?? {}),
