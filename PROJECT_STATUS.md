@@ -67,6 +67,7 @@
 - 6限定Viewをanon・権限あり・権限なしで確認する18件のData APIセキュリティ回帰をNodeで自動実行
 - Service Roleの6限定View拒否と限定RPCの主体・Tenant・返却形・秘匿化を確認する19件のセキュリティ回帰をNodeで自動実行
 - Supabase Data APIの公開スキーマ、追加search_path、最大返却件数とDashboard設定スナップショットの差分をCIで自動検査
+- APIロールへの直接書込みGRANTをMigration全体から再構成し、レビュー済み10テーブル以外の追加とanon・public面への書込みをCIで拒否
 - Migration 120でRLS・FK判定用インデックスを追加
 - Migration 121で`private.redact_sensitive_jsonb(jsonb)`のvolatilityを`stable`へ修正
 - Migration 122で58実テーブルへ`row_version`と自動加算Triggerを追加
@@ -134,7 +135,7 @@
 ## 現在作業中
 
 - Supabase Authの実環境結合確認（実行待ち）
-- Supabase公開スキーマ設定の環境差分検知（ローカル・CI実装済み／Dashboard実値確認待ち）
+- Data APIの書込み権限回帰（静的GRANTガード実装済み／実環境の拒否・許可シナリオは未実装）
 
 # 開発進捗
 
@@ -219,6 +220,9 @@ docs/
 
 ## 2026-08-22
 
+- PR #72を`Main`へマージし、Supabase公開スキーマ設定ガードを追加
+- Migration全体のGRANT・REVOKEを適用順に再構成し、authenticatedの直接書込みをレビュー済み10テーブルへ固定するCIガードを追加
+- anonの直接書込みとService Roleの`public`リレーション書込みをゼロに固定し、追加・削除は明示的なレビューを必須にする
 - PR #71を`Main`へマージし、Service Role・限定RPCの19件セキュリティ回帰を追加
 - `supabase/config.toml`のExposed schemasを`public`・`graphql_public`だけに固定し、内部スキーマ混入をCIで拒否する設定ガードを追加
 - DashboardのExposed schemas値を任意入力して、GitHub管理値との環境差分を検出できるようにする
