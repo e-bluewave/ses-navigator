@@ -68,6 +68,16 @@ pnpm security:supabase-config
 
 DashboardのExposed schemasを確認した場合は、その値をカンマ区切りで`SESN_REMOTE_EXPOSED_SCHEMAS`へ設定して同じコマンドを実行する。期待値は`public,graphql_public`であり、秘密情報は含まれない。未指定時はローカル設定だけを検証し、結果の`remoteChecked`は`false`になる。
 
+## 書込み公開面の確認
+
+Migration全体から現在の直接書込みGRANTを再構成し、レビュー済み一覧との差分を確認する。
+
+```text
+pnpm security:data-api-writes
+```
+
+この検査はDB接続や秘密情報を必要としない。新しい直接書込み、既存許可の削除、anonへの書込み、Service Roleの`public`リレーション書込みを検出した場合は失敗する。業務状態変更や機密書込みは、引き続き限定RPCを使用する。
+
 ## 現在の検証状態
 
 - `01_precheck.sql`：`READY`

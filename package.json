@@ -17,6 +17,8 @@
     "lint": "eslint .",
     "security:data-api": "node scripts/data-api-security-regression.mjs",
     "security:data-api:check": "node --test scripts/data-api-security-regression.test.mjs",
+    "security:data-api-writes": "node scripts/check-data-api-write-surface.mjs",
+    "security:data-api-writes:check": "node --test scripts/check-data-api-write-surface.test.mjs",
     "security:service-rpc": "node scripts/service-role-rpc-security-regression.mjs",
     "security:service-rpc:check": "node --test scripts/service-role-rpc-security-regression.test.mjs",
     "security:supabase-config": "node scripts/check-supabase-config.mjs",
