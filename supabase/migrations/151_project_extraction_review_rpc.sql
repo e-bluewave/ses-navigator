@@ -276,7 +276,7 @@ begin
     raise exception 'project extraction review is invalid' using errcode = '42501';
   end if;
 
-  select x, a into extraction, execution
+  select x.* into extraction
   from app.project_extraction_results x
   join app.ai_executions a on a.id = x.ai_execution_id and a.tenant_id = x.tenant_id
   where x.id = p_extraction_id and x.tenant_id = tenant
@@ -285,6 +285,11 @@ begin
   if not found then
     raise exception 'project extraction is not reviewable' using errcode = '42501';
   end if;
+
+  select a.* into execution
+  from app.ai_executions a
+  where a.id = extraction.ai_execution_id and a.tenant_id = tenant;
+
   canonical := coalesce(p_corrected_result, extraction.extracted_data);
 
   if p_decision = 'approved' then

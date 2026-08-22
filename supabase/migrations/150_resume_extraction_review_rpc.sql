@@ -320,7 +320,7 @@ begin
     raise exception 'resume extraction review is invalid' using errcode = '42501';
   end if;
 
-  select x, a into extraction, execution
+  select x.* into extraction
   from app.resume_extraction_results x
   join app.engineer_resume_versions v on v.id = x.resume_version_id and v.tenant_id = x.tenant_id
   join app.engineer_resumes r on r.id = v.resume_id and r.tenant_id = v.tenant_id
@@ -333,6 +333,10 @@ begin
   if not found then
     raise exception 'resume extraction is not reviewable' using errcode = '42501';
   end if;
+
+  select a.* into execution
+  from app.ai_executions a
+  where a.id = extraction.ai_execution_id and a.tenant_id = tenant;
 
   canonical := coalesce(p_corrected_result, jsonb_build_object(
     'profile', coalesce(extraction.extracted_profile->'profile', '{}'::jsonb),
