@@ -7,6 +7,19 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /ai-operations:
+    get:
+      operationId: getAiOperationsDashboard
+      parameters:
+        - { name: fromDate, in: query, required: true, schema: { type: string, format: date } }
+        - { name: toDate, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Tenant-scoped AI quality, cost, and usage dashboard
+          content: { application/json: { schema: { $ref: '#/components/schemas/AiOperationsDashboard' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /sales-kpi:
     get:
       operationId: getSalesKpiDashboard
@@ -2648,6 +2661,93 @@ components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
+    AiUsageDay:
+      type: object
+      required: [usageDate, executionCount, succeededCount, failedCount, totalTokens, estimatedCostUsd]
+      properties:
+        usageDate: { type: string, format: date }
+        executionCount: { type: integer }
+        succeededCount: { type: integer }
+        failedCount: { type: integer }
+        totalTokens: { type: integer }
+        estimatedCostUsd: { type: number }
+    AiTypeUsage:
+      type: object
+      required: [executionType, executionCount, succeededCount, failedCount, successRate, totalTokens]
+      properties:
+        executionType: { type: string }
+        executionCount: { type: integer }
+        succeededCount: { type: integer }
+        failedCount: { type: integer }
+        successRate: { type: [number, 'null'] }
+        totalTokens: { type: integer }
+    AiModelUsage:
+      type: object
+      required: [provider, modelName, currency, executionCount, failedCount, inputTokens, outputTokens, estimatedCost, costRecordedCount]
+      properties:
+        provider: { type: string }
+        modelName: { type: string }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        executionCount: { type: integer }
+        failedCount: { type: integer }
+        inputTokens: { type: integer }
+        outputTokens: { type: integer }
+        estimatedCost: { type: number }
+        costRecordedCount: { type: integer }
+    AiCostByCurrency:
+      type: object
+      required: [currency, estimatedCost, recordedCount]
+      properties:
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        estimatedCost: { type: number }
+        recordedCount: { type: integer }
+    AiRecentFailure:
+      type: object
+      required: [id, executionType, provider, modelName, errorCode, requestedAt, completedAt]
+      properties:
+        id: { type: string, format: uuid }
+        executionType: { type: string }
+        provider: { type: string }
+        modelName: { type: string }
+        errorCode: { type: [string, 'null'] }
+        requestedAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+    AiOperationsDashboard:
+      type: object
+      required: [fromDate, toDate, executionCount, succeededCount, failedCount, activeCount, reviewRequiredCount, successRate, inputTokens, outputTokens, totalTokens, tokenRecordedCount, costRecordedCount, costCoverageRate, averageLatencyMs, p95LatencyMs, pendingReviewCount, reviewedCount, approvedCount, partiallyApprovedCount, rejectedCount, changesRequestedCount, approvalRate, feedbackCount, averageRating, issueFeedbackCount, unsafeFeedbackCount, daily, typeUsage, modelUsage, costByCurrency, recentFailures]
+      properties:
+        fromDate: { type: string, format: date }
+        toDate: { type: string, format: date }
+        executionCount: { type: integer }
+        succeededCount: { type: integer }
+        failedCount: { type: integer }
+        activeCount: { type: integer }
+        reviewRequiredCount: { type: integer }
+        successRate: { type: [number, 'null'] }
+        inputTokens: { type: integer }
+        outputTokens: { type: integer }
+        totalTokens: { type: integer }
+        tokenRecordedCount: { type: integer }
+        costRecordedCount: { type: integer }
+        costCoverageRate: { type: [number, 'null'] }
+        averageLatencyMs: { type: [integer, 'null'] }
+        p95LatencyMs: { type: [integer, 'null'] }
+        pendingReviewCount: { type: integer }
+        reviewedCount: { type: integer }
+        approvedCount: { type: integer }
+        partiallyApprovedCount: { type: integer }
+        rejectedCount: { type: integer }
+        changesRequestedCount: { type: integer }
+        approvalRate: { type: [number, 'null'] }
+        feedbackCount: { type: integer }
+        averageRating: { type: [number, 'null'] }
+        issueFeedbackCount: { type: integer }
+        unsafeFeedbackCount: { type: integer }
+        daily: { type: array, items: { $ref: '#/components/schemas/AiUsageDay' } }
+        typeUsage: { type: array, items: { $ref: '#/components/schemas/AiTypeUsage' } }
+        modelUsage: { type: array, items: { $ref: '#/components/schemas/AiModelUsage' } }
+        costByCurrency: { type: array, items: { $ref: '#/components/schemas/AiCostByCurrency' } }
+        recentFailures: { type: array, items: { $ref: '#/components/schemas/AiRecentFailure' } }
     ProfitabilityMonth:
       type: object
       required:

@@ -106,9 +106,14 @@ import type {
   ProfitabilityQuery,
   SalesKpiDashboard,
   SalesKpiQuery,
+  AiOperationsDashboard,
+  AiOperationsQuery,
 } from './generated.js';
 
 export interface ProjectsApi {
+  getAiOperationsDashboard(
+    query: AiOperationsQuery,
+  ): Promise<AiOperationsDashboard>;
   createProjectEngineerMatch(
     projectId: string,
     limit?: number,
@@ -479,6 +484,13 @@ export function createProjectsApi(options: {
   }
 
   return {
+    getAiOperationsDashboard(query) {
+      const params = new URLSearchParams({
+        fromDate: query.fromDate,
+        toDate: query.toDate,
+      });
+      return get<AiOperationsDashboard>(`/ai-operations?${params.toString()}`);
+    },
     getSalesKpiDashboard(query) {
       const params = new URLSearchParams({
         fromDate: query.fromDate,

@@ -738,6 +738,42 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
         expiringContracts: [],
       }),
     ),
+    getAiOperationsDashboard: vi.fn(() =>
+      Promise.resolve({
+        fromDate: '2026-08-01',
+        toDate: '2026-08-22',
+        executionCount: 0,
+        succeededCount: 0,
+        failedCount: 0,
+        activeCount: 0,
+        reviewRequiredCount: 0,
+        successRate: null,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        tokenRecordedCount: 0,
+        costRecordedCount: 0,
+        costCoverageRate: null,
+        averageLatencyMs: null,
+        p95LatencyMs: null,
+        pendingReviewCount: 0,
+        reviewedCount: 0,
+        approvedCount: 0,
+        partiallyApprovedCount: 0,
+        rejectedCount: 0,
+        changesRequestedCount: 0,
+        approvalRate: null,
+        feedbackCount: 0,
+        averageRating: null,
+        issueFeedbackCount: 0,
+        unsafeFeedbackCount: 0,
+        daily: [],
+        typeUsage: [],
+        modelUsage: [],
+        costByCurrency: [],
+        recentFailures: [],
+      }),
+    ),
     getProfitabilityDashboard: vi.fn(() =>
       Promise.resolve({
         fromMonth: '2026-01-01',
@@ -1050,6 +1086,91 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { name: '提案' }),
     ).toBeInTheDocument();
+  });
+
+  it('shows AI quality, cost, usage, and redacted failures', async () => {
+    window.history.replaceState({}, '', '/ai-operations');
+    const getAiOperationsDashboard = vi.fn(() =>
+      Promise.resolve({
+        fromDate: '2026-08-01',
+        toDate: '2026-08-22',
+        executionCount: 12,
+        succeededCount: 10,
+        failedCount: 1,
+        activeCount: 0,
+        reviewRequiredCount: 1,
+        successRate: 83.33,
+        inputTokens: 12000,
+        outputTokens: 3000,
+        totalTokens: 15000,
+        tokenRecordedCount: 11,
+        costRecordedCount: 8,
+        costCoverageRate: 66.67,
+        averageLatencyMs: 2500,
+        p95LatencyMs: 5000,
+        pendingReviewCount: 1,
+        reviewedCount: 9,
+        approvedCount: 7,
+        partiallyApprovedCount: 1,
+        rejectedCount: 1,
+        changesRequestedCount: 0,
+        approvalRate: 88.89,
+        feedbackCount: 2,
+        averageRating: 4.5,
+        issueFeedbackCount: 1,
+        unsafeFeedbackCount: 0,
+        daily: [],
+        typeUsage: [
+          {
+            executionType: 'interview_summary',
+            executionCount: 3,
+            succeededCount: 2,
+            failedCount: 1,
+            successRate: 66.67,
+            totalTokens: 4200,
+          },
+        ],
+        modelUsage: [
+          {
+            provider: 'openai',
+            modelName: 'gpt-5.6-luna',
+            currency: 'USD',
+            executionCount: 12,
+            failedCount: 1,
+            inputTokens: 12000,
+            outputTokens: 3000,
+            estimatedCost: 1.25,
+            costRecordedCount: 8,
+          },
+        ],
+        costByCurrency: [
+          { currency: 'USD', estimatedCost: 1.25, recordedCount: 8 },
+        ],
+        recentFailures: [
+          {
+            id: '11111111-1111-4111-8111-111111111112',
+            executionType: 'interview_summary',
+            provider: 'openai',
+            modelName: 'gpt-5.6-luna',
+            errorCode: 'provider_timeout',
+            requestedAt: '2026-08-22T01:00:00Z',
+            completedAt: '2026-08-22T01:00:05Z',
+          },
+        ],
+      }),
+    );
+    render(<App auth={auth()} api={api({ getAiOperationsDashboard })} />);
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'AI品質・費用・利用状況',
+      }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('83.33%')).toBeInTheDocument();
+    expect(screen.getAllByText('interview_summary')).toHaveLength(2);
+    expect(screen.getByText('provider_timeout')).toBeInTheDocument();
+    expect(screen.queryByText(/error message/i)).not.toBeInTheDocument();
+    expect(getAiOperationsDashboard).toHaveBeenCalledOnce();
   });
 
   it('creates and submits an expense', async () => {
