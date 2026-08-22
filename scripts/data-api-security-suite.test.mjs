@@ -135,9 +135,18 @@ test('aborts a stalled HTTP request after the configured timeout', async () => {
   const timedFetch = createTimedFetch(
     async (_input, { signal }) =>
       new Promise((_resolve, reject) => {
-        signal.addEventListener('abort', () => reject(signal.reason), {
-          once: true,
-        });
+        const deadline = setTimeout(
+          () => reject(new Error('test request did not abort')),
+          1_000,
+        );
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(deadline);
+            reject(signal.reason);
+          },
+          { once: true },
+        );
       }),
     10,
   );
