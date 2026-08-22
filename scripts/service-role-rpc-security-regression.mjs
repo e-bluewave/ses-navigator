@@ -1,4 +1,5 @@
 import { viewSpecs } from './data-api-security-regression.mjs';
+import { isMainModule } from './cli-entry.mjs';
 
 const tenantAId = '7a110000-0000-4000-8000-000000000001';
 const missingResourceId = '7affffff-ffff-4fff-8fff-ffffffffffff';
@@ -452,7 +453,7 @@ function arraysEqual(left, right) {
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   runServiceRoleRpcSecurityRegression().catch((error) => {
     console.error(
       error instanceof Error ? error.message : 'Security regression failed',

@@ -10,6 +10,7 @@
     "build": "pnpm -r build",
     "client:generate": "node scripts/generate-api-client.mjs",
     "client:check": "node scripts/generate-api-client.mjs --check",
+    "cli:entry:check": "node --test scripts/cli-entry.test.mjs",
     "contract:check": "node scripts/check-openapi.mjs",
     "dev": "pnpm -r --parallel dev",
     "format": "prettier --write \"apps/**/*.{ts,tsx,json,html,css}\" \"scripts/**/*.mjs\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",

@@ -1,3 +1,5 @@
+import { isMainModule } from './cli-entry.mjs';
+
 const requiredVariables = [
   'SESN_SUPABASE_URL',
   'SESN_SUPABASE_PUBLISHABLE_KEY',
@@ -336,7 +338,7 @@ async function readJson(response) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   runDataApiSecurityRegression().catch((error) => {
     console.error(
       error instanceof Error ? error.message : 'Security regression failed',

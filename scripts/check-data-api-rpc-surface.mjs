@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isMainModule } from './cli-entry.mjs';
 
 const trackedRoles = ['public', 'anon', 'authenticated', 'service_role'];
 
@@ -159,7 +160,7 @@ function compareSet(failures, label, actual, expected) {
   if (excess.length > 0) failures.push(`${label} excess: ${excess.join(', ')}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   runDataApiRpcSurfaceCheck().catch((error) => {
     console.error(
       error instanceof Error ? error.message : 'RPC surface check failed',

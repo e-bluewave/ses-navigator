@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isMainModule } from './cli-entry.mjs';
 
 export function validateDataApiSchemaRouting(files) {
   const requestFiles = files.filter((file) => file.source.includes('/rest/v1'));
@@ -69,7 +70,7 @@ async function readTree(root) {
   return files;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   runDataApiSchemaRoutingCheck().catch((error) => {
     console.error(
       error instanceof Error ? error.message : 'Schema routing check failed',

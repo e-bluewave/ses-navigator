@@ -1,3 +1,5 @@
+import { isMainModule } from './cli-entry.mjs';
+
 const requiredVariables = [
   'SESN_SUPABASE_URL',
   'SESN_SUPABASE_PUBLISHABLE_KEY',
@@ -89,7 +91,7 @@ function withoutTrailingSlash(value) {
   return value.replace(/\/+$/, '');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   runAuthProjectSmoke()
     .then(() => console.log('Auth + projects integration smoke passed'))
     .catch((error) => {

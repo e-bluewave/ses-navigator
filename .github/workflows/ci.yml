@@ -24,6 +24,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm cli:entry:check
       - run: pnpm smoke:auth-project:check
       - run: pnpm security:data-api:check
       - run: pnpm security:data-api-writes

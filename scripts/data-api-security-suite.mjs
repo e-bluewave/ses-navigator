@@ -1,6 +1,7 @@
 import { runDataApiSecurityRegression } from './data-api-security-regression.mjs';
 import { runDataApiRuntimeBoundaryRegression } from './data-api-runtime-boundary-regression.mjs';
 import { runServiceRoleRpcSecurityRegression } from './service-role-rpc-security-regression.mjs';
+import { isMainModule } from './cli-entry.mjs';
 
 const requiredVariables = [
   'SESN_SUPABASE_URL',
@@ -185,7 +186,7 @@ function sum(values, property) {
   return values.reduce((total, value) => total + value[property], 0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   runDataApiSecuritySuite().catch((error) => {
     console.error(
       error instanceof Error ? error.message : 'Security suite failed',
