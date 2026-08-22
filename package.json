@@ -23,6 +23,8 @@
     "security:data-api-rpcs:check": "node --test scripts/check-data-api-rpc-surface.test.mjs",
     "security:data-api-routing": "node scripts/check-data-api-schema-routing.mjs",
     "security:data-api-routing:check": "node --test scripts/check-data-api-schema-routing.test.mjs",
+    "security:data-api-runtime": "node scripts/data-api-runtime-boundary-regression.mjs",
+    "security:data-api-runtime:check": "node --test scripts/data-api-runtime-boundary-regression.test.mjs",
     "security:service-rpc": "node scripts/service-role-rpc-security-regression.mjs",
     "security:service-rpc:check": "node --test scripts/service-role-rpc-security-regression.test.mjs",
     "security:supabase-config": "node scripts/check-supabase-config.mjs",

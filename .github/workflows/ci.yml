@@ -32,6 +32,7 @@ jobs:
       - run: pnpm security:data-api-rpcs:check
       - run: pnpm security:data-api-routing
       - run: pnpm security:data-api-routing:check
+      - run: pnpm security:data-api-runtime:check
       - run: pnpm security:service-rpc:check
       - run: pnpm security:supabase-config
       - run: pnpm security:supabase-config:check
