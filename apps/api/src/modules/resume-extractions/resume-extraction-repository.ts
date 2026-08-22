@@ -1,5 +1,5 @@
 import { requiredEnv } from '../../plugins/authentication.js';
-import { ApiError } from '../../shared/errors.js';
+import { assertSupabaseResponse } from '../../shared/supabase-response.js';
 import type { ResumeExtractionResult } from './resume-extraction-service.js';
 
 export interface ResumeExtraction {
@@ -191,12 +191,10 @@ export class SupabaseResumeExtractionRepository implements ResumeExtractionRepos
         },
       },
     );
-    if (!response.ok)
-      throw new ApiError(
-        response.status === 409 ? 409 : 502,
-        response.status === 409 ? 'conflict' : 'upstream_error',
-        'Resume extraction data service request failed',
-      );
+    await assertSupabaseResponse(
+      response,
+      'Resume extraction data service request failed',
+    );
     return response;
   }
 }

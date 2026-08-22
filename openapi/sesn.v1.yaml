@@ -20,6 +20,33 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /ai-operations/budget:
+    get:
+      operationId: getAiBudgetPolicy
+      responses:
+        '200':
+          description: Tenant AI budget policy and current UTC usage
+          content: { application/json: { schema: { $ref: '#/components/schemas/AiBudgetPolicy' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: saveAiBudgetPolicy
+      parameters:
+        - { name: If-Match, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AiBudgetPolicyInput' }
+      responses:
+        '200':
+          description: Saved tenant AI budget policy
+          content: { application/json: { schema: { $ref: '#/components/schemas/AiBudgetPolicy' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /sales-kpi:
     get:
       operationId: getSalesKpiDashboard
@@ -2748,6 +2775,39 @@ components:
         modelUsage: { type: array, items: { $ref: '#/components/schemas/AiModelUsage' } }
         costByCurrency: { type: array, items: { $ref: '#/components/schemas/AiCostByCurrency' } }
         recentFailures: { type: array, items: { $ref: '#/components/schemas/AiRecentFailure' } }
+    AiBudgetPolicyInput:
+      type: object
+      required: [enabled, currency, dailyWarningAmount, dailyStopAmount, monthlyWarningAmount, monthlyStopAmount, dailyWarningExecutions, dailyStopExecutions, monthlyWarningExecutions, monthlyStopExecutions]
+      properties:
+        enabled: { type: boolean }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        dailyWarningAmount: { type: [number, 'null'], minimum: 0 }
+        dailyStopAmount: { type: [number, 'null'], minimum: 0 }
+        monthlyWarningAmount: { type: [number, 'null'], minimum: 0 }
+        monthlyStopAmount: { type: [number, 'null'], minimum: 0 }
+        dailyWarningExecutions: { type: [integer, 'null'], minimum: 1 }
+        dailyStopExecutions: { type: [integer, 'null'], minimum: 1 }
+        monthlyWarningExecutions: { type: [integer, 'null'], minimum: 1 }
+        monthlyStopExecutions: { type: [integer, 'null'], minimum: 1 }
+    AiBudgetPolicy:
+      allOf:
+        - { $ref: '#/components/schemas/AiBudgetPolicyInput' }
+        - type: object
+          required: [canManage, configured, dailyExecutionCount, monthlyExecutionCount, dailyEstimatedCost, monthlyEstimatedCost, dailyCostRecordedCount, monthlyCostRecordedCount, warningReached, stopReached, stopReasons, rowVersion, updatedAt]
+          properties:
+            canManage: { type: boolean }
+            configured: { type: boolean }
+            dailyExecutionCount: { type: integer }
+            monthlyExecutionCount: { type: integer }
+            dailyEstimatedCost: { type: number }
+            monthlyEstimatedCost: { type: number }
+            dailyCostRecordedCount: { type: integer }
+            monthlyCostRecordedCount: { type: integer }
+            warningReached: { type: boolean }
+            stopReached: { type: boolean }
+            stopReasons: { type: array, items: { type: string } }
+            rowVersion: { type: integer, minimum: 0 }
+            updatedAt: { type: [string, 'null'], format: date-time }
     ProfitabilityMonth:
       type: object
       required:

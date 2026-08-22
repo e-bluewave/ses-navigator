@@ -1,5 +1,5 @@
 import { requiredEnv } from '../../plugins/authentication.js';
-import { ApiError } from '../../shared/errors.js';
+import { assertSupabaseResponse } from '../../shared/supabase-response.js';
 import type {
   InterviewSummaryGeneration,
   InterviewSummaryInput,
@@ -227,12 +227,10 @@ export class SupabaseInterviewSummaryRepository implements InterviewSummaryRepos
         },
       },
     );
-    if (!response.ok)
-      throw new ApiError(
-        response.status === 409 ? 409 : 502,
-        response.status === 409 ? 'conflict' : 'upstream_error',
-        'Interview summary data service request failed',
-      );
+    await assertSupabaseResponse(
+      response,
+      'Interview summary data service request failed',
+    );
     return response;
   }
 }

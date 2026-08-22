@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app.js';
 import type {
+  AiBudgetPolicy,
   AiOperationsDashboard,
   AiOperationsRepository,
 } from '../src/modules/ai-operations/ai-operations-repository.js';
@@ -41,6 +42,32 @@ const dashboard: AiOperationsDashboard = {
   recentFailures: [],
 };
 
+const budget: AiBudgetPolicy = {
+  canManage: true,
+  configured: true,
+  enabled: true,
+  currency: 'USD',
+  dailyWarningAmount: 1,
+  dailyStopAmount: 2,
+  monthlyWarningAmount: 20,
+  monthlyStopAmount: 30,
+  dailyWarningExecutions: 50,
+  dailyStopExecutions: 100,
+  monthlyWarningExecutions: 1000,
+  monthlyStopExecutions: 2000,
+  dailyExecutionCount: 12,
+  monthlyExecutionCount: 240,
+  dailyEstimatedCost: 0.25,
+  monthlyEstimatedCost: 5.5,
+  dailyCostRecordedCount: 10,
+  monthlyCostRecordedCount: 220,
+  warningReached: false,
+  stopReached: false,
+  stopReasons: [],
+  rowVersion: 3,
+  updatedAt: '2026-08-22T06:00:00Z',
+};
+
 const authentication: AuthenticationService = {
   authenticate: (accessToken) => Promise.resolve({ id: 'user-a', accessToken }),
 };
@@ -52,7 +79,10 @@ function repository(
 ): AiOperationsRepository {
   return {
     canRead: vi.fn(() => Promise.resolve(true)),
+    canManage: vi.fn(() => Promise.resolve(true)),
     get: vi.fn(() => Promise.resolve(dashboard)),
+    getBudget: vi.fn(() => Promise.resolve(budget)),
+    saveBudget: vi.fn(() => Promise.resolve(budget)),
     ...overrides,
   };
 }
@@ -92,5 +122,80 @@ describe('AI operations API', () => {
       headers: { authorization: 'Bearer valid' },
     });
     expect(invalid.statusCode).toBe(400);
+  });
+
+  it('reads and saves an optimistic-locked AI budget policy', async () => {
+    const getBudget = vi.fn(() => Promise.resolve(budget));
+    const saveBudget = vi.fn(() => Promise.resolve(budget));
+    const instance = app(repository({ getBudget, saveBudget }));
+    const read = await instance.inject({
+      method: 'GET',
+      url: '/api/v1/ai-operations/budget',
+      headers: { authorization: 'Bearer valid' },
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.headers.etag).toBe('W/"3"');
+    expect(read.json()).toEqual(budget);
+
+    const input = {
+      enabled: true,
+      currency: 'USD',
+      dailyWarningAmount: 1,
+      dailyStopAmount: 2,
+      monthlyWarningAmount: 20,
+      monthlyStopAmount: 30,
+      dailyWarningExecutions: 50,
+      dailyStopExecutions: 100,
+      monthlyWarningExecutions: 1000,
+      monthlyStopExecutions: 2000,
+    };
+    const save = await instance.inject({
+      method: 'PUT',
+      url: '/api/v1/ai-operations/budget',
+      headers: { authorization: 'Bearer valid', 'if-match': 'W/"3"' },
+      payload: input,
+    });
+    expect(save.statusCode).toBe(200);
+    expect(saveBudget).toHaveBeenCalledWith(
+      'valid',
+      3,
+      input,
+      expect.any(String),
+    );
+  });
+
+  it('protects budget changes with permission, validation, and conflict checks', async () => {
+    const forbidden = await app(
+      repository({ canManage: vi.fn(() => Promise.resolve(false)) }),
+    ).inject({
+      method: 'PUT',
+      url: '/api/v1/ai-operations/budget',
+      headers: { authorization: 'Bearer valid', 'if-match': 'W/"0"' },
+      payload: { enabled: false, currency: 'USD' },
+    });
+    expect(forbidden.statusCode).toBe(403);
+
+    const invalid = await app().inject({
+      method: 'PUT',
+      url: '/api/v1/ai-operations/budget',
+      headers: { authorization: 'Bearer valid', 'if-match': 'W/"0"' },
+      payload: {
+        enabled: true,
+        currency: 'USD',
+        dailyWarningAmount: 3,
+        dailyStopAmount: 2,
+      },
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const conflict = await app(
+      repository({ saveBudget: vi.fn(() => Promise.resolve(null)) }),
+    ).inject({
+      method: 'PUT',
+      url: '/api/v1/ai-operations/budget',
+      headers: { authorization: 'Bearer valid', 'if-match': 'W/"2"' },
+      payload: { enabled: false, currency: 'USD' },
+    });
+    expect(conflict.statusCode).toBe(409);
   });
 });

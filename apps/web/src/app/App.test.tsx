@@ -774,6 +774,36 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
         recentFailures: [],
       }),
     ),
+    getAiBudgetPolicy: vi.fn(() =>
+      Promise.resolve({
+        canManage: true,
+        configured: false,
+        enabled: false,
+        currency: 'USD',
+        dailyWarningAmount: null,
+        dailyStopAmount: null,
+        monthlyWarningAmount: null,
+        monthlyStopAmount: null,
+        dailyWarningExecutions: null,
+        dailyStopExecutions: null,
+        monthlyWarningExecutions: null,
+        monthlyStopExecutions: null,
+        dailyExecutionCount: 0,
+        monthlyExecutionCount: 0,
+        dailyEstimatedCost: 0,
+        monthlyEstimatedCost: 0,
+        dailyCostRecordedCount: 0,
+        monthlyCostRecordedCount: 0,
+        warningReached: false,
+        stopReached: false,
+        stopReasons: [],
+        rowVersion: 0,
+        updatedAt: null,
+      }),
+    ),
+    saveAiBudgetPolicy: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     getProfitabilityDashboard: vi.fn(() =>
       Promise.resolve({
         fromMonth: '2026-01-01',
@@ -1171,6 +1201,78 @@ describe('App', () => {
     expect(screen.getByText('provider_timeout')).toBeInTheDocument();
     expect(screen.queryByText(/error message/i)).not.toBeInTheDocument();
     expect(getAiOperationsDashboard).toHaveBeenCalledOnce();
+  });
+
+  it('configures tenant AI warning and stop limits', async () => {
+    window.history.replaceState({}, '', '/ai-operations');
+    const baseBudget = {
+      canManage: true,
+      configured: false,
+      enabled: false,
+      currency: 'USD',
+      dailyWarningAmount: null,
+      dailyStopAmount: null,
+      monthlyWarningAmount: null,
+      monthlyStopAmount: null,
+      dailyWarningExecutions: null,
+      dailyStopExecutions: null,
+      monthlyWarningExecutions: null,
+      monthlyStopExecutions: null,
+      dailyExecutionCount: 4,
+      monthlyExecutionCount: 20,
+      dailyEstimatedCost: 0.1,
+      monthlyEstimatedCost: 0.8,
+      dailyCostRecordedCount: 4,
+      monthlyCostRecordedCount: 20,
+      warningReached: false,
+      stopReached: false,
+      stopReasons: [],
+      rowVersion: 0,
+      updatedAt: null,
+    };
+    const getAiBudgetPolicy = vi.fn(() => Promise.resolve(baseBudget));
+    const saveAiBudgetPolicy = vi.fn((_: number, input: { enabled: boolean }) =>
+      Promise.resolve({
+        ...baseBudget,
+        ...input,
+        configured: true,
+        rowVersion: 1,
+        updatedAt: '2026-08-22T06:00:00Z',
+      }),
+    );
+    render(
+      <App
+        auth={auth()}
+        api={api({ getAiBudgetPolicy, saveAiBudgetPolicy })}
+      />,
+    );
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'AI予算・実行上限（UTC基準）',
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: '予算制御を有効にする' }),
+    );
+    fireEvent.change(screen.getByLabelText('日次警告額'), {
+      target: { value: '1' },
+    });
+    fireEvent.change(screen.getByLabelText('日次停止額'), {
+      target: { value: '2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '予算設定を保存' }));
+
+    expect(await screen.findByText('予算制御は有効です。')).toBeInTheDocument();
+    expect(saveAiBudgetPolicy).toHaveBeenCalledWith(
+      0,
+      expect.objectContaining({
+        enabled: true,
+        currency: 'USD',
+        dailyWarningAmount: 1,
+        dailyStopAmount: 2,
+      }),
+    );
   });
 
   it('creates and submits an expense', async () => {

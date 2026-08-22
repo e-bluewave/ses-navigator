@@ -6,6 +6,8 @@ const contract = await readFile(contractPath, 'utf8');
 
 const requiredContractFragments = [
   'operationId: getAiOperationsDashboard',
+  'operationId: getAiBudgetPolicy',
+  'operationId: saveAiBudgetPolicy',
   'operationId: getSalesKpiDashboard',
   'operationId: getProfitabilityDashboard',
   'operationId: listExpenses',
@@ -1057,6 +1059,33 @@ export interface AiOperationsDashboard {
 export interface AiOperationsQuery {
   fromDate: string;
   toDate: string;
+}
+export interface AiBudgetPolicyInput {
+  enabled: boolean;
+  currency: string;
+  dailyWarningAmount: number | null;
+  dailyStopAmount: number | null;
+  monthlyWarningAmount: number | null;
+  monthlyStopAmount: number | null;
+  dailyWarningExecutions: number | null;
+  dailyStopExecutions: number | null;
+  monthlyWarningExecutions: number | null;
+  monthlyStopExecutions: number | null;
+}
+export interface AiBudgetPolicy extends AiBudgetPolicyInput {
+  canManage: boolean;
+  configured: boolean;
+  dailyExecutionCount: number;
+  monthlyExecutionCount: number;
+  dailyEstimatedCost: number;
+  monthlyEstimatedCost: number;
+  dailyCostRecordedCount: number;
+  monthlyCostRecordedCount: number;
+  warningReached: boolean;
+  stopReached: boolean;
+  stopReasons: string[];
+  rowVersion: number;
+  updatedAt: string | null;
 }
 
 export interface SalesKpiMonth {

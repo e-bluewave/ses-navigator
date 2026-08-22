@@ -108,12 +108,19 @@ import type {
   SalesKpiQuery,
   AiOperationsDashboard,
   AiOperationsQuery,
+  AiBudgetPolicy,
+  AiBudgetPolicyInput,
 } from './generated.js';
 
 export interface ProjectsApi {
   getAiOperationsDashboard(
     query: AiOperationsQuery,
   ): Promise<AiOperationsDashboard>;
+  getAiBudgetPolicy(): Promise<AiBudgetPolicy>;
+  saveAiBudgetPolicy(
+    rowVersion: number,
+    input: AiBudgetPolicyInput,
+  ): Promise<AiBudgetPolicy>;
   createProjectEngineerMatch(
     projectId: string,
     limit?: number,
@@ -490,6 +497,17 @@ export function createProjectsApi(options: {
         toDate: query.toDate,
       });
       return get<AiOperationsDashboard>(`/ai-operations?${params.toString()}`);
+    },
+    getAiBudgetPolicy() {
+      return get<AiBudgetPolicy>('/ai-operations/budget');
+    },
+    saveAiBudgetPolicy(rowVersion, input) {
+      return send<AiBudgetPolicy>(
+        '/ai-operations/budget',
+        'PUT',
+        input,
+        rowVersion,
+      );
     },
     getSalesKpiDashboard(query) {
       const params = new URLSearchParams({
