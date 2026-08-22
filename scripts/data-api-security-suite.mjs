@@ -18,11 +18,14 @@ const defaultStages = [
   { name: 'runtime_boundary', run: runDataApiRuntimeBoundaryRegression },
 ];
 
+const defaultRequestTimeoutMs = 15_000;
+
 export async function runDataApiSecuritySuite({
   env = process.env,
   fetchImpl = fetch,
   randomUuid,
   stages = defaultStages,
+  requestTimeoutMs = timeoutFromEnvironment(env),
   log = console.log,
 } = {}) {
   const missing = requiredVariables.filter((name) => !env[name]?.trim());
@@ -32,20 +35,44 @@ export async function runDataApiSecuritySuite({
   if (env.SESN_SUPABASE_SECRET_KEY.startsWith('sb_publishable_')) {
     throw new Error('A publishable key was supplied as the secret key');
   }
+  if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
+    throw new Error('Security request timeout must be a positive integer');
+  }
 
   const components = [];
-  for (const stage of stages) {
+  const timedFetch = createTimedFetch(fetchImpl, requestTimeoutMs);
+  for (const [index, stage] of stages.entries()) {
     let captured;
+    log(
+      JSON.stringify(
+        progressEvent(
+          'DATA_API_SECURITY_STAGE_STARTED',
+          stage.name,
+          index,
+          stages.length,
+        ),
+      ),
+    );
     try {
       const result = await stage.run({
         env,
-        fetchImpl,
+        fetchImpl: timedFetch,
         randomUuid,
         log: (value) => {
           captured = parseSummary(value);
         },
       });
       components.push(component(stage.name, result));
+      log(
+        JSON.stringify(
+          progressEvent(
+            'DATA_API_SECURITY_STAGE_COMPLETED',
+            stage.name,
+            index,
+            stages.length,
+          ),
+        ),
+      );
     } catch (error) {
       components.push(
         component(stage.name, captured, {
@@ -53,6 +80,16 @@ export async function runDataApiSecuritySuite({
           error:
             error instanceof Error ? error.message : 'Unknown stage failure',
         }),
+      );
+      log(
+        JSON.stringify(
+          progressEvent(
+            'DATA_API_SECURITY_STAGE_FAILED',
+            stage.name,
+            index,
+            stages.length,
+          ),
+        ),
       );
       const summary = suiteSummary(components, false, stages.length);
       log(JSON.stringify(summary, null, 2));
@@ -65,6 +102,40 @@ export async function runDataApiSecuritySuite({
   const summary = suiteSummary(components, true, stages.length);
   log(JSON.stringify(summary, null, 2));
   return summary;
+}
+
+export function createTimedFetch(fetchImpl, timeoutMs) {
+  return async (input, init = {}) => {
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = init.signal
+      ? AbortSignal.any([init.signal, timeoutSignal])
+      : timeoutSignal;
+    try {
+      return await fetchImpl(input, { ...init, signal });
+    } catch (error) {
+      if (timeoutSignal.aborted) {
+        throw new Error(`HTTP request timed out after ${timeoutMs} ms`, {
+          cause: error,
+        });
+      }
+      throw error;
+    }
+  };
+}
+
+function timeoutFromEnvironment(env) {
+  const configured = env.SESN_SECURITY_REQUEST_TIMEOUT_MS?.trim();
+  if (!configured) return defaultRequestTimeoutMs;
+  return Number(configured);
+}
+
+function progressEvent(event, stage, index, totalStages) {
+  return {
+    event,
+    stage,
+    stageIndex: index + 1,
+    totalStages,
+  };
 }
 
 function component(name, value, fallback = {}) {
