@@ -271,6 +271,28 @@ h2 {
   min-height: 8rem;
   resize: vertical;
 }
+.budget-form {
+  max-width: none;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #d8e3e4;
+  border-radius: 0.8rem;
+  background: #f8fbfb;
+}
+.budget-limit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.8rem;
+}
+.budget-toggle {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 0.6rem !important;
+}
+.budget-toggle input {
+  width: auto;
+}
 .project-filters label {
   display: grid;
   gap: 0.4rem;

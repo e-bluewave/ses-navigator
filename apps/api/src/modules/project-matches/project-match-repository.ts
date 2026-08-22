@@ -1,5 +1,5 @@
 import { requiredEnv } from '../../plugins/authentication.js';
-import { ApiError } from '../../shared/errors.js';
+import { assertSupabaseResponse } from '../../shared/supabase-response.js';
 import type {
   ProjectMatchExplanation,
   ProjectMatchRun,
@@ -139,12 +139,10 @@ export class SupabaseProjectMatchRepository implements ProjectMatchRepository {
         },
       },
     );
-    if (!response.ok)
-      throw new ApiError(
-        response.status === 409 ? 409 : 502,
-        response.status === 409 ? 'conflict' : 'upstream_error',
-        'Project match data service request failed',
-      );
+    await assertSupabaseResponse(
+      response,
+      'Project match data service request failed',
+    );
     return response;
   }
 }

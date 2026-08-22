@@ -1,5 +1,5 @@
 import { requiredEnv } from '../../plugins/authentication.js';
-import { ApiError } from '../../shared/errors.js';
+import { assertSupabaseResponse } from '../../shared/supabase-response.js';
 import type {
   ProposalMessageCompositionInput,
   ProposalMessageGeneration,
@@ -251,12 +251,10 @@ export class SupabaseProposalMessageDraftRepository implements ProposalMessageDr
         },
       },
     );
-    if (!response.ok)
-      throw new ApiError(
-        response.status === 409 ? 409 : 502,
-        response.status === 409 ? 'conflict' : 'upstream_error',
-        'Proposal message data service request failed',
-      );
+    await assertSupabaseResponse(
+      response,
+      'Proposal message data service request failed',
+    );
     return response;
   }
 }

@@ -3,7 +3,11 @@ import type { FormEvent } from 'react';
 
 import { ApiClientError } from '../api/client.js';
 import type { ProjectsApi } from '../api/client.js';
-import type { AiOperationsDashboard } from '../api/generated.js';
+import type {
+  AiBudgetPolicy,
+  AiBudgetPolicyInput,
+  AiOperationsDashboard,
+} from '../api/generated.js';
 
 interface AiOperationsViewProps {
   api: ProjectsApi;
@@ -20,17 +24,23 @@ export function AiOperationsView({
   const [dashboard, setDashboard] = useState<AiOperationsDashboard | null>(
     null,
   );
+  const [budget, setBudget] = useState<AiBudgetPolicy | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [budgetError, setBudgetError] = useState('');
+  const [budgetSaving, setBudgetSaving] = useState(false);
 
   const load = useCallback(
     async (from: string, to: string) => {
       setLoading(true);
       setError('');
       try {
-        setDashboard(
-          await api.getAiOperationsDashboard({ fromDate: from, toDate: to }),
-        );
+        const [loadedDashboard, loadedBudget] = await Promise.all([
+          api.getAiOperationsDashboard({ fromDate: from, toDate: to }),
+          api.getAiBudgetPolicy(),
+        ]);
+        setDashboard(loadedDashboard);
+        setBudget(loadedBudget);
       } catch (cause) {
         setDashboard(null);
         if (cause instanceof ApiClientError && cause.status === 401) {
@@ -48,6 +58,27 @@ export function AiOperationsView({
     },
     [api, onUnauthorized],
   );
+
+  async function saveBudget(input: AiBudgetPolicyInput) {
+    if (!budget) return;
+    setBudgetSaving(true);
+    setBudgetError('');
+    try {
+      setBudget(await api.saveAiBudgetPolicy(budget.rowVersion, input));
+    } catch (cause) {
+      if (cause instanceof ApiClientError && cause.status === 401) {
+        await onUnauthorized();
+        return;
+      }
+      setBudgetError(
+        cause instanceof ApiClientError
+          ? cause.message
+          : 'AI予算設定を保存できませんでした。',
+      );
+    } finally {
+      setBudgetSaving(false);
+    }
+  }
 
   useEffect(() => {
     void load(initialRange.fromDate, initialRange.toDate);
@@ -96,9 +127,198 @@ export function AiOperationsView({
 
       {loading ? <p role="status">AI運用状況を集計しています…</p> : null}
       {error ? <p role="alert">{error}</p> : null}
+      {budget ? (
+        <BudgetPanel
+          key={budget.rowVersion}
+          budget={budget}
+          saving={budgetSaving}
+          error={budgetError}
+          onSave={saveBudget}
+        />
+      ) : null}
       {dashboard ? <Dashboard dashboard={dashboard} /> : null}
     </section>
   );
+}
+
+function BudgetPanel({
+  budget,
+  saving,
+  error,
+  onSave,
+}: {
+  budget: AiBudgetPolicy;
+  saving: boolean;
+  error: string;
+  onSave: (input: AiBudgetPolicyInput) => Promise<void>;
+}) {
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    void onSave({
+      enabled: form.get('enabled') === 'on',
+      currency: formString(form, 'currency').trim().toUpperCase(),
+      dailyWarningAmount: optionalNumber(form, 'dailyWarningAmount'),
+      dailyStopAmount: optionalNumber(form, 'dailyStopAmount'),
+      monthlyWarningAmount: optionalNumber(form, 'monthlyWarningAmount'),
+      monthlyStopAmount: optionalNumber(form, 'monthlyStopAmount'),
+      dailyWarningExecutions: optionalInteger(form, 'dailyWarningExecutions'),
+      dailyStopExecutions: optionalInteger(form, 'dailyStopExecutions'),
+      monthlyWarningExecutions: optionalInteger(
+        form,
+        'monthlyWarningExecutions',
+      ),
+      monthlyStopExecutions: optionalInteger(form, 'monthlyStopExecutions'),
+    });
+  }
+
+  return (
+    <section className="dashboard-section" aria-labelledby="ai-budget-summary">
+      <h3 id="ai-budget-summary">AI予算・実行上限（UTC基準）</h3>
+      <p role="status">
+        {budget.stopReached
+          ? '停止閾値に到達しているため、新しいAI実行を停止しています。'
+          : budget.warningReached
+            ? '警告閾値に到達しています。利用状況を確認してください。'
+            : budget.enabled
+              ? '予算制御は有効です。'
+              : '予算制御は無効です。設定を保存して有効化するまでAI実行を停止しません。'}
+      </p>
+      <dl className="dashboard-card-grid">
+        <Metric label="本日の実行" value={number(budget.dailyExecutionCount)} />
+        <Metric
+          label="今月の実行"
+          value={number(budget.monthlyExecutionCount)}
+        />
+        <Metric
+          label="本日の概算"
+          value={cost(budget.dailyEstimatedCost, budget.currency)}
+          alert={budget.warningReached}
+        />
+        <Metric
+          label="今月の概算"
+          value={cost(budget.monthlyEstimatedCost, budget.currency)}
+          alert={budget.warningReached}
+        />
+      </dl>
+      {budget.canManage ? (
+        <form className="project-form budget-form" onSubmit={submit}>
+          <label className="budget-toggle">
+            <input
+              name="enabled"
+              type="checkbox"
+              defaultChecked={budget.enabled}
+            />
+            予算制御を有効にする
+          </label>
+          <label>
+            通貨
+            <input
+              name="currency"
+              defaultValue={budget.currency}
+              maxLength={3}
+              pattern="[A-Za-z]{3}"
+              required
+            />
+          </label>
+          <div className="budget-limit-grid">
+            <BudgetField
+              name="dailyWarningAmount"
+              label="日次警告額"
+              value={budget.dailyWarningAmount}
+            />
+            <BudgetField
+              name="dailyStopAmount"
+              label="日次停止額"
+              value={budget.dailyStopAmount}
+            />
+            <BudgetField
+              name="monthlyWarningAmount"
+              label="月次警告額"
+              value={budget.monthlyWarningAmount}
+            />
+            <BudgetField
+              name="monthlyStopAmount"
+              label="月次停止額"
+              value={budget.monthlyStopAmount}
+            />
+            <BudgetField
+              name="dailyWarningExecutions"
+              label="日次警告件数"
+              value={budget.dailyWarningExecutions}
+              integer
+            />
+            <BudgetField
+              name="dailyStopExecutions"
+              label="日次停止件数"
+              value={budget.dailyStopExecutions}
+              integer
+            />
+            <BudgetField
+              name="monthlyWarningExecutions"
+              label="月次警告件数"
+              value={budget.monthlyWarningExecutions}
+              integer
+            />
+            <BudgetField
+              name="monthlyStopExecutions"
+              label="月次停止件数"
+              value={budget.monthlyStopExecutions}
+              integer
+            />
+          </div>
+          <p>
+            空欄の項目は判定に使用しません。有効化する場合は停止額または停止件数を1つ以上設定してください。
+          </p>
+          {error ? <p role="alert">{error}</p> : null}
+          <button className="primary-button" disabled={saving}>
+            {saving ? '保存中…' : '予算設定を保存'}
+          </button>
+        </form>
+      ) : (
+        <p>設定変更にはtenant.manage権限が必要です。</p>
+      )}
+    </section>
+  );
+}
+
+function BudgetField({
+  name,
+  label,
+  value,
+  integer = false,
+}: {
+  name: string;
+  label: string;
+  value: number | null;
+  integer?: boolean;
+}) {
+  return (
+    <label>
+      {label}
+      <input
+        name={name}
+        type="number"
+        min={integer ? 1 : 0}
+        step={integer ? 1 : '0.000001'}
+        defaultValue={value ?? ''}
+      />
+    </label>
+  );
+}
+
+function optionalNumber(form: FormData, name: string) {
+  const value = formString(form, name).trim();
+  return value === '' ? null : Number(value);
+}
+
+function optionalInteger(form: FormData, name: string) {
+  return optionalNumber(form, name);
+}
+
+function formString(form: FormData, name: string) {
+  const value = form.get(name);
+  return typeof value === 'string' ? value : '';
 }
 
 function Dashboard({ dashboard }: { dashboard: AiOperationsDashboard }) {
