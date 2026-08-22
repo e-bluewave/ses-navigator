@@ -78,6 +78,16 @@ pnpm security:data-api-writes
 
 この検査はDB接続や秘密情報を必要としない。新しい直接書込み、既存許可の削除、anonへの書込み、Service Roleの`public`リレーション書込みを検出した場合は失敗する。業務状態変更や機密書込みは、引き続き限定RPCを使用する。
 
+## RPC公開面の確認
+
+APIソースが実際に呼ぶRPCと、Migration適用後のFunction実行権限を照合する。
+
+```text
+pnpm security:data-api-rpcs
+```
+
+この検査もDB接続や秘密情報を必要としない。APIが未許可RPCを呼ぶ変更、未レビューRPCのauthenticated公開、Service Role限定RPCの追加、anon・PUBLICへの実行許可を検出すると失敗する。認証補助RPCはMigration 158の`public`ラッパーを経由し、内部`app`スキーマはData APIへ公開しない。
+
 ## 現在の検証状態
 
 - `01_precheck.sql`：`READY`
