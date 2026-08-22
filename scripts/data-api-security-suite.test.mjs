@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { runDataApiSecuritySuite } from './data-api-security-suite.mjs';
+import {
+  createTimedFetch,
+  runDataApiSecuritySuite,
+} from './data-api-security-suite.mjs';
 
 const env = {
   SESN_SUPABASE_URL: 'https://example.supabase.co',
@@ -31,8 +34,22 @@ test('aggregates the 18, 19, and 8 check stages', async () => {
     'service_role_rpc',
     'runtime_boundary',
   ]);
-  assert.equal(logs.length, 1);
-  assert.doesNotMatch(logs[0], /secret-a|secret-b|secret-role-key|publishable/);
+  assert.equal(logs.length, 7);
+  assert.deepEqual(
+    logs.slice(0, 6).map((value) => JSON.parse(value).event),
+    [
+      'DATA_API_SECURITY_STAGE_STARTED',
+      'DATA_API_SECURITY_STAGE_COMPLETED',
+      'DATA_API_SECURITY_STAGE_STARTED',
+      'DATA_API_SECURITY_STAGE_COMPLETED',
+      'DATA_API_SECURITY_STAGE_STARTED',
+      'DATA_API_SECURITY_STAGE_COMPLETED',
+    ],
+  );
+  assert.doesNotMatch(
+    logs.join('\n'),
+    /secret-a|secret-b|secret-role-key|publishable/,
+  );
 });
 
 test('stops before any stage when configuration is incomplete', async () => {
@@ -105,12 +122,50 @@ test('stops later stages and reports the failing component', async () => {
   );
 
   assert.deepEqual(calls, ['limited_views', 'service_role_rpc']);
-  assert.equal(logs.length, 1);
-  const summary = JSON.parse(logs[0]);
+  assert.equal(logs.length, 5);
+  assert.equal(JSON.parse(logs[3]).event, 'DATA_API_SECURITY_STAGE_FAILED');
+  const summary = JSON.parse(logs[4]);
   assert.equal(summary.status, 'DATA_API_SECURITY_SUITE_FAILED');
   assert.equal(summary.completedStages, 2);
   assert.equal(summary.failed, 1);
   assert.equal(summary.components[1].error, 'RPC boundary failed');
+});
+
+test('aborts a stalled HTTP request after the configured timeout', async () => {
+  const timedFetch = createTimedFetch(
+    async (_input, { signal }) =>
+      new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        });
+      }),
+    10,
+  );
+
+  await assert.rejects(
+    timedFetch('https://example.test'),
+    /timed out after 10 ms/,
+  );
+});
+
+test('rejects an invalid configured timeout before a stage starts', async () => {
+  let called = false;
+  await assert.rejects(
+    runDataApiSecuritySuite({
+      env: { ...env, SESN_SECURITY_REQUEST_TIMEOUT_MS: 'invalid' },
+      stages: [
+        {
+          name: 'must_not_run',
+          run: async () => {
+            called = true;
+          },
+        },
+      ],
+      log: () => undefined,
+    }),
+    /positive integer/,
+  );
+  assert.equal(called, false);
 });
 
 function passingStages(calls) {
