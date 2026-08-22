@@ -1,3 +1,4 @@
+import { dataApiSchemaHeaders } from '../../shared/supabase-schema.js';
 import { requiredEnv } from '../../plugins/authentication.js';
 import { assertSupabaseResponse } from '../../shared/supabase-response.js';
 import type {
@@ -134,6 +135,7 @@ export class SupabaseProjectMatchRepository implements ProjectMatchRepository {
         headers: {
           apikey: requiredEnv('SUPABASE_ANON_KEY'),
           authorization: `Bearer ${token}`,
+          ...dataApiSchemaHeaders(path),
           'content-type': 'application/json',
           accept: 'application/json',
         },

@@ -67,6 +67,7 @@
 - 6限定Viewをanon・権限あり・権限なしで確認する18件のData APIセキュリティ回帰をNodeで自動実行
 - Service Roleの6限定View拒否と限定RPCの主体・Tenant・返却形・秘匿化を確認する19件のセキュリティ回帰をNodeで自動実行
 - Supabase Data APIの公開スキーマ、追加search_path、最大返却件数とDashboard設定スナップショットの差分をCIで自動検査
+- Data APIの22リクエスト実装を、テーブルは`app`、限定View/RPCは`public`へProfileヘッダーで明示ルーティング
 - APIロールへの直接書込みGRANTをMigration全体から再構成し、レビュー済み10テーブル以外の追加とanon・public面への書込みをCIで拒否
 - API実装が呼ぶ81 RPCとauthenticatedの公開RPC、Service Roleの限定1 RPC、anon・PUBLICの拒否をMigration全体から再構成してCIで照合
 - Migration 120でRLS・FK判定用インデックスを追加
@@ -136,7 +137,7 @@
 ## 現在作業中
 
 - Supabase Authの実環境結合確認（実行待ち）
-- Data APIの権限回帰（表書込み・RPC公開面の静的ガード実装済み／実環境の拒否・許可シナリオは未実装）
+- Data APIの権限回帰（表書込み・RPC公開面・スキーマルーティングの静的ガード実装済み／実環境の拒否・許可シナリオは未実装）
 
 # 開発進捗
 
@@ -213,7 +214,7 @@ docs/
 
 1. 検証環境の値を設定し、Auth・案件参照の実環境スモークテストを実行する
 2. Migration 158を検証環境へ適用する
-3. DashboardのExposed schemas実値を取得し、設定ガードでリポジトリ値と照合する
+3. DashboardのExposed schemasを`public,graphql_public,app`へ設定し、設定ガードでリポジトリ値と照合する
 4. Data API検証データを準備し、Node版18件＋19件セキュリティ回帰を実環境で実行する
 5. AI予算の初期値を実測利用量に基づいて設定し、警告・停止動作を確認する
 
@@ -221,14 +222,17 @@ docs/
 
 ## 2026-08-22
 
+- PR #74を`Main`へマージし、Data API認証補助RPCとRPC公開面ガードを追加
+- Data APIの業務テーブル参照先を`app`、限定View/RPC参照先を`public`へProfileヘッダーで明示する共通ルーティングを追加
+- `app`をExposed schemasへ追加しつつ、GRANT・RLSで公開対象を限定し、`audit`・`private`・`integration`・`storage`は非公開を維持
 - PR #73を`Main`へマージし、Data API直接書込み公開面ガードを追加
-- Migration 158でAPIが利用する認証補助3関数を`public`の最小権限ラッパーとして公開し、内部`app`スキーマを非公開のまま維持
+- Migration 158でAPIが利用する認証補助3関数を`public`の最小権限ラッパーとして公開し、認証RPCを業務テーブル用`app` Profileから分離
 - APIが呼ぶ81 RPC、レビュー済み未接続2 RPC、Service Role限定1 RPC、anon・PUBLIC 0 RPCをMigration全体から再構成してCIで固定
 - PR #72を`Main`へマージし、Supabase公開スキーマ設定ガードを追加
 - Migration全体のGRANT・REVOKEを適用順に再構成し、authenticatedの直接書込みをレビュー済み10テーブルへ固定するCIガードを追加
 - anonの直接書込みとService Roleの`public`リレーション書込みをゼロに固定し、追加・削除は明示的なレビューを必須にする
 - PR #71を`Main`へマージし、Service Role・限定RPCの19件セキュリティ回帰を追加
-- `supabase/config.toml`のExposed schemasを`public`・`graphql_public`だけに固定し、内部スキーマ混入をCIで拒否する設定ガードを追加
+- `supabase/config.toml`のExposed schemasを`public`・`graphql_public`・`app`に固定し、非公開内部スキーマ混入をCIで拒否する設定ガードを追加
 - DashboardのExposed schemas値を任意入力して、GitHub管理値との環境差分を検出できるようにする
 - PR #70を`Main`へマージし、限定ViewのData APIセキュリティ回帰ランナーを追加
 - Service Roleの一般View拒否6件、限定RPCの主体境界2件、正常取得5件、存在秘匿6件をNodeで自動化

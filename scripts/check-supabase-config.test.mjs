@@ -5,7 +5,7 @@ import { validateSupabaseConfig } from './check-supabase-config.mjs';
 
 const valid = `[api]
 enabled = true
-schemas = ["public", "graphql_public"]
+schemas = ["public", "graphql_public", "app"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 `;
@@ -19,15 +19,15 @@ test('accepts the committed local Supabase API boundary', async () => {
   assert.equal(result.remoteChecked, false);
 });
 
-test('rejects an internal schema in the exposed schemas list', () => {
+test('rejects a non-API internal schema in the exposed schemas list', () => {
   const source = valid.replace(
-    '["public", "graphql_public"]',
     '["public", "graphql_public", "app"]',
+    '["public", "graphql_public", "app", "audit"]',
   );
   const result = validateSupabaseConfig(source);
 
   assert.equal(result.status, 'SUPABASE_CONFIG_FAILED');
-  assert.match(result.failures.join('\n'), /internal schemas.*app/);
+  assert.match(result.failures.join('\n'), /internal schemas.*audit/);
 });
 
 test('rejects an internal schema in the extra search path', () => {
@@ -48,8 +48,8 @@ test('rejects excessive Data API row limits', () => {
 });
 
 test('compares a supplied Dashboard Exposed schemas snapshot', () => {
-  const passed = validateSupabaseConfig(valid, 'public, graphql_public');
-  const failed = validateSupabaseConfig(valid, 'public, app');
+  const passed = validateSupabaseConfig(valid, 'public, graphql_public, app');
+  const failed = validateSupabaseConfig(valid, 'public, graphql_public');
 
   assert.equal(passed.remoteChecked, true);
   assert.equal(passed.status, 'SUPABASE_CONFIG_PASSED');

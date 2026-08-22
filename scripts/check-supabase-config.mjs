@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 
-const allowedSchemas = ['graphql_public', 'public'];
+const allowedSchemas = ['app', 'graphql_public', 'public'];
 const allowedSearchPath = ['extensions', 'public'];
-const forbiddenSchemas = ['app', 'audit', 'integration', 'private', 'storage'];
+const forbiddenSchemas = ['audit', 'integration', 'private', 'storage'];
 
 export function validateSupabaseConfig(source, remoteSchemasValue) {
   const api = parseApiSection(source);
