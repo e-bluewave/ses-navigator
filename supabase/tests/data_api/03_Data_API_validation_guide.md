@@ -9,8 +9,7 @@
 
 ## 採用方式
 
-`03_validation.sql`ではなく、`03_validation.ps1`から実際のSupabase Data
-APIへ読み取りリクエストを送る。
+推奨する`pnpm security:data-api`、または従来の`03_validation.ps1`から、実際のSupabase Data APIへ読み取りリクエストを送る。
 
 SQL EditorでJWTクレームを模擬する方式では確認できない、次の境界を一度に
 検証するためである。
@@ -71,6 +70,14 @@ User AとUser BのJWTを既に取得している場合、パスワードの代�
 - Secret key／service_role key
 
 ## Windowsでの実行
+
+リポジトリのルートで、必要な環境変数を現在のプロセスへ設定した後に次を実行する方法を推奨する。変数名は`DATA_API_TEST_README.md`を参照する。
+
+```powershell
+pnpm security:data-api
+```
+
+従来の対話入力方式が必要な場合は、次のPowerShell版も利用できる。
 
 1. `03_validation.ps1`をWindows上の任意のフォルダへ保存する。
 2. PowerShellを開く。

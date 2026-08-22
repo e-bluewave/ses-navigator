@@ -13,7 +13,7 @@
 |---:|---|---|
 | 1 | `01_precheck.sql` | 既存環境・権限・衝突の読み取り専用確認 |
 | 2 | `02_setup.sql` | 固定IDの検証データを単一トランザクションで作成 |
-| 3 | `03_validation.ps1` | anon・User A・User Bで6 Viewを実HTTP検証 |
+| 3 | `pnpm security:data-api`（推奨）または`03_validation.ps1` | anon・User A・User Bで6 Viewを実HTTP検証 |
 | 4 | `04_service_role_rpc_validation.ps1` | service_roleのView拒否後に限定RPCを検証 |
 | 5 | `05_cleanup.sql` | 固定IDの検証データと検証専用User Bを原子的に削除 |
 
@@ -34,6 +34,24 @@
 - Secret key／Legacy service_role key
 
 PowerShellスクリプトは秘密情報を伏せ字で対話入力し、結果JSONへ含めない。
+Node版は秘密情報を環境変数からのみ受け取り、結果JSONへ含めない。環境変数をファイル、GitHub、チャットへ保存しない。
+
+## Node版の実行
+
+`02_setup.sql`が`READY_FOR_VALIDATION`になった検証環境で、次の環境変数を現在プロセスへ設定して実行する。
+
+- `SESN_SUPABASE_URL`
+- `SESN_SUPABASE_PUBLISHABLE_KEY`
+- `SESN_TEST_USER_A_EMAIL`
+- `SESN_TEST_USER_A_PASSWORD`
+- `SESN_TEST_USER_B_EMAIL`
+- `SESN_TEST_USER_B_PASSWORD`
+
+```text
+pnpm security:data-api
+```
+
+合格時は`VALIDATION_PASSED`、18/18を出力する。実環境の認証情報を使わない判定ロジックの自動テストは`pnpm security:data-api:check`で実行する。
 
 ## 現在の検証状態
 
