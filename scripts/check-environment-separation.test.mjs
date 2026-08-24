@@ -69,7 +69,9 @@ test('rejects Production data promotion to lower environments', () => {
     supabaseConfig,
     gitignore,
   });
-  assert.ok(result.failures.includes('production data must not be copied to Local'));
+  assert.ok(
+    result.failures.includes('production data must not be copied to Local'),
+  );
 });
 
 test('rejects non-local Supabase CLI configuration', () => {
@@ -82,6 +84,8 @@ test('rejects non-local Supabase CLI configuration', () => {
     gitignore,
   });
   assert.ok(
-    result.failures.includes('Local Supabase auth site_url must remain localhost'),
+    result.failures.includes(
+      'Local Supabase auth site_url must remain localhost',
+    ),
   );
 });
