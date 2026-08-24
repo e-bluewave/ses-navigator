@@ -60,25 +60,44 @@ test('rejects missing monitoring signals', () => {
     ...policy,
     signals: { ...policy.signals, databaseLocks: false, rlsLoad: false },
   });
-  assert.ok(result.failures.includes('required monitoring signal missing: databaseLocks'));
-  assert.ok(result.failures.includes('required monitoring signal missing: rlsLoad'));
+  assert.ok(
+    result.failures.includes(
+      'required monitoring signal missing: databaseLocks',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('required monitoring signal missing: rlsLoad'),
+  );
 });
 
 test('rejects alert secret exposure and missing notification controls', () => {
   const result = validateMonitoringPolicy({
     ...policy,
     alerting: { ...policy.alerting, recoveryNotificationRequired: false },
-    security: { ...policy.security, secretsInAlertsAllowed: true, personalDataInAlertsAllowed: true },
+    security: {
+      ...policy.security,
+      secretsInAlertsAllowed: true,
+      personalDataInAlertsAllowed: true,
+    },
   });
   assert.ok(result.failures.includes('recovery notification is required'));
   assert.ok(result.failures.includes('secrets in alerts must be prohibited'));
-  assert.ok(result.failures.includes('personal data in alerts must be prohibited'));
+  assert.ok(
+    result.failures.includes('personal data in alerts must be prohibited'),
+  );
 });
 
 test('rejects initial threshold drift', () => {
   const result = validateMonitoringPolicy({
     ...policy,
-    initialThresholds: { ...policy.initialThresholds, connectionUsageCriticalPercent: 95 },
+    initialThresholds: {
+      ...policy.initialThresholds,
+      connectionUsageCriticalPercent: 95,
+    },
   });
-  assert.ok(result.failures.includes('connectionUsageCriticalPercent approved initial threshold must not drift'));
+  assert.ok(
+    result.failures.includes(
+      'connectionUsageCriticalPercent approved initial threshold must not drift',
+    ),
+  );
 });
