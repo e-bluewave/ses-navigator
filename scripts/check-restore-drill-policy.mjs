@@ -103,7 +103,9 @@ export function validateRestoreDrillPolicy(policy) {
     failures.push('restore credentials must not be allowed in logs');
   }
   if (security.restoredSensitiveDataPublicExposureAllowed !== false) {
-    failures.push('public exposure of restored sensitive data must be prohibited');
+    failures.push(
+      'public exposure of restored sensitive data must be prohibited',
+    );
   }
 
   return {
