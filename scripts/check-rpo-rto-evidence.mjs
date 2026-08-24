@@ -90,7 +90,11 @@ export function validateRpoRtoEvidence(document, policy) {
 
   for (const tier of ['tier1', 'tier2', 'tier3']) {
     const target = policy.tiers?.[tier];
-    if (!target || !isPositiveNumber(target.rpoMinutes) || !isPositiveNumber(target.rtoMinutes)) {
+    if (
+      !target ||
+      !isPositiveNumber(target.rpoMinutes) ||
+      !isPositiveNumber(target.rtoMinutes)
+    ) {
       findings.push(`invalid-policy-target:${tier}`);
       continue;
     }
@@ -154,7 +158,9 @@ export async function runRpoRtoEvidenceCheck({
   const result = validateRpoRtoEvidence(document, policy);
   log(JSON.stringify(result, null, 2));
   if (!result.complete) {
-    throw new Error(`RPO/RTO evidence check failed (${result.findings.length})`);
+    throw new Error(
+      `RPO/RTO evidence check failed (${result.findings.length})`,
+    );
   }
   return result;
 }
@@ -186,7 +192,9 @@ function isBlank(value) {
 
 if (isMainModule(import.meta.url)) {
   runRpoRtoEvidenceCheck({ evidencePath: process.argv[2] }).catch((error) => {
-    console.error(error instanceof Error ? error.message : 'RPO/RTO evidence check failed');
+    console.error(
+      error instanceof Error ? error.message : 'RPO/RTO evidence check failed',
+    );
     process.exitCode = 1;
   });
 }
