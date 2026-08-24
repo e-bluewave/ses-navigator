@@ -38,6 +38,8 @@
     "security:db-connectivity:check": "node --test scripts/check-database-connectivity-policy.test.mjs",
     "security:env-separation": "node scripts/check-environment-separation.mjs",
     "security:env-separation:check": "node --test scripts/check-environment-separation.test.mjs",
+    "security:personal-data-erasure": "node scripts/check-personal-data-erasure-policy.mjs",
+    "security:personal-data-erasure:check": "node --test scripts/check-personal-data-erasure-policy.test.mjs",
     "security:restore-drill": "node scripts/check-restore-drill-policy.mjs",
     "security:restore-drill:check": "node --test scripts/check-restore-drill-policy.test.mjs",
     "security:rpo-rto": "node scripts/check-rpo-rto-policy.mjs",
