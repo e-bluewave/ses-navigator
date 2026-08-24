@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "environments": {
+    "local": {
+      "dataClass": "synthetic",
+      "supabaseBinding": "local-cli",
+      "vercelBinding": "none"
+    },
+    "ci": {
+      "dataClass": "ephemeral",
+      "supabaseBinding": "ephemeral",
+      "vercelBinding": "none"
+    },
+    "staging": {
+      "dataClass": "synthetic",
+      "supabaseBinding": "dedicated",
+      "vercelBinding": "dedicated"
+    },
+    "production": {
+      "dataClass": "production",
+      "supabaseBinding": "dedicated",
+      "vercelBinding": "dedicated"
+    }
+  },
+  "requiredDistinctBindings": [
+    ["staging", "production", "supabase"],
+    ["staging", "production", "vercel"]
+  ],
+  "promotionOrder": ["local", "ci", "staging", "production"],
+  "trackedEnvironmentIdentifiers": false,
+  "productionDataToLocalAllowed": false,
+  "productionDataToStagingAllowed": false
+}
