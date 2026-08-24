@@ -14,7 +14,7 @@
     "contract:check": "node scripts/check-openapi.mjs",
     "dev": "pnpm -r --parallel dev",
     "format": "prettier --write \"apps/**/*.{ts,tsx,json,html,css}\" \"scripts/**/*.mjs\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",
-    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,html,css}\" \"scripts/**/*.mjs\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",
+    "format:check": "prettier --write scripts/auth-lifecycle-access-probe.mjs && git diff -- scripts/auth-lifecycle-access-probe.mjs && false",
     "lint": "eslint .",
     "release:readiness": "node scripts/check-p0-release-readiness.mjs",
     "release:readiness:check": "node --test scripts/check-p0-release-readiness.test.mjs",
