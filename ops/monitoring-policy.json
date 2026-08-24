@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "scope": "production-operational-monitoring",
+  "providerSelection": "deferred",
+  "signals": {
+    "applicationErrors": true,
+    "slowSql": true,
+    "databaseConnections": true,
+    "databaseCapacity": true,
+    "databaseLocks": true,
+    "rlsLoad": true,
+    "jobBacklog": true
+  },
+  "alerting": {
+    "severityLevels": ["critical", "warning", "info"],
+    "criticalRequiresImmediateNotification": true,
+    "warningRequiresNotification": true,
+    "deduplicationRequired": true,
+    "recoveryNotificationRequired": true,
+    "ownerRequired": true
+  },
+  "initialThresholds": {
+    "slowSqlMilliseconds": 1000,
+    "connectionUsageWarningPercent": 70,
+    "connectionUsageCriticalPercent": 85,
+    "databaseCapacityWarningPercent": 70,
+    "databaseCapacityCriticalPercent": 85,
+    "lockWaitWarningSeconds": 10,
+    "jobBacklogWarningCount": 100,
+    "jobOldestAgeWarningMinutes": 15
+  },
+  "security": {
+    "secretsInAlertsAllowed": false,
+    "personalDataInAlertsAllowed": false,
+    "productionIdentifiersInRepositoryAllowed": false,
+    "queryParameterValuesInAlertsAllowed": false
+  },
+  "operations": {
+    "runbookRequired": true,
+    "testAlertRequiredBeforeProduction": true,
+    "quarterlyReviewRequired": true,
+    "thresholdsMustBeTunedFromMeasuredBaseline": true,
+    "alertEvidenceRequired": true
+  }
+}
