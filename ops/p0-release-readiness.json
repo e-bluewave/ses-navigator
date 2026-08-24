@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "scope": "p0-release-readiness",
+  "productionReady": false,
+  "requireAllP0Verified": true,
+  "allowedStatuses": ["verified", "pending", "deferred"],
+  "items": [
+    { "id": "BA-001", "status": "pending", "evidence": "real environment separation verification required" },
+    { "id": "BA-002", "status": "pending", "evidence": "real region, binding, and latency verification required" },
+    { "id": "BA-003", "status": "pending", "evidence": "non-Production account lifecycle drill required" },
+    { "id": "BA-004", "status": "verified", "evidence": "integrated Data API security suite 45/45 PASS and cleanup complete" },
+    { "id": "BA-005", "status": "pending", "evidence": "external secret inventory and rotation drill required" },
+    { "id": "BA-006", "status": "pending", "evidence": "external destination and Staging logical backup proof required" },
+    { "id": "BA-007", "status": "pending", "evidence": "external Storage destination and initial Staging backup proof required" },
+    { "id": "BA-008", "status": "pending", "evidence": "separate-environment DB and Storage restore drill required" },
+    { "id": "BA-009", "status": "pending", "evidence": "measured RPO/RTO and owner approval required" },
+    { "id": "BA-010", "status": "pending", "evidence": "business and legal retention review required" },
+    { "id": "BA-011", "status": "pending", "evidence": "Staging erasure drill and business approval required" },
+    { "id": "BA-012", "status": "deferred", "evidence": "self-managed malware scanning engine selection and Staging validation required" },
+    { "id": "BA-013", "status": "pending", "evidence": "real monitoring destinations, alerts, and Staging fault drills required" },
+    { "id": "BA-014", "status": "deferred", "evidence": "Production workload scale and formal performance thresholds not yet fixed" },
+    { "id": "BA-015", "status": "pending", "evidence": "Staging migration dry run, rerun, duplicate, and rollback validation required" },
+    { "id": "BA-016", "status": "pending", "evidence": "invoice templates, transaction types, and Staging finance validation required" },
+    { "id": "BA-017", "status": "pending", "evidence": "queue and worker implementation plus Staging failure-mode validation required" },
+    { "id": "BA-018", "status": "verified", "evidence": "integrated Data API permission regression verified in real environment" },
+    { "id": "BA-019", "status": "pending", "evidence": "Migration 159 real-environment application and regression verification required" },
+    { "id": "BA-020", "status": "verified", "evidence": "Dashboard exposed schemas aligned and integrated real-environment verification passed" }
+  ]
+}
