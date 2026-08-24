@@ -63,7 +63,10 @@ export function validateDatabaseBackupEvidence(document) {
   if (!allowedEnvironments.has(document.environment)) {
     findings.push('environment-must-be-staging-or-production');
   }
-  if (!Number.isInteger(document.postgresMajorVersion) || document.postgresMajorVersion < 1) {
+  if (
+    !Number.isInteger(document.postgresMajorVersion) ||
+    document.postgresMajorVersion < 1
+  ) {
     findings.push('postgres-major-version-must-be-positive-integer');
   }
 
@@ -100,7 +103,10 @@ export function validateDatabaseBackupEvidence(document) {
   if (document.secretExposureReview !== 'PASS') {
     findings.push('secret-exposure-review-must-pass');
   }
-  if (!Number.isInteger(document.retentionDays) || document.retentionDays < 35) {
+  if (
+    !Number.isInteger(document.retentionDays) ||
+    document.retentionDays < 35
+  ) {
     findings.push('retention-days-must-be-at-least-35');
   }
   if (
