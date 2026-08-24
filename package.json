@@ -26,6 +26,8 @@
     "security:data-api-routing:check": "node --test scripts/check-data-api-schema-routing.test.mjs",
     "security:data-api-runtime": "node scripts/data-api-runtime-boundary-regression.mjs",
     "security:data-api-runtime:check": "node --test scripts/data-api-runtime-boundary-regression.test.mjs",
+    "security:data-api-sensitive": "node scripts/check-sensitive-data-api-surface.mjs",
+    "security:data-api-sensitive:check": "node --test scripts/check-sensitive-data-api-surface.test.mjs",
     "security:data-api:all": "node scripts/data-api-security-suite.mjs",
     "security:data-api:all:check": "node --test scripts/data-api-security-suite.test.mjs",
     "security:client-secrets": "node scripts/check-client-secret-boundary.mjs",
