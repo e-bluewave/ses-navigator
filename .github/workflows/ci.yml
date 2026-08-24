@@ -47,6 +47,7 @@ jobs:
       - run: pnpm security:db-backup:check
       - run: pnpm security:db-connectivity
       - run: pnpm security:db-connectivity:check
+      - run: pnpm security:region-connectivity-evidence:check
       - run: pnpm security:env-separation
       - run: pnpm security:env-separation:check
       - run: pnpm security:env-separation-evidence:check
