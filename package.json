@@ -40,6 +40,8 @@
     "security:env-separation:check": "node --test scripts/check-environment-separation.test.mjs",
     "security:restore-drill": "node scripts/check-restore-drill-policy.mjs",
     "security:restore-drill:check": "node --test scripts/check-restore-drill-policy.test.mjs",
+    "security:rpo-rto": "node scripts/check-rpo-rto-policy.mjs",
+    "security:rpo-rto:check": "node --test scripts/check-rpo-rto-policy.test.mjs",
     "security:secret-inventory": "node scripts/check-secret-inventory.mjs",
     "security:secret-inventory:check": "node --test scripts/check-secret-inventory.test.mjs",
     "security:service-rpc": "node scripts/service-role-rpc-security-regression.mjs",
