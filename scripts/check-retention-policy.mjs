@@ -62,7 +62,8 @@ export function validateRetentionPolicy(policy) {
 
   const byId = new Map(categories.map((category) => [category?.id, category]));
   for (const id of REQUIRED_CATEGORIES) {
-    if (!byId.has(id)) failures.push(`required retention category missing: ${id}`);
+    if (!byId.has(id))
+      failures.push(`required retention category missing: ${id}`);
   }
 
   const expected = {
@@ -83,8 +84,13 @@ export function validateRetentionPolicy(policy) {
   }
 
   for (const category of categories) {
-    if (typeof category?.trigger !== 'string' || category.trigger.length === 0) {
-      failures.push(`retention trigger is required: ${category?.id ?? 'unknown'}`);
+    if (
+      typeof category?.trigger !== 'string' ||
+      category.trigger.length === 0
+    ) {
+      failures.push(
+        `retention trigger is required: ${category?.id ?? 'unknown'}`,
+      );
     }
     if (
       typeof category?.disposition !== 'string' ||
@@ -93,7 +99,9 @@ export function validateRetentionPolicy(policy) {
       failures.push(`disposition is required: ${category?.id ?? 'unknown'}`);
     }
     if (typeof category?.basis !== 'string' || category.basis.length === 0) {
-      failures.push(`retention basis is required: ${category?.id ?? 'unknown'}`);
+      failures.push(
+        `retention basis is required: ${category?.id ?? 'unknown'}`,
+      );
     }
   }
 
@@ -127,7 +135,9 @@ export async function runRetentionPolicyCheck({
   const result = validateRetentionPolicy(JSON.parse(policyText));
   log(JSON.stringify(result, null, 2));
   if (result.failures.length > 0) {
-    throw new Error(`Retention policy check failed (${result.failures.length})`);
+    throw new Error(
+      `Retention policy check failed (${result.failures.length})`,
+    );
   }
   return result;
 }
