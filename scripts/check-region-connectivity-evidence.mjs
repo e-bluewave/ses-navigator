@@ -22,11 +22,7 @@ const requiredFields = [
   'secretFreeEvidence',
 ];
 
-const allowedFields = new Set([
-  ...requiredFields,
-  'sampleCount',
-  'notes',
-]);
+const allowedFields = new Set([...requiredFields, 'sampleCount', 'notes']);
 
 const runtimeModes = new Set(['data-api', 'transaction-pooler']);
 const adminModes = new Set(['direct', 'session-pooler']);
@@ -184,12 +180,14 @@ function isBlank(value) {
 }
 
 if (isMainModule(import.meta.url)) {
-  runRegionConnectivityEvidenceCheck({ path: process.argv[2] }).catch((error) => {
-    console.error(
-      error instanceof Error
-        ? error.message
-        : 'Region connectivity evidence check failed',
-    );
-    process.exitCode = 1;
-  });
+  runRegionConnectivityEvidenceCheck({ path: process.argv[2] }).catch(
+    (error) => {
+      console.error(
+        error instanceof Error
+          ? error.message
+          : 'Region connectivity evidence check failed',
+      );
+      process.exitCode = 1;
+    },
+  );
 }
