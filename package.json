@@ -14,7 +14,7 @@
     "contract:check": "node scripts/check-openapi.mjs",
     "dev": "pnpm -r --parallel dev",
     "format": "prettier --write \"apps/**/*.{ts,tsx,json,html,css}\" \"scripts/**/*.mjs\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",
-    "format:check": "prettier --write scripts/check-storage-backup-evidence.mjs scripts/check-storage-backup-evidence.test.mjs && git diff -- scripts/check-storage-backup-evidence.mjs scripts/check-storage-backup-evidence.test.mjs && false",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,html,css}\" \"scripts/**/*.mjs\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",
     "lint": "eslint .",
     "release:readiness": "node scripts/check-p0-release-readiness.mjs",
     "release:readiness:check": "node --test scripts/check-p0-release-readiness.test.mjs",
