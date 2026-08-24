@@ -83,7 +83,9 @@ export function validateLongRunningProcessingPolicy(policy) {
   }
 
   if (monitoring.trackedBy !== 'BA-013') {
-    failures.push('long-running processing monitoring must be tracked by BA-013');
+    failures.push(
+      'long-running processing monitoring must be tracked by BA-013',
+    );
   }
   for (const [key, message] of [
     ['queueDepthRequired', 'queue depth monitoring is required'],
@@ -111,7 +113,10 @@ export function validateLongRunningProcessingPolicy(policy) {
       'productionIdentifiersInRepositoryAllowed',
       'Production identifiers in repository must be prohibited',
     ],
-    ['personalDataInCiLogsAllowed', 'personal data in CI logs must be prohibited'],
+    [
+      'personalDataInCiLogsAllowed',
+      'personal data in CI logs must be prohibited',
+    ],
   ]) {
     if (security[key] !== false) failures.push(message);
   }
