@@ -46,6 +46,8 @@ jobs:
       - run: pnpm security:env-separation:check
       - run: pnpm security:file-malware-scanning
       - run: pnpm security:file-malware-scanning:check
+      - run: pnpm security:monitoring
+      - run: pnpm security:monitoring:check
       - run: pnpm security:personal-data-erasure
       - run: pnpm security:personal-data-erasure:check
       - run: pnpm security:restore-drill
