@@ -64,7 +64,9 @@ test('rejects unsafe rerun and Production bulk edit behavior', () => {
       rerunMustBeIdempotent: false,
     },
   });
-  assert.ok(result.failures.includes('manual Production bulk edit must be prohibited'));
+  assert.ok(
+    result.failures.includes('manual Production bulk edit must be prohibited'),
+  );
   assert.ok(result.failures.includes('migration rerun must be idempotent'));
 });
 
@@ -77,8 +79,12 @@ test('rejects weak duplicate matching', () => {
       manualReviewPathRequiredForAmbiguousMatches: false,
     },
   });
-  assert.ok(result.failures.includes('name-only automatic merge must be prohibited'));
-  assert.ok(result.failures.includes('ambiguous matches require a manual review path'));
+  assert.ok(
+    result.failures.includes('name-only automatic merge must be prohibited'),
+  );
+  assert.ok(
+    result.failures.includes('ambiguous matches require a manual review path'),
+  );
 });
 
 test('rejects unsafe rollback controls', () => {
@@ -90,7 +96,9 @@ test('rejects unsafe rollback controls', () => {
       irreversibleSideEffectsAllowedInsideMigration: true,
     },
   });
-  assert.ok(result.failures.includes('full-table delete rollback must be prohibited'));
+  assert.ok(
+    result.failures.includes('full-table delete rollback must be prohibited'),
+  );
   assert.ok(
     result.failures.includes(
       'irreversible side effects inside migration must be prohibited',
@@ -107,8 +115,14 @@ test('requires zero unexpected creates and tenant violations', () => {
       tenantBoundaryViolationTolerance: 1,
     },
   });
-  assert.ok(result.failures.includes('rerun unexpected create tolerance must be zero'));
-  assert.ok(result.failures.includes('tenant boundary violation tolerance must be zero'));
+  assert.ok(
+    result.failures.includes('rerun unexpected create tolerance must be zero'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'tenant boundary violation tolerance must be zero',
+    ),
+  );
 });
 
 test('keeps source-specific details empty while deferred', () => {
