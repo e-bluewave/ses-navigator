@@ -74,7 +74,9 @@ test('requires non-negative measured RTO and recovery point age', () => {
   evidence.rtoMinutesMeasured = -1;
   evidence.recoveryPointAgeMinutesMeasured = Number.NaN;
   const result = validateRestoreDrillEvidence(evidence);
-  assert.ok(result.findings.includes('rtoMinutesMeasured-must-be-non-negative-number'));
+  assert.ok(
+    result.findings.includes('rtoMinutesMeasured-must-be-non-negative-number'),
+  );
   assert.ok(
     result.findings.includes(
       'recoveryPointAgeMinutesMeasured-must-be-non-negative-number',
@@ -96,7 +98,9 @@ test('rejects timestamps out of order, unknown fields, and sensitive values', ()
   evidence.notes = 'postgresql://example.invalid';
   evidence.projectRef = 'must-not-be-recorded';
   const result = validateRestoreDrillEvidence(evidence);
-  assert.ok(result.findings.includes('completed-at-must-not-precede-started-at'));
+  assert.ok(
+    result.findings.includes('completed-at-must-not-precede-started-at'),
+  );
   assert.ok(result.findings.includes('sensitive-restore-value:notes'));
   assert.ok(result.findings.includes('unknown-field:projectRef'));
 });
