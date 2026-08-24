@@ -12,6 +12,7 @@ const expectedDistinctBindings = [
   'staging:production:vercel',
 ];
 
+// prettier-ignore
 export function validateEnvironmentSeparation(input) {
   const { policy, supabaseConfig, gitignore, env = {} } = input;
   const failures = [];
@@ -104,6 +105,7 @@ export function validateEnvironmentSeparation(input) {
   };
 }
 
+// prettier-ignore
 export async function runEnvironmentSeparationCheck(options = {}) {
   const {
     policyPath = 'ops/environment-separation-policy.json',
@@ -135,6 +137,7 @@ export async function runEnvironmentSeparationCheck(options = {}) {
   return result;
 }
 
+// prettier-ignore
 if (isMainModule(import.meta.url)) {
   runEnvironmentSeparationCheck().catch((error) => {
     let message = 'Environment separation check failed';
