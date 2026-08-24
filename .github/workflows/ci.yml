@@ -38,6 +38,8 @@ jobs:
       - run: pnpm security:data-api-sensitive:check
       - run: pnpm security:data-api:all:check
       - run: pnpm security:client-secrets:check
+      - run: pnpm security:env-separation
+      - run: pnpm security:env-separation:check
       - run: pnpm security:secret-inventory:check
       - run: pnpm security:service-rpc:check
       - run: pnpm security:supabase-config
