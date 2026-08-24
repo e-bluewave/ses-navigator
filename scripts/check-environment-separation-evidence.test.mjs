@@ -38,10 +38,14 @@ test('rejects shared bindings and secrets', () => {
   evidence.secretsSeparated = false;
   const result = validateEnvironmentSeparationEvidence(evidence);
   assert.ok(
-    result.findings.includes('stagingAndProductionSupabaseDifferent-must-be-true'),
+    result.findings.includes(
+      'stagingAndProductionSupabaseDifferent-must-be-true',
+    ),
   );
   assert.ok(
-    result.findings.includes('stagingAndProductionVercelDifferent-must-be-true'),
+    result.findings.includes(
+      'stagingAndProductionVercelDifferent-must-be-true',
+    ),
   );
   assert.ok(result.findings.includes('secretsSeparated-must-be-true'));
 });
@@ -51,7 +55,9 @@ test('rejects Production data use outside Production', () => {
   evidence.productionDataUsedOutsideProduction = true;
   const result = validateEnvironmentSeparationEvidence(evidence);
   assert.ok(
-    result.findings.includes('production-data-must-not-be-used-outside-production'),
+    result.findings.includes(
+      'production-data-must-not-be-used-outside-production',
+    ),
   );
 });
 
