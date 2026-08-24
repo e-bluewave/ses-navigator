@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "scope": "pre-production-load-testing",
+  "workloadTargets": {
+    "status": "deferred",
+    "concurrentUsers": null,
+    "projectsPerTenant": null,
+    "engineersPerTenant": null,
+    "companiesPerTenant": null,
+    "applicationsPerTenant": null,
+    "productionAcceptanceAllowedWithoutApprovedTargets": false
+  },
+  "data": {
+    "productionPersonalDataAllowed": false,
+    "anonymizedOrSyntheticOnly": true,
+    "productionSecretsAllowed": false,
+    "productionTargetAllowed": false
+  },
+  "requiredScenarios": [
+    "project-list",
+    "project-search",
+    "engineer-list",
+    "engineer-search",
+    "company-list",
+    "rls-tenant-isolation",
+    "bulk-write",
+    "month-end-finance-like-processing"
+  ],
+  "measurements": {
+    "throughputRequired": true,
+    "p50LatencyRequired": true,
+    "p95LatencyRequired": true,
+    "p99LatencyRequired": true,
+    "errorRateRequired": true,
+    "databaseConnectionUsageRequired": true,
+    "slowSqlRequired": true,
+    "lockWaitRequired": true,
+    "jobBacklogRequired": true
+  },
+  "execution": {
+    "smokeRequired": true,
+    "baselineRequiredAfterTargetsApproved": true,
+    "peakRequiredAfterTargetsApproved": true,
+    "stressIsExploratory": true,
+    "recoveryRequired": true,
+    "rlsBoundaryViolationTolerance": 0
+  },
+  "coordination": {
+    "monitoringTrackedBy": "BA-013",
+    "measuredBaselineRequiredForMonitoringThresholds": true,
+    "approvedWorkloadTargetsRequiredBeforeProductionGoLive": true
+  }
+}
