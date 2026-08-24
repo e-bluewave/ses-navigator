@@ -52,7 +52,9 @@ test('rejects transaction pooler and unsafe destinations', () => {
   evidence.githubActionsArtifactLongTermDestination = true;
   const result = validateDatabaseBackupEvidence(evidence);
   assert.ok(
-    result.findings.includes('connection-mode-must-be-direct-or-session-pooler'),
+    result.findings.includes(
+      'connection-mode-must-be-direct-or-session-pooler',
+    ),
   );
   assert.ok(
     result.findings.includes('sameSupabaseProjectDestination-must-be-false'),
@@ -86,9 +88,7 @@ test('rejects insufficient retention frequency and invalid sizes', () => {
   assert.ok(
     result.findings.includes('frequency-hours-must-be-between-1-and-24'),
   );
-  assert.ok(
-    result.findings.includes('dataSizeBytes-must-be-positive-integer'),
-  );
+  assert.ok(result.findings.includes('dataSizeBytes-must-be-positive-integer'));
 });
 
 test('rejects exposed credentials and sensitive values', () => {
