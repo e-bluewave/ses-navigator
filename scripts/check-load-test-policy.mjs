@@ -39,11 +39,15 @@ export function validateLoadTestPolicy(policy) {
   }
   for (const key of DEFERRED_TARGET_KEYS) {
     if (workload[key] !== null) {
-      failures.push(`${key} must remain null while workload targets are deferred`);
+      failures.push(
+        `${key} must remain null while workload targets are deferred`,
+      );
     }
   }
   if (workload.productionAcceptanceAllowedWithoutApprovedTargets !== false) {
-    failures.push('Production acceptance must be prohibited without approved workload targets');
+    failures.push(
+      'Production acceptance must be prohibited without approved workload targets',
+    );
   }
 
   if (data.productionPersonalDataAllowed !== false) {
@@ -60,7 +64,8 @@ export function validateLoadTestPolicy(policy) {
   }
 
   for (const scenario of REQUIRED_SCENARIOS) {
-    if (!scenarios.has(scenario)) failures.push(`required load test scenario missing: ${scenario}`);
+    if (!scenarios.has(scenario))
+      failures.push(`required load test scenario missing: ${scenario}`);
   }
 
   for (const key of [
@@ -74,7 +79,8 @@ export function validateLoadTestPolicy(policy) {
     'lockWaitRequired',
     'jobBacklogRequired',
   ]) {
-    if (measurements[key] !== true) failures.push(`required measurement missing: ${key}`);
+    if (measurements[key] !== true)
+      failures.push(`required measurement missing: ${key}`);
   }
 
   if (execution.smokeRequired !== true) failures.push('smoke test is required');
@@ -87,7 +93,8 @@ export function validateLoadTestPolicy(policy) {
   if (execution.stressIsExploratory !== true) {
     failures.push('stress test must remain exploratory');
   }
-  if (execution.recoveryRequired !== true) failures.push('recovery test is required');
+  if (execution.recoveryRequired !== true)
+    failures.push('recovery test is required');
   if (execution.rlsBoundaryViolationTolerance !== 0) {
     failures.push('RLS boundary violation tolerance must be zero');
   }
@@ -98,12 +105,19 @@ export function validateLoadTestPolicy(policy) {
   if (coordination.measuredBaselineRequiredForMonitoringThresholds !== true) {
     failures.push('measured baseline must feed monitoring thresholds');
   }
-  if (coordination.approvedWorkloadTargetsRequiredBeforeProductionGoLive !== true) {
-    failures.push('approved workload targets are required before Production go-live');
+  if (
+    coordination.approvedWorkloadTargetsRequiredBeforeProductionGoLive !== true
+  ) {
+    failures.push(
+      'approved workload targets are required before Production go-live',
+    );
   }
 
   return {
-    status: failures.length === 0 ? 'LOAD_TEST_POLICY_PASSED' : 'LOAD_TEST_POLICY_FAILED',
+    status:
+      failures.length === 0
+        ? 'LOAD_TEST_POLICY_PASSED'
+        : 'LOAD_TEST_POLICY_FAILED',
     failures,
   };
 }
@@ -116,14 +130,18 @@ export async function runLoadTestPolicyCheck({
   const result = validateLoadTestPolicy(policy);
   log(JSON.stringify(result, null, 2));
   if (result.failures.length > 0) {
-    throw new Error(`Load test policy check failed (${result.failures.length})`);
+    throw new Error(
+      `Load test policy check failed (${result.failures.length})`,
+    );
   }
   return result;
 }
 
 if (isMainModule(import.meta.url)) {
   runLoadTestPolicyCheck().catch((error) => {
-    console.error(error instanceof Error ? error.message : 'Load test policy check failed');
+    console.error(
+      error instanceof Error ? error.message : 'Load test policy check failed',
+    );
     process.exitCode = 1;
   });
 }
