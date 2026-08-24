@@ -43,6 +43,8 @@
     "security:db-connectivity:check": "node --test scripts/check-database-connectivity-policy.test.mjs",
     "security:env-separation": "node scripts/check-environment-separation.mjs",
     "security:env-separation:check": "node --test scripts/check-environment-separation.test.mjs",
+    "security:env-separation-evidence": "node scripts/check-environment-separation-evidence.mjs",
+    "security:env-separation-evidence:check": "node --test scripts/check-environment-separation-evidence.test.mjs",
     "security:file-malware-scanning": "node scripts/check-file-malware-scanning-policy.mjs",
     "security:file-malware-scanning:check": "node --test scripts/check-file-malware-scanning-policy.test.mjs",
     "security:finance": "node scripts/check-finance-policy.mjs",
