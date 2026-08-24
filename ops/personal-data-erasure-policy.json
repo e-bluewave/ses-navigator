@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "scope": "personal-data-erasure-and-anonymization",
+  "jurisdiction": "JP",
+  "retentionPolicyTrackedBy": "BA-010",
+  "purposeEndedDeletionDeadlineDays": 90,
+  "allowedDispositionModes": [
+    "hard-delete",
+    "irreversible-anonymization"
+  ],
+  "prohibitedAsDeletionSubstitutes": [
+    "masking-only",
+    "pseudonymization-only",
+    "soft-delete-only"
+  ],
+  "anonymization": {
+    "mustBeIrreversible": true,
+    "reidentificationKeyAllowed": false,
+    "directIdentifiersRemoved": true,
+    "linkableIdentifiersRemovedOrGeneralized": true,
+    "verificationRequired": true
+  },
+  "legalHold": {
+    "overridesDeletion": true,
+    "ownerRequired": true,
+    "reasonRequired": true,
+    "startedAtRequired": true,
+    "reviewAtRequired": true,
+    "indefiniteHoldWithoutReviewAllowed": false,
+    "holdDataAccessRestricted": true
+  },
+  "tenantTermination": {
+    "accessRevocationRequired": true,
+    "newWritesBlockedRequired": true,
+    "inventoryRequired": true,
+    "retentionClassificationRequired": true,
+    "purgeOrAnonymizeNonHeldDataWithinPurposeDeadline": true,
+    "storageObjectsIncluded": true,
+    "integrationCredentialsRevoked": true,
+    "webhooksAndTokensRevoked": true
+  },
+  "execution": {
+    "deletionRequestIdRequired": true,
+    "dryRunInventoryRequired": true,
+    "databaseDeletionRequired": true,
+    "storageDeletionRequired": true,
+    "searchOrDerivedDataDeletionRequired": true,
+    "backupTombstoneLedgerRequired": true,
+    "restoreReapplyDeletionRequired": true,
+    "deletionEvidenceRequired": true,
+    "evidenceMustExcludePersonalData": true
+  },
+  "governance": {
+    "privacyOwnerRequired": true,
+    "technicalOwnerRequired": true,
+    "annualReviewRequired": true,
+    "legalChangeReviewRequired": true,
+    "productionIdentifiersInRepositoryAllowed": false,
+    "personalDataInRepositoryAllowed": false
+  }
+}
