@@ -18,11 +18,7 @@ const requiredFields = [
   'secretFreeEvidence',
 ];
 
-const allowedFields = new Set([
-  ...requiredFields,
-  'migrationParity',
-  'notes',
-]);
+const allowedFields = new Set([...requiredFields, 'migrationParity', 'notes']);
 
 const sensitivePatterns = [
   /https?:\/\/[a-z0-9-]+\.supabase\.co/iu,
@@ -102,7 +98,8 @@ export async function runEnvironmentSeparationEvidenceCheck({
   path,
   log = console.log,
 } = {}) {
-  if (!path) throw new Error('Environment separation evidence path is required');
+  if (!path)
+    throw new Error('Environment separation evidence path is required');
   const document = JSON.parse(await readFile(path, 'utf8'));
   const result = validateEnvironmentSeparationEvidence(document);
   log(JSON.stringify(result, null, 2));
