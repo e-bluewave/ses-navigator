@@ -49,6 +49,7 @@ jobs:
       - run: pnpm security:db-connectivity:check
       - run: pnpm security:env-separation
       - run: pnpm security:env-separation:check
+      - run: pnpm security:env-separation-evidence:check
       - run: pnpm security:file-malware-scanning
       - run: pnpm security:file-malware-scanning:check
       - run: pnpm security:finance
