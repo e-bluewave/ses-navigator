@@ -54,14 +54,28 @@ test('rejects transaction pooler and repository storage', () => {
     connection: { ...policy.connection, transactionPoolerAllowed: true },
     destination: { ...policy.destination, repositoryAllowed: true },
   });
-  assert.ok(result.failures.includes('transaction pooler must not be allowed for logical backup'));
-  assert.ok(result.failures.includes('repository backup storage must be prohibited'));
+  assert.ok(
+    result.failures.includes(
+      'transaction pooler must not be allowed for logical backup',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('repository backup storage must be prohibited'),
+  );
 });
 
 test('rejects a backup interval longer than 24 hours and short retention', () => {
-  const result = validateDatabaseBackupPolicy({ ...policy, frequencyHours: 48, retentionDays: 7 });
-  assert.ok(result.failures.includes('backup frequency must be between 1 and 24 hours'));
-  assert.ok(result.failures.includes('backup retention must be at least 35 days'));
+  const result = validateDatabaseBackupPolicy({
+    ...policy,
+    frequencyHours: 48,
+    retentionDays: 7,
+  });
+  assert.ok(
+    result.failures.includes('backup frequency must be between 1 and 24 hours'),
+  );
+  assert.ok(
+    result.failures.includes('backup retention must be at least 35 days'),
+  );
 });
 
 test('requires roles, schema, data COPY mode and Supabase vector exclusions', () => {
@@ -75,10 +89,22 @@ test('requires roles, schema, data COPY mode and Supabase vector exclusions', ()
       excludedDataObjects: [],
     },
   });
-  assert.ok(result.failures.includes('roles, schema and data backup artifacts are required'));
+  assert.ok(
+    result.failures.includes(
+      'roles, schema and data backup artifacts are required',
+    ),
+  );
   assert.ok(result.failures.includes('data backup must use COPY mode'));
-  assert.ok(result.failures.includes('required data exclusion missing: storage.buckets_vectors'));
-  assert.ok(result.failures.includes('required data exclusion missing: storage.vector_indexes'));
+  assert.ok(
+    result.failures.includes(
+      'required data exclusion missing: storage.buckets_vectors',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'required data exclusion missing: storage.vector_indexes',
+    ),
+  );
 });
 
 test('requires encryption, secret handling, manifest, checksum and BA-008 restore tracking', () => {
@@ -98,11 +124,25 @@ test('requires encryption, secret handling, manifest, checksum and BA-008 restor
   });
   assert.equal(result.status, 'DATABASE_BACKUP_POLICY_FAILED');
   assert.ok(result.failures.includes('backup transfer must require TLS'));
-  assert.ok(result.failures.includes('backup destination must require encryption at rest'));
-  assert.ok(result.failures.includes('database URL must not be allowed in logs'));
-  assert.ok(result.failures.includes('database password must not be allowed in repository'));
-  assert.ok(result.failures.includes('backup secret-content review must be required'));
+  assert.ok(
+    result.failures.includes(
+      'backup destination must require encryption at rest',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('database URL must not be allowed in logs'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'database password must not be allowed in repository',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('backup secret-content review must be required'),
+  );
   assert.ok(result.failures.includes('backup manifest is required'));
   assert.ok(result.failures.includes('backup checksum is required'));
-  assert.ok(result.failures.includes('restore drill must be tracked by BA-008'));
+  assert.ok(
+    result.failures.includes('restore drill must be tracked by BA-008'),
+  );
 });
