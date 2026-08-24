@@ -55,7 +55,11 @@ test('rejects cross-region runtime bindings', () => {
       SESN_PRODUCTION_DATABASE_MODE: 'data-api',
     },
   });
-  assert.ok(result.failures.includes('Staging and Production region groups must match'));
+  assert.ok(
+    result.failures.includes(
+      'Staging and Production region groups must match',
+    ),
+  );
 });
 
 test('rejects transaction pooler for migrations', () => {
@@ -68,7 +72,11 @@ test('rejects transaction pooler for migrations', () => {
       },
     },
   });
-  assert.ok(result.failures.includes('transaction pooler must not be used for migrations'));
+  assert.ok(
+    result.failures.includes(
+      'transaction pooler must not be used for migrations',
+    ),
+  );
 });
 
 test('rejects invalid or incomplete runtime configuration', () => {
@@ -81,6 +89,10 @@ test('rejects invalid or incomplete runtime configuration', () => {
     },
   });
   assert.equal(result.status, 'DATABASE_CONNECTIVITY_FAILED');
-  assert.ok(result.failures.includes('all runtime region and database mode values must be supplied together'));
+  assert.ok(
+    result.failures.includes(
+      'all runtime region and database mode values must be supplied together',
+    ),
+  );
   assert.ok(result.failures.includes('invalid Staging database mode'));
 });
