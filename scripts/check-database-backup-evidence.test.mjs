@@ -86,7 +86,9 @@ test('rejects insufficient retention frequency and invalid sizes', () => {
   assert.ok(
     result.findings.includes('frequency-hours-must-be-between-1-and-24'),
   );
-  assert.ok(result.findings.includes('dataSizeBytes-must-be-positive-integer'));
+  assert.ok(
+    result.findings.includes('dataSizeBytes-must-be-positive-integer'),
+  );
 });
 
 test('rejects exposed credentials and sensitive values', () => {
@@ -105,6 +107,8 @@ test('rejects invalid timestamp environment and missing field', () => {
   delete evidence.evidenceId;
   const result = validateDatabaseBackupEvidence(evidence);
   assert.ok(result.findings.includes('invalid-timestamp:completedAt'));
-  assert.ok(result.findings.includes('environment-must-be-staging-or-production'));
+  assert.ok(
+    result.findings.includes('environment-must-be-staging-or-production'),
+  );
   assert.ok(result.findings.includes('required-field-missing:evidenceId'));
 });
