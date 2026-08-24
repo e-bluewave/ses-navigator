@@ -15,9 +15,13 @@ export function validateFinancePolicy(policy) {
     failures.push('scope must be invoice-finance-business-rules');
   }
 
-  if (invoice.supported !== true) failures.push('qualified invoice support is required');
+  if (invoice.supported !== true) {
+    failures.push('qualified invoice support is required');
+  }
   if (invoice.registrationNumberStoredInRepository !== false) {
-    failures.push('qualified invoice registration number must not be stored in repository');
+    failures.push(
+      'qualified invoice registration number must not be stored in repository',
+    );
   }
   if (invoice.taxRoundingFrequency !== 'once-per-invoice-per-tax-rate') {
     failures.push('tax rounding must occur once per invoice per tax rate');
@@ -26,14 +30,24 @@ export function validateFinancePolicy(policy) {
     failures.push('line-item tax rounding must be prohibited');
   }
 
-  if (!Array.isArray(tax.supportedRatesPercent) || !tax.supportedRatesPercent.includes(10)) {
+  if (
+    !Array.isArray(tax.supportedRatesPercent) ||
+    !tax.supportedRatesPercent.includes(10)
+  ) {
     failures.push('10 percent tax rate support is required');
   }
-  if (!Array.isArray(tax.supportedRatesPercent) || !tax.supportedRatesPercent.includes(8)) {
+  if (
+    !Array.isArray(tax.supportedRatesPercent) ||
+    !tax.supportedRatesPercent.includes(8)
+  ) {
     failures.push('8 percent tax rate support is required');
   }
-  if (tax.defaultRatePercent !== 10) failures.push('default tax rate must be 10 percent');
-  if (tax.roundingMethod !== 'floor') failures.push('tax rounding method must be floor');
+  if (tax.defaultRatePercent !== 10) {
+    failures.push('default tax rate must be 10 percent');
+  }
+  if (tax.roundingMethod !== 'floor') {
+    failures.push('tax rounding method must be floor');
+  }
   if (tax.roundingUnit !== 'invoice-tax-rate-total') {
     failures.push('tax rounding unit must be invoice-tax-rate-total');
   }
@@ -42,7 +56,9 @@ export function validateFinancePolicy(policy) {
     failures.push('withholding default must be not applicable');
   }
   if (withholding.counterpartyOrInvoiceOverrideRequired !== true) {
-    failures.push('withholding override must be supported per counterparty or invoice');
+    failures.push(
+      'withholding override must be supported per counterparty or invoice',
+    );
   }
   if (withholding.automaticIndustryNameOnlyDecisionAllowed !== false) {
     failures.push('industry-name-only withholding decision must be prohibited');
@@ -57,7 +73,10 @@ export function validateFinancePolicy(policy) {
   for (const [key, message] of [
     ['revisionHistoryRequired', 'invoice revision history is required'],
     ['originalInvoiceLinkRequired', 'original invoice link is required'],
-    ['reasonActorTimestampRequired', 'correction reason actor timestamp is required'],
+    [
+      'reasonActorTimestampRequired',
+      'correction reason actor timestamp is required',
+    ],
   ]) {
     if (correction[key] !== true) failures.push(message);
   }
@@ -72,14 +91,21 @@ export function validateFinancePolicy(policy) {
     failures.push('configurable accounting mapping is required');
   }
   if (mapping.retroactiveChangeToConfirmedInvoicesAllowed !== false) {
-    failures.push('accounting mapping must not retroactively change confirmed invoices');
+    failures.push(
+      'accounting mapping must not retroactively change confirmed invoices',
+    );
   }
 
-  if (production.businessReviewRequired !== true) failures.push('Production business review is required');
-  if (production.stagingValidationRequired !== true) failures.push('Staging validation is required');
+  if (production.businessReviewRequired !== true) {
+    failures.push('Production business review is required');
+  }
+  if (production.stagingValidationRequired !== true) {
+    failures.push('Staging validation is required');
+  }
 
   return {
-    status: failures.length === 0 ? 'FINANCE_POLICY_PASSED' : 'FINANCE_POLICY_FAILED',
+    status:
+      failures.length === 0 ? 'FINANCE_POLICY_PASSED' : 'FINANCE_POLICY_FAILED',
     failures,
   };
 }
@@ -99,7 +125,9 @@ export async function runFinancePolicyCheck({
 
 if (isMainModule(import.meta.url)) {
   runFinancePolicyCheck().catch((error) => {
-    console.error(error instanceof Error ? error.message : 'Finance policy check failed');
+    console.error(
+      error instanceof Error ? error.message : 'Finance policy check failed',
+    );
     process.exitCode = 1;
   });
 }
