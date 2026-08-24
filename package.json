@@ -40,6 +40,8 @@
     "security:env-separation:check": "node --test scripts/check-environment-separation.test.mjs",
     "security:file-malware-scanning": "node scripts/check-file-malware-scanning-policy.mjs",
     "security:file-malware-scanning:check": "node --test scripts/check-file-malware-scanning-policy.test.mjs",
+    "security:monitoring": "node scripts/check-monitoring-policy.mjs",
+    "security:monitoring:check": "node --test scripts/check-monitoring-policy.test.mjs",
     "security:personal-data-erasure": "node scripts/check-personal-data-erasure-policy.mjs",
     "security:personal-data-erasure:check": "node --test scripts/check-personal-data-erasure-policy.test.mjs",
     "security:restore-drill": "node scripts/check-restore-drill-policy.mjs",
