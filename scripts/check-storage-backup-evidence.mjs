@@ -125,7 +125,10 @@ export function validateStorageBackupEvidence(document) {
   if (!allowedIntegrity.has(document.integrityVerification)) {
     findings.push('integrity-verification-method-invalid');
   }
-  if (!Number.isInteger(document.retentionDays) || document.retentionDays < 35) {
+  if (
+    !Number.isInteger(document.retentionDays) ||
+    document.retentionDays < 35
+  ) {
     findings.push('retention-days-must-be-at-least-35');
   }
   if (
