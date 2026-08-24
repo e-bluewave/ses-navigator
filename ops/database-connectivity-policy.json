@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "regionPolicy": {
+    "databaseFirst": true,
+    "functionMustBeNearDatabase": true,
+    "crossRegionProductionTrafficRequiresException": true,
+    "stagingMustMatchProductionRegionClass": true
+  },
+  "connections": {
+    "browser": "data-api",
+    "serverRuntimeDefault": "data-api",
+    "serverRuntimeDirectSql": "transaction-pooler",
+    "serverRuntimeDirectSqlPort": 6543,
+    "preparedStatementsAllowedOnTransactionPooler": false,
+    "migration": "direct-or-session-pooler",
+    "backupRestore": "direct-or-session-pooler",
+    "transactionPoolerAllowedForMigration": false,
+    "transactionPoolerAllowedForBackupRestore": false
+  },
+  "runtimeValidation": {
+    "regionGroupVariables": [
+      "SESN_STAGING_REGION_GROUP",
+      "SESN_PRODUCTION_REGION_GROUP"
+    ],
+    "databaseModeVariables": [
+      "SESN_STAGING_DATABASE_MODE",
+      "SESN_PRODUCTION_DATABASE_MODE"
+    ],
+    "allowedDatabaseModes": ["data-api", "transaction-pooler"]
+  }
+}
