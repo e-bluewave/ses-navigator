@@ -2,12 +2,13 @@
   "version": 1,
   "scope": "pre-production-load-testing",
   "workloadTargets": {
-    "status": "decision-required",
+    "status": "deferred",
     "concurrentUsers": null,
     "projectsPerTenant": null,
     "engineersPerTenant": null,
     "companiesPerTenant": null,
-    "applicationsPerTenant": null
+    "applicationsPerTenant": null,
+    "productionAcceptanceAllowedWithoutApprovedTargets": false
   },
   "data": {
     "productionPersonalDataAllowed": false,
@@ -26,6 +27,7 @@
     "month-end-finance-like-processing"
   ],
   "measurements": {
+    "throughputRequired": true,
     "p50LatencyRequired": true,
     "p95LatencyRequired": true,
     "p99LatencyRequired": true,
@@ -35,8 +37,17 @@
     "lockWaitRequired": true,
     "jobBacklogRequired": true
   },
+  "execution": {
+    "smokeRequired": true,
+    "baselineRequiredAfterTargetsApproved": true,
+    "peakRequiredAfterTargetsApproved": true,
+    "stressIsExploratory": true,
+    "recoveryRequired": true,
+    "rlsBoundaryViolationTolerance": 0
+  },
   "coordination": {
     "monitoringTrackedBy": "BA-013",
-    "measuredBaselineRequiredForMonitoringThresholds": true
+    "measuredBaselineRequiredForMonitoringThresholds": true,
+    "approvedWorkloadTargetsRequiredBeforeProductionGoLive": true
   }
 }
