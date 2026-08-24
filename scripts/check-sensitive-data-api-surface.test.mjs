@@ -63,7 +63,7 @@ test('rejects a missing reviewed limited view', () => {
   const missing = limitedSensitiveRelations['app.project_sources'];
   const source = reviewedSql().replace(
     new RegExp(
-      `create or replace view ${missing.replaceAll('.', '\\.') }[^;]+;`,
+      `create or replace view ${missing.replaceAll('.', '\\.')}[^;]+;`,
       'u',
     ),
     '',
