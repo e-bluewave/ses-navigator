@@ -71,7 +71,9 @@ test('rejects long or CPU-intensive work on Edge', () => {
       cpuIntensiveAllowed: true,
     },
   });
-  assert.ok(result.failures.includes('Edge expected maximum must be 30 seconds'));
+  assert.ok(
+    result.failures.includes('Edge expected maximum must be 30 seconds'),
+  );
   assert.ok(
     result.failures.includes('CPU intensive work must be prohibited on Edge'),
   );
