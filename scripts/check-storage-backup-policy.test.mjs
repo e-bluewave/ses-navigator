@@ -60,7 +60,9 @@ test('rejects incomplete bucket coverage and loss of object keys', () => {
     },
   });
   assert.ok(result.failures.includes('all file buckets must be included'));
-  assert.ok(result.failures.includes('bucket and object key must be preserved'));
+  assert.ok(
+    result.failures.includes('bucket and object key must be preserved'),
+  );
   assert.ok(result.failures.includes('source versioning must not be assumed'));
 });
 
@@ -80,15 +82,27 @@ test('rejects weak destination retention and delete propagation', () => {
       deletePropagationAllowed: true,
     },
   });
-  assert.ok(result.failures.includes('backup interval must be between 1 and 24 hours'));
-  assert.ok(result.failures.includes('backup retention must be at least 35 days'));
   assert.ok(
-    result.failures.includes('same Supabase project destination must be prohibited'),
+    result.failures.includes('backup interval must be between 1 and 24 hours'),
   );
-  assert.ok(result.failures.includes('repository backup storage must be prohibited'));
+  assert.ok(
+    result.failures.includes('backup retention must be at least 35 days'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'same Supabase project destination must be prohibited',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('repository backup storage must be prohibited'),
+  );
   assert.ok(result.failures.includes('destination versioning is required'));
-  assert.ok(result.failures.includes('destination encryption at rest is required'));
-  assert.ok(result.failures.includes('source deletes must not automatically propagate'));
+  assert.ok(
+    result.failures.includes('destination encryption at rest is required'),
+  );
+  assert.ok(
+    result.failures.includes('source deletes must not automatically propagate'),
+  );
 });
 
 test('requires integrity, DB coordination and safe credentials', () => {
@@ -114,14 +128,34 @@ test('requires integrity, DB coordination and safe credentials', () => {
   });
   assert.ok(result.failures.includes('TLS transfer is required'));
   assert.ok(result.failures.includes('object inventory is required'));
-  assert.ok(result.failures.includes('object integrity verification is required'));
   assert.ok(
-    result.failures.includes('database metadata backup coordination is required'),
+    result.failures.includes('object integrity verification is required'),
   );
-  assert.ok(result.failures.includes('database backup must be tracked by BA-006'));
-  assert.ok(result.failures.includes('restore drill must be tracked by BA-008'));
-  assert.ok(result.failures.includes('dedicated backup credential is required'));
-  assert.ok(result.failures.includes('backup credential must not be allowed in repository'));
-  assert.ok(result.failures.includes('backup credential must not be allowed in logs'));
-  assert.ok(result.failures.includes('storage object data must not be allowed in repository'));
+  assert.ok(
+    result.failures.includes(
+      'database metadata backup coordination is required',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('database backup must be tracked by BA-006'),
+  );
+  assert.ok(
+    result.failures.includes('restore drill must be tracked by BA-008'),
+  );
+  assert.ok(
+    result.failures.includes('dedicated backup credential is required'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'backup credential must not be allowed in repository',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('backup credential must not be allowed in logs'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'storage object data must not be allowed in repository',
+    ),
+  );
 });
