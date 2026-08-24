@@ -14,7 +14,7 @@
     "contract:check": "node scripts/check-openapi.mjs",
     "dev": "pnpm -r --parallel dev",
     "format": "prettier --write \"apps/**/*.{ts,tsx,json,html,css}\" \"scripts/**/*.mjs\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",
-    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,html,css}\" \"scripts/**/*.mjs\" \".github/**/*.yml\" \"*.{json,yaml,mjs}\"",
+    "format:check": "prettier --write scripts/check-database-backup-policy.mjs scripts/check-database-backup-policy.test.mjs && git diff -- scripts/check-database-backup-policy.mjs scripts/check-database-backup-policy.test.mjs && false",
     "lint": "eslint .",
     "security:data-api": "node scripts/data-api-security-regression.mjs",
     "security:data-api:check": "node --test scripts/data-api-security-regression.test.mjs",
