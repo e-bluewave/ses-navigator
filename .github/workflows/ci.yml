@@ -46,6 +46,8 @@ jobs:
       - run: pnpm security:env-separation:check
       - run: pnpm security:restore-drill
       - run: pnpm security:restore-drill:check
+      - run: pnpm security:rpo-rto
+      - run: pnpm security:rpo-rto:check
       - run: pnpm security:secret-inventory:check
       - run: pnpm security:service-rpc:check
       - run: pnpm security:storage-backup
