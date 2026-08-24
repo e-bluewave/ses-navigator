@@ -51,7 +51,9 @@ export function validateDataMigrationPolicy(policy) {
     failures.push('full-table delete rollback must be prohibited');
   }
   if (rollback.irreversibleSideEffectsAllowedInsideMigration !== false) {
-    failures.push('irreversible side effects inside migration must be prohibited');
+    failures.push(
+      'irreversible side effects inside migration must be prohibited',
+    );
   }
   if (rollback.updatedRowRecoveryRequired !== true) {
     failures.push('updated row recovery is required');
@@ -59,9 +61,18 @@ export function validateDataMigrationPolicy(policy) {
 
   for (const [key, message] of [
     ['inputChecksumRequired', 'input checksum is required'],
-    ['createdUpdatedSkippedRejectedCountsRequired', 'result counts are required'],
-    ['referentialIntegrityRequired', 'referential integrity validation is required'],
-    ['tenantBoundaryValidationRequired', 'tenant boundary validation is required'],
+    [
+      'createdUpdatedSkippedRejectedCountsRequired',
+      'result counts are required',
+    ],
+    [
+      'referentialIntegrityRequired',
+      'referential integrity validation is required',
+    ],
+    [
+      'tenantBoundaryValidationRequired',
+      'tenant boundary validation is required',
+    ],
   ]) {
     if (validation[key] !== true) failures.push(message);
   }
@@ -73,18 +84,36 @@ export function validateDataMigrationPolicy(policy) {
   }
 
   for (const [key, message] of [
-    ['productionSecretsInRepositoryAllowed', 'Production secrets in repository must be prohibited'],
-    ['productionIdentifiersInRepositoryAllowed', 'Production identifiers in repository must be prohibited'],
-    ['personalDataInRepositoryAllowed', 'personal data in repository must be prohibited'],
-    ['personalDataInCiLogsAllowed', 'personal data in CI logs must be prohibited'],
+    [
+      'productionSecretsInRepositoryAllowed',
+      'Production secrets in repository must be prohibited',
+    ],
+    [
+      'productionIdentifiersInRepositoryAllowed',
+      'Production identifiers in repository must be prohibited',
+    ],
+    [
+      'personalDataInRepositoryAllowed',
+      'personal data in repository must be prohibited',
+    ],
+    [
+      'personalDataInCiLogsAllowed',
+      'personal data in CI logs must be prohibited',
+    ],
   ]) {
     if (security[key] !== false) failures.push(message);
   }
 
   if (sourceMapping.status === 'deferred-until-source-confirmed') {
-    for (const key of ['actualSourceSystem', 'actualFileNames', 'actualDeduplicationKeys']) {
+    for (const key of [
+      'actualSourceSystem',
+      'actualFileNames',
+      'actualDeduplicationKeys',
+    ]) {
       if (sourceMapping[key] !== null) {
-        failures.push(`${key} must remain null while source mapping is deferred`);
+        failures.push(
+          `${key} must remain null while source mapping is deferred`,
+        );
       }
     }
   }
@@ -106,7 +135,9 @@ export async function runDataMigrationPolicyCheck({
   const result = validateDataMigrationPolicy(policy);
   log(JSON.stringify(result, null, 2));
   if (result.failures.length > 0) {
-    throw new Error(`Data migration policy check failed (${result.failures.length})`);
+    throw new Error(
+      `Data migration policy check failed (${result.failures.length})`,
+    );
   }
   return result;
 }
@@ -114,7 +145,9 @@ export async function runDataMigrationPolicyCheck({
 if (isMainModule(import.meta.url)) {
   runDataMigrationPolicyCheck().catch((error) => {
     console.error(
-      error instanceof Error ? error.message : 'Data migration policy check failed',
+      error instanceof Error
+        ? error.message
+        : 'Data migration policy check failed',
     );
     process.exitCode = 1;
   });
