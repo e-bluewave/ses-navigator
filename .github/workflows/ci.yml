@@ -69,6 +69,7 @@ jobs:
       - run: pnpm security:restore-drill-evidence:check
       - run: pnpm security:rpo-rto
       - run: pnpm security:rpo-rto:check
+      - run: pnpm security:rpo-rto-evidence:check
       - run: pnpm security:retention
       - run: pnpm security:retention:check
       - run: pnpm security:secret-inventory:check
