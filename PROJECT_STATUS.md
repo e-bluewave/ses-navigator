@@ -14,7 +14,7 @@
 | Status     | 🟢 DB基盤・主要設計書初版完了／フロントエンド・API基盤実装中 |
 | Repository | ses-navigator                                                |
 | 優先基盤   | Vercel + Supabase                                            |
-| 更新日時   | 2026-08-22                                                   |
+| 更新日時   | 2026-08-24                                                   |
 
 ---
 
@@ -57,7 +57,7 @@
 - `docs/08_テーブル設計.md`
 - `docs/13_残課題・改善バックログ.md`
 - Decision Log DL-001〜DL-225相当
-- Migration 001〜157を欠番なく作成・リモートDBへ適用
+- Migration 001〜158を欠番なく作成・リモートDBへ適用
 - テナント、複数組織、ロール、権限、期限付き共有の権限基盤
 - 会社・担当者・技術者・案件・提案の所有組織対応
 - `app` 104テーブルと`audit` 2テーブルのRLS有効化・強制
@@ -70,13 +70,15 @@
 - Data APIの22リクエスト実装を、テーブルは`app`、限定View/RPCは`public`へProfileヘッダーで明示ルーティング
 - 実データを変更せず、`app`・`public`到達、anon拒否、許可済み0件更新、未許可更新拒否、内部スキーマ非公開を確認する8件の実環境回帰ランナー
 - 限定View 18件、Service Role・限定RPC 19件、実環境境界8件を順番に実行し、合計45件を一括集計するセキュリティスイート
+- Data API統合実環境スイート45/45 PASS、業務データ変更なし、検証用データcleanup残存0件
+- RB-006 Secret漏えい・ローテーションRunbook（保管、計画／緊急交換、Provider別検証、秘密値を含まない証跡）
 - APIロールへの直接書込みGRANTをMigration全体から再構成し、レビュー済み10テーブル以外の追加とanon・public面への書込みをCIで拒否
 - API実装が呼ぶ81 RPCとauthenticatedの公開RPC、Service Roleの限定1 RPC、anon・PUBLICの拒否をMigration全体から再構成してCIで照合
 - Migration 120でRLS・FK判定用インデックスを追加
 - Migration 121で`private.redact_sensitive_jsonb(jsonb)`のvolatilityを`stable`へ修正
 - Migration 122で58実テーブルへ`row_version`と自動加算Triggerを追加
 - Supabase DB Lint：`No schema errors found`
-- Local／Remote Migration 001〜133完全一致
+- Local／Remote Migration 001〜158完全一致
 - pnpm workspace、React + Vite、Fastify、品質チェック、CIの基盤
 - 案件一覧・案件詳細のOpenAPI契約、認証・認可境界、参照API
 - OpenAPI連動の型付きAPIクライアントと生成差分CIチェック
@@ -138,8 +140,8 @@
 
 ## 現在作業中
 
-- Supabase Authの実環境結合確認（実行待ち）
-- Data APIの権限回帰（静的ガードと45件統合実環境スイート実装済み／実環境実行待ち）
+- Supabase Auth・案件参照の実環境結合確認（実行待ち）
+- BA-005の環境別Secret台帳作成と初回ローテーション訓練
 
 # 開発進捗
 
@@ -215,12 +217,22 @@ docs/
 # 次にやること
 
 1. 検証環境の値を設定し、Auth・案件参照の実環境スモークテストを実行する
-2. Migration 158を検証環境へ適用する
-3. DashboardのExposed schemasを`public,graphql_public,app`へ設定し、設定ガードでリポジトリ値と照合する
-4. `pnpm security:data-api:all`でData APIセキュリティ回帰45件を実環境実行する
-5. AI予算の初期値を実測利用量に基づいて設定し、警告・停止動作を確認する
+2. RB-006に基づく環境別Secret台帳を作成し、値を記録せず初回ローテーション訓練を行う
+3. AI予算の初期値を実測利用量に基づいて設定し、警告・停止動作を確認する
+4. Production・StagingのSupabase／Vercel分離方針を確定する
+5. DB・Storageバックアップと復旧訓練の手順を具体化する
 
 # 更新履歴
+
+## 2026-08-24
+
+- Migration 150〜158が検証環境へ適用済みであることを確認
+- DashboardのExposed schemasを`public`・`graphql_public`・`app`へ設定
+- Data API統合実環境スイートを実行し、限定View 18件、Service Role・RPC 19件、実環境境界8件の合計45/45 PASSを確認
+- 統合スイートが`databaseChanges: false`で完了し、業務データを変更していないことを確認
+- `05_cleanup.sql`が`CLEANUP_PASSED`で完了し、検証用アプリケーション行51件を削除、残存0件、User A保持、User B削除を確認
+- BA-004、BA-018、BA-020を完了へ更新
+- RB-006 Secret漏えい・ローテーション手順を追加し、BA-005の保管・計画／緊急交換・監査証跡を具体化
 
 ## 2026-08-22
 
