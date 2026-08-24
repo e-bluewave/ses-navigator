@@ -92,7 +92,9 @@ test('rejects direct overwrite and invoice number reuse', () => {
     },
   });
   assert.ok(
-    result.failures.includes('confirmed invoice direct overwrite must be prohibited'),
+    result.failures.includes(
+      'confirmed invoice direct overwrite must be prohibited',
+    ),
   );
   assert.ok(
     result.failures.includes('issued invoice number reuse must be prohibited'),
