@@ -45,8 +45,7 @@ export function validateMonitoringPolicy(policy) {
     failures.push('alert deduplication is required');
   if (alerting.recoveryNotificationRequired !== true)
     failures.push('recovery notification is required');
-  if (alerting.ownerRequired !== true)
-    failures.push('alert owner is required');
+  if (alerting.ownerRequired !== true) failures.push('alert owner is required');
 
   const expected = {
     slowSqlMilliseconds: 1000,
