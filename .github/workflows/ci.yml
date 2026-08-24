@@ -52,6 +52,8 @@ jobs:
       - run: pnpm security:finance:check
       - run: pnpm security:load-test
       - run: pnpm security:load-test:check
+      - run: pnpm security:long-running-processing
+      - run: pnpm security:long-running-processing:check
       - run: pnpm security:monitoring
       - run: pnpm security:monitoring:check
       - run: pnpm security:personal-data-erasure
