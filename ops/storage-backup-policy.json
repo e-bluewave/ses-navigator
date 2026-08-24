@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "scope": "supabase-storage-object-backup",
+  "source": {
+    "protocol": "s3-compatible",
+    "includeAllFileBuckets": true,
+    "preserveBucketAndObjectKey": true,
+    "sourceVersioningAvailable": false
+  },
+  "schedule": {
+    "maximumIntervalHours": 24,
+    "retentionDays": 35
+  },
+  "destination": {
+    "offsiteRequired": true,
+    "sameSupabaseProjectAllowed": false,
+    "repositoryAllowed": false,
+    "githubActionsArtifactLongTermAllowed": false,
+    "versioningRequired": true,
+    "encryptionAtRestRequired": true
+  },
+  "transfer": {
+    "tlsRequired": true,
+    "inventoryRequired": true,
+    "checksumOrEquivalentIntegrityRequired": true,
+    "deletePropagationAllowed": false
+  },
+  "coordination": {
+    "databaseMetadataBackupRequired": true,
+    "databaseBackupTrackedBy": "BA-006",
+    "restoreDrillTrackedBy": "BA-008"
+  },
+  "security": {
+    "dedicatedBackupCredentialRequired": true,
+    "credentialInRepositoryAllowed": false,
+    "credentialInLogsAllowed": false,
+    "objectDataInRepositoryAllowed": false
+  }
+}

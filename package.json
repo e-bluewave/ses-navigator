@@ -42,6 +42,8 @@
     "security:secret-inventory:check": "node --test scripts/check-secret-inventory.test.mjs",
     "security:service-rpc": "node scripts/service-role-rpc-security-regression.mjs",
     "security:service-rpc:check": "node --test scripts/service-role-rpc-security-regression.test.mjs",
+    "security:storage-backup": "node scripts/check-storage-backup-policy.mjs",
+    "security:storage-backup:check": "node --test scripts/check-storage-backup-policy.test.mjs",
     "security:supabase-config": "node scripts/check-supabase-config.mjs",
     "security:supabase-config:check": "node --test scripts/check-supabase-config.test.mjs",
     "smoke:auth-project": "node scripts/auth-project-smoke.mjs",
