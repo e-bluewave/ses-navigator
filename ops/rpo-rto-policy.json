@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "scope": "business-rpo-rto",
+  "measurementSource": {
+    "restoreDrillTrackedBy": "BA-008",
+    "databaseBackupTrackedBy": "BA-006",
+    "storageBackupTrackedBy": "BA-007",
+    "measuredValuesRequiredBeforeProduction": true
+  },
+  "tiers": {
+    "tier1": {
+      "rpoMinutes": 60,
+      "rtoMinutes": 240
+    },
+    "tier2": {
+      "rpoMinutes": 240,
+      "rtoMinutes": 480
+    },
+    "tier3": {
+      "rpoMinutes": 1440,
+      "rtoMinutes": 1440
+    }
+  },
+  "domains": [
+    { "id": "contracts", "tier": "tier1" },
+    { "id": "invoices", "tier": "tier1" },
+    { "id": "payments", "tier": "tier1" },
+    { "id": "auth-and-membership", "tier": "tier1" },
+    { "id": "projects-and-applications", "tier": "tier2" },
+    { "id": "engineers-and-resumes", "tier": "tier2" },
+    { "id": "companies-and-contacts", "tier": "tier2" },
+    { "id": "audit-and-ai-execution", "tier": "tier3" }
+  ],
+  "governance": {
+    "businessOwnerRequired": true,
+    "technicalOwnerRequired": true,
+    "annualReviewRequired": true,
+    "materialChangeReviewRequired": true,
+    "productionReleaseBlockedWhenMeasuredRpoExceedsTarget": true,
+    "productionReleaseBlockedWhenMeasuredRtoExceedsTarget": true,
+    "exceptionsRequireApprovalAndExpiry": true
+  }
+}
