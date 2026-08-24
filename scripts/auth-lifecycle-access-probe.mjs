@@ -52,7 +52,9 @@ export async function runAuthLifecycleAccessProbe({
       if (loginResponse.ok) {
         throw new Error('Fresh authentication unexpectedly succeeded');
       }
-      log(`Fresh authentication denied as expected (HTTP ${loginResponse.status})`);
+      log(
+        `Fresh authentication denied as expected (HTTP ${loginResponse.status})`,
+      );
       return {
         mode,
         login: 'denied',
@@ -89,12 +91,11 @@ export async function runAuthLifecycleAccessProbe({
   });
 
   if (apiExpectation === 'allow' && !response.ok) {
-    throw new Error(`Business API was unexpectedly rejected (HTTP ${response.status})`);
+    throw new Error(
+      `Business API was unexpectedly rejected (HTTP ${response.status})`,
+    );
   }
-  if (
-    apiExpectation === 'deny' &&
-    ![401, 403].includes(response.status)
-  ) {
+  if (apiExpectation === 'deny' && ![401, 403].includes(response.status)) {
     throw new Error(
       `Business API was not rejected with 401/403 (HTTP ${response.status})`,
     );
@@ -107,7 +108,9 @@ export async function runAuthLifecycleAccessProbe({
   );
 
   if (generatedToken) {
-    await logoutGeneratedToken({ env, accessToken, fetchImpl }).catch(() => undefined);
+    await logoutGeneratedToken({ env, accessToken, fetchImpl }).catch(
+      () => undefined,
+    );
   }
 
   return {
