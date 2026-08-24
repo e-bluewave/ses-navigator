@@ -35,7 +35,8 @@ test('accepts complete non-production secret-free evidence', () => {
 test('allows provider not-testable old credential rejection only with reason', () => {
   const evidence = validEvidence();
   evidence.oldCredentialRejected = 'not-testable';
-  evidence.oldCredentialRejectionReason = 'Provider revokes immediately without a reusable verification path.';
+  evidence.oldCredentialRejectionReason =
+    'Provider revokes immediately without a reusable verification path.';
   const result = validateSecretRotationDrillEvidence(evidence);
   assert.equal(result.complete, true);
 });
@@ -72,7 +73,9 @@ test('rejects not-testable without a reason', () => {
   const evidence = validEvidence();
   evidence.oldCredentialRejected = 'not-testable';
   const result = validateSecretRotationDrillEvidence(evidence);
-  assert.ok(result.findings.includes('old-credential-not-testable-reason-required'));
+  assert.ok(
+    result.findings.includes('old-credential-not-testable-reason-required'),
+  );
 });
 
 test('rejects secret-like values, email addresses, and unknown fields', () => {
