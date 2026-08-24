@@ -109,7 +109,12 @@ export function validateSecretInventory(document) {
     }
 
     if (!Array.isArray(row.components) || row.components.length === 0) {
-      addFinding(findings, rowNumber, 'components', 'components-array-required');
+      addFinding(
+        findings,
+        rowNumber,
+        'components',
+        'components-array-required',
+      );
     }
 
     scanForSecretLikeValues(row, rowNumber, findings);
