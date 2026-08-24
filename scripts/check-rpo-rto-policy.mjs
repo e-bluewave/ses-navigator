@@ -68,7 +68,12 @@ export function validateRpoRtoPolicy(policy) {
     }
   }
 
-  const tier1Required = ['contracts', 'invoices', 'payments', 'auth-and-membership'];
+  const tier1Required = [
+    'contracts',
+    'invoices',
+    'payments',
+    'auth-and-membership',
+  ];
   for (const id of tier1Required) {
     if (domains.find((domain) => domain.id === id)?.tier !== 'tier1') {
       failures.push(`${id} must remain tier1`);
@@ -87,18 +92,27 @@ export function validateRpoRtoPolicy(policy) {
   if (governance.materialChangeReviewRequired !== true) {
     failures.push('material change review is required');
   }
-  if (governance.productionReleaseBlockedWhenMeasuredRpoExceedsTarget !== true) {
-    failures.push('Production release must be blocked when measured RPO exceeds target');
+  if (
+    governance.productionReleaseBlockedWhenMeasuredRpoExceedsTarget !== true
+  ) {
+    failures.push(
+      'Production release must be blocked when measured RPO exceeds target',
+    );
   }
-  if (governance.productionReleaseBlockedWhenMeasuredRtoExceedsTarget !== true) {
-    failures.push('Production release must be blocked when measured RTO exceeds target');
+  if (
+    governance.productionReleaseBlockedWhenMeasuredRtoExceedsTarget !== true
+  ) {
+    failures.push(
+      'Production release must be blocked when measured RTO exceeds target',
+    );
   }
   if (governance.exceptionsRequireApprovalAndExpiry !== true) {
     failures.push('RPO/RTO exceptions require approval and expiry');
   }
 
   return {
-    status: failures.length === 0 ? 'RPO_RTO_POLICY_PASSED' : 'RPO_RTO_POLICY_FAILED',
+    status:
+      failures.length === 0 ? 'RPO_RTO_POLICY_PASSED' : 'RPO_RTO_POLICY_FAILED',
     failures,
   };
 }
@@ -118,7 +132,9 @@ export async function runRpoRtoPolicyCheck({
 
 if (isMainModule(import.meta.url)) {
   runRpoRtoPolicyCheck().catch((error) => {
-    console.error(error instanceof Error ? error.message : 'RPO/RTO policy check failed');
+    console.error(
+      error instanceof Error ? error.message : 'RPO/RTO policy check failed',
+    );
     process.exitCode = 1;
   });
 }
