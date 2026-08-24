@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "scope": "ba-003-auth-lifecycle-drill",
+  "environment": "non-production-only",
+  "dedicatedTestUserRequired": true,
+  "productionExecutionForbidden": true,
+  "requiredPhases": [
+    "baseline",
+    "suspend",
+    "admin-revoke",
+    "reactivate"
+  ],
+  "requiredChecks": {
+    "baseline": [
+      "login-allowed",
+      "authorized-api-allowed"
+    ],
+    "suspend": [
+      "business-access-disabled",
+      "sessions-revoked",
+      "old-session-rejected",
+      "fresh-login-or-business-access-rejected"
+    ],
+    "admin-revoke": [
+      "admin-context-revoked",
+      "admin-api-rejected"
+    ],
+    "reactivate": [
+      "fresh-login-allowed",
+      "least-privilege-access-restored"
+    ]
+  },
+  "forbiddenEvidenceFields": [
+    "email",
+    "password",
+    "accessToken",
+    "refreshToken",
+    "jwt",
+    "mfaSecret",
+    "projectRef"
+  ],
+  "completionRequires": [
+    "all-required-phases-passed",
+    "old-session-rejected",
+    "admin-access-rejected-after-revoke",
+    "reactivation-verified",
+    "secret-free-evidence-recorded"
+  ]
+}
