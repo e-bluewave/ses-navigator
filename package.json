@@ -46,6 +46,8 @@
     "security:finance:check": "node --test scripts/check-finance-policy.test.mjs",
     "security:load-test": "node scripts/check-load-test-policy.mjs",
     "security:load-test:check": "node --test scripts/check-load-test-policy.test.mjs",
+    "security:long-running-processing": "node scripts/check-long-running-processing-policy.mjs",
+    "security:long-running-processing:check": "node --test scripts/check-long-running-processing-policy.test.mjs",
     "security:monitoring": "node scripts/check-monitoring-policy.mjs",
     "security:monitoring:check": "node --test scripts/check-monitoring-policy.test.mjs",
     "security:personal-data-erasure": "node scripts/check-personal-data-erasure-policy.mjs",
