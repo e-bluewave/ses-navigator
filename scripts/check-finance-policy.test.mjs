@@ -51,10 +51,15 @@ test('accepts reviewed finance policy', () => {
 test('rejects line-item rounding and wrong rounding method', () => {
   const result = validateFinancePolicy({
     ...policy,
-    qualifiedInvoice: { ...policy.qualifiedInvoice, lineItemTaxRoundingAllowed: true },
+    qualifiedInvoice: {
+      ...policy.qualifiedInvoice,
+      lineItemTaxRoundingAllowed: true,
+    },
     consumptionTax: { ...policy.consumptionTax, roundingMethod: 'round' },
   });
-  assert.ok(result.failures.includes('line-item tax rounding must be prohibited'));
+  assert.ok(
+    result.failures.includes('line-item tax rounding must be prohibited'),
+  );
   assert.ok(result.failures.includes('tax rounding method must be floor'));
 });
 
@@ -67,8 +72,14 @@ test('rejects unsafe withholding automation', () => {
       automaticIndustryNameOnlyDecisionAllowed: true,
     },
   });
-  assert.ok(result.failures.includes('withholding default must be not applicable'));
-  assert.ok(result.failures.includes('industry-name-only withholding decision must be prohibited'));
+  assert.ok(
+    result.failures.includes('withholding default must be not applicable'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'industry-name-only withholding decision must be prohibited',
+    ),
+  );
 });
 
 test('rejects direct overwrite and invoice number reuse', () => {
@@ -80,8 +91,12 @@ test('rejects direct overwrite and invoice number reuse', () => {
       issuedNumberReuseAllowed: true,
     },
   });
-  assert.ok(result.failures.includes('confirmed invoice direct overwrite must be prohibited'));
-  assert.ok(result.failures.includes('issued invoice number reuse must be prohibited'));
+  assert.ok(
+    result.failures.includes('confirmed invoice direct overwrite must be prohibited'),
+  );
+  assert.ok(
+    result.failures.includes('issued invoice number reuse must be prohibited'),
+  );
 });
 
 test('rejects hardcoded accounting mapping', () => {
@@ -93,6 +108,14 @@ test('rejects hardcoded accounting mapping', () => {
       retroactiveChangeToConfirmedInvoicesAllowed: true,
     },
   });
-  assert.ok(result.failures.includes('vendor-specific accounting codes must not be hardcoded'));
-  assert.ok(result.failures.includes('accounting mapping must not retroactively change confirmed invoices'));
+  assert.ok(
+    result.failures.includes(
+      'vendor-specific accounting codes must not be hardcoded',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'accounting mapping must not retroactively change confirmed invoices',
+    ),
+  );
 });
