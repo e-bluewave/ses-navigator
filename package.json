@@ -39,6 +39,8 @@
     "security:data-migration:check": "node --test scripts/check-data-migration-policy.test.mjs",
     "security:db-backup": "node scripts/check-database-backup-policy.mjs",
     "security:db-backup:check": "node --test scripts/check-database-backup-policy.test.mjs",
+    "security:db-backup-evidence": "node scripts/check-database-backup-evidence.mjs",
+    "security:db-backup-evidence:check": "node --test scripts/check-database-backup-evidence.test.mjs",
     "security:db-connectivity": "node scripts/check-database-connectivity-policy.mjs",
     "security:db-connectivity:check": "node --test scripts/check-database-connectivity-policy.test.mjs",
     "security:region-connectivity-evidence": "node scripts/check-region-connectivity-evidence.mjs",
