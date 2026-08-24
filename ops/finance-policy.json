@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "scope": "invoice-finance-business-rules",
+  "qualifiedInvoice": {
+    "supported": true,
+    "registrationNumberStoredInRepository": false,
+    "taxRoundingFrequency": "once-per-invoice-per-tax-rate",
+    "lineItemTaxRoundingAllowed": false
+  },
+  "consumptionTax": {
+    "supportedRatesPercent": [10, 8],
+    "defaultRatePercent": 10,
+    "roundingMethod": "floor",
+    "roundingUnit": "invoice-tax-rate-total"
+  },
+  "withholding": {
+    "defaultApplicable": false,
+    "counterpartyOrInvoiceOverrideRequired": true,
+    "automaticIndustryNameOnlyDecisionAllowed": false,
+    "businessReviewRequired": true
+  },
+  "invoiceCorrection": {
+    "confirmedInvoiceDirectOverwriteAllowed": false,
+    "revisionHistoryRequired": true,
+    "originalInvoiceLinkRequired": true,
+    "reasonActorTimestampRequired": true,
+    "issuedNumberReuseAllowed": false
+  },
+  "accountingMapping": {
+    "vendorSpecificCodesHardcoded": false,
+    "configurableMappingRequired": true,
+    "retroactiveChangeToConfirmedInvoicesAllowed": false
+  },
+  "production": {
+    "businessReviewRequired": true,
+    "stagingValidationRequired": true
+  }
+}
