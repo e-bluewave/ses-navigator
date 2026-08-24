@@ -29,10 +29,15 @@ export function validateEnvironmentSeparation({
     'staging:production:supabase',
     'staging:production:vercel',
   ]) {
-    if (!distinct.has(required)) failures.push(`missing distinct binding: ${required}`);
+    if (!distinct.has(required)) {
+      failures.push(`missing distinct binding: ${required}`);
+    }
   }
 
-  if (JSON.stringify(policy?.promotionOrder) !== JSON.stringify(expectedEnvironments)) {
+  if (
+    JSON.stringify(policy?.promotionOrder) !==
+    JSON.stringify(expectedEnvironments)
+  ) {
     failures.push('promotion order must be local -> ci -> staging -> production');
   }
   if (policy?.trackedEnvironmentIdentifiers !== false) {
@@ -48,7 +53,9 @@ export function validateEnvironmentSeparation({
   if (!/project_id\s*=\s*"ses-navigator"/u.test(supabaseConfig)) {
     failures.push('supabase/config.toml must remain the Local CLI project');
   }
-  if (!/site_url\s*=\s*"http:\/\/127\.0\.0\.1:3000"/u.test(supabaseConfig)) {
+  if (
+    !/site_url\s*=\s*"http:\/\/127\.0\.0\.1:3000"/u.test(supabaseConfig)
+  ) {
     failures.push('Local Supabase auth site_url must remain localhost');
   }
   if (!/^\.env$/mu.test(gitignore) || !/^\.env\.\*$/mu.test(gitignore)) {
@@ -62,7 +69,9 @@ export function validateEnvironmentSeparation({
     if (!stagingValue && !productionValue) continue;
     runtimeBindingsChecked = true;
     if (!stagingValue || !productionValue) {
-      failures.push(`${stagingName} and ${productionName} must be supplied together`);
+      failures.push(
+        `${stagingName} and ${productionName} must be supplied together`,
+      );
       continue;
     }
     if (stagingValue === productionValue) {
@@ -100,7 +109,9 @@ export async function runEnvironmentSeparationCheck({
   });
   log(JSON.stringify(result, null, 2));
   if (result.failures.length > 0) {
-    throw new Error(`Environment separation check failed (${result.failures.length})`);
+    throw new Error(
+      `Environment separation check failed (${result.failures.length})`,
+    );
   }
   return result;
 }
@@ -108,7 +119,9 @@ export async function runEnvironmentSeparationCheck({
 if (isMainModule(import.meta.url)) {
   runEnvironmentSeparationCheck().catch((error) => {
     console.error(
-      error instanceof Error ? error.message : 'Environment separation check failed',
+      error instanceof Error
+        ? error.message
+        : 'Environment separation check failed',
     );
     process.exitCode = 1;
   });
