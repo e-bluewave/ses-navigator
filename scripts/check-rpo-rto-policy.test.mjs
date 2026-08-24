@@ -49,7 +49,9 @@ test('rejects drift in approved tier values', () => {
     ...policy,
     tiers: { ...policy.tiers, tier1: { rpoMinutes: 120, rtoMinutes: 240 } },
   });
-  assert.ok(result.failures.includes('approved RPO/RTO tier values must not drift'));
+  assert.ok(
+    result.failures.includes('approved RPO/RTO tier values must not drift'),
+  );
 });
 
 test('rejects missing critical domain or tier downgrade', () => {
@@ -78,9 +80,13 @@ test('requires measured values and release blocking governance', () => {
     },
   });
   assert.ok(
-    result.failures.includes('measured RPO/RTO values are required before Production'),
+    result.failures.includes(
+      'measured RPO/RTO values are required before Production',
+    ),
   );
   assert.ok(
-    result.failures.includes('Production release must be blocked when measured RTO exceeds target'),
+    result.failures.includes(
+      'Production release must be blocked when measured RTO exceeds target',
+    ),
   );
 });
