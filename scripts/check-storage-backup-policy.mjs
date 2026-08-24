@@ -33,7 +33,10 @@ export function validateStorageBackupPolicy(policy) {
   ) {
     failures.push('backup interval must be between 1 and 24 hours');
   }
-  if (!Number.isInteger(schedule.retentionDays) || schedule.retentionDays < 35) {
+  if (
+    !Number.isInteger(schedule.retentionDays) ||
+    schedule.retentionDays < 35
+  ) {
     failures.push('backup retention must be at least 35 days');
   }
   if (destination.offsiteRequired !== true) {
@@ -46,7 +49,9 @@ export function validateStorageBackupPolicy(policy) {
     failures.push('repository backup storage must be prohibited');
   }
   if (destination.githubActionsArtifactLongTermAllowed !== false) {
-    failures.push('GitHub Actions artifacts must not be long-term backup storage');
+    failures.push(
+      'GitHub Actions artifacts must not be long-term backup storage',
+    );
   }
   if (destination.versioningRequired !== true) {
     failures.push('destination versioning is required');
@@ -103,7 +108,9 @@ export async function runStorageBackupPolicyCheck({
   const result = validateStorageBackupPolicy(JSON.parse(policyText));
   log(JSON.stringify(result, null, 2));
   if (result.failures.length > 0) {
-    throw new Error(`Storage backup policy check failed (${result.failures.length})`);
+    throw new Error(
+      `Storage backup policy check failed (${result.failures.length})`,
+    );
   }
   return result;
 }
@@ -111,7 +118,9 @@ export async function runStorageBackupPolicyCheck({
 if (isMainModule(import.meta.url)) {
   runStorageBackupPolicyCheck().catch((error) => {
     console.error(
-      error instanceof Error ? error.message : 'Storage backup policy check failed',
+      error instanceof Error
+        ? error.message
+        : 'Storage backup policy check failed',
     );
     process.exitCode = 1;
   });
