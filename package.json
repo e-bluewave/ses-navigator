@@ -32,6 +32,8 @@
     "security:data-api:all:check": "node --test scripts/data-api-security-suite.test.mjs",
     "security:client-secrets": "node scripts/check-client-secret-boundary.mjs",
     "security:client-secrets:check": "node --test scripts/check-client-secret-boundary.test.mjs",
+    "security:env-separation": "node scripts/check-environment-separation.mjs",
+    "security:env-separation:check": "node --test scripts/check-environment-separation.test.mjs",
     "security:secret-inventory": "node scripts/check-secret-inventory.mjs",
     "security:secret-inventory:check": "node --test scripts/check-secret-inventory.test.mjs",
     "security:service-rpc": "node scripts/service-role-rpc-security-regression.mjs",
