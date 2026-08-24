@@ -65,7 +65,9 @@ test('rejects Production restore and weak DB restore controls', () => {
     },
   });
   assert.ok(
-    result.failures.includes('direct Production restore drill must be prohibited'),
+    result.failures.includes(
+      'direct Production restore drill must be prohibited',
+    ),
   );
   assert.ok(
     result.failures.includes('database restore must use a single transaction'),
@@ -83,13 +85,17 @@ test('requires coordinated DB and Storage validation', () => {
       dataApiSecurityRegressionRequired: false,
     },
   });
-  assert.ok(result.failures.includes('storage integrity verification is required'));
+  assert.ok(
+    result.failures.includes('storage integrity verification is required'),
+  );
   assert.ok(
     result.failures.includes(
       'DB and Storage recovery point coordination is required',
     ),
   );
-  assert.ok(result.failures.includes('Data API security regression is required'));
+  assert.ok(
+    result.failures.includes('Data API security regression is required'),
+  );
 });
 
 test('rejects drills older than 90 days and unsafe secrets', () => {
@@ -103,9 +109,13 @@ test('rejects drills older than 90 days and unsafe secrets', () => {
     },
   });
   assert.ok(
-    result.failures.includes('restore drill interval must be between 1 and 90 days'),
+    result.failures.includes(
+      'restore drill interval must be between 1 and 90 days',
+    ),
   );
-  assert.ok(result.failures.includes('Production secrets reuse must be prohibited'));
+  assert.ok(
+    result.failures.includes('Production secrets reuse must be prohibited'),
+  );
   assert.ok(
     result.failures.includes('restore credentials must not be allowed in logs'),
   );
