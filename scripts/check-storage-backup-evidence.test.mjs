@@ -61,7 +61,9 @@ test('rejects unsafe destination and deletion propagation', () => {
     ),
   );
   assert.ok(
-    result.findings.includes('sourceDeletionPropagatesImmediately-must-be-false'),
+    result.findings.includes(
+      'sourceDeletionPropagatesImmediately-must-be-false',
+    ),
   );
 });
 
