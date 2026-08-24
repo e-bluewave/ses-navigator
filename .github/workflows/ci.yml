@@ -75,6 +75,7 @@ jobs:
       - run: pnpm security:service-rpc:check
       - run: pnpm security:storage-backup
       - run: pnpm security:storage-backup:check
+      - run: pnpm security:storage-backup-evidence:check
       - run: pnpm security:supabase-config
       - run: pnpm security:supabase-config:check
       - run: pnpm contract:check
