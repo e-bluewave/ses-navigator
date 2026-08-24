@@ -72,8 +72,16 @@ test('rejects guessed workload values while status is deferred', () => {
       projectsPerTenant: 1000,
     },
   });
-  assert.ok(result.failures.includes('concurrentUsers must remain null while workload targets are deferred'));
-  assert.ok(result.failures.includes('projectsPerTenant must remain null while workload targets are deferred'));
+  assert.ok(
+    result.failures.includes(
+      'concurrentUsers must remain null while workload targets are deferred',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'projectsPerTenant must remain null while workload targets are deferred',
+    ),
+  );
 });
 
 test('rejects Production acceptance before targets are approved', () => {
@@ -101,7 +109,9 @@ test('rejects unsafe Production test data and target usage', () => {
       productionTargetAllowed: true,
     },
   });
-  assert.ok(result.failures.includes('Production personal data must be prohibited'));
+  assert.ok(
+    result.failures.includes('Production personal data must be prohibited'),
+  );
   assert.ok(result.failures.includes('Production secrets must be prohibited'));
   assert.ok(result.failures.includes('Production target must be prohibited'));
 });
@@ -112,6 +122,10 @@ test('requires zero RLS boundary violations and BA-013 coordination', () => {
     execution: { ...policy.execution, rlsBoundaryViolationTolerance: 1 },
     coordination: { ...policy.coordination, monitoringTrackedBy: 'BA-999' },
   });
-  assert.ok(result.failures.includes('RLS boundary violation tolerance must be zero'));
-  assert.ok(result.failures.includes('load test monitoring must be tracked by BA-013'));
+  assert.ok(
+    result.failures.includes('RLS boundary violation tolerance must be zero'),
+  );
+  assert.ok(
+    result.failures.includes('load test monitoring must be tracked by BA-013'),
+  );
 });
