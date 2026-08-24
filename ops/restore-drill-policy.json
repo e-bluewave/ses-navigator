@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "scope": "database-storage-restore-drill",
+  "target": {
+    "separateEnvironmentRequired": true,
+    "productionDirectRestoreAllowed": false,
+    "disposableOrDedicatedStagingTargetRequired": true
+  },
+  "database": {
+    "backupTrackedBy": "BA-006",
+    "rolesRequired": true,
+    "schemaRequired": true,
+    "dataRequired": true,
+    "singleTransactionRequired": true,
+    "onErrorStopRequired": true
+  },
+  "storage": {
+    "backupTrackedBy": "BA-007",
+    "objectsRequired": true,
+    "bucketAndObjectKeyPreservationRequired": true,
+    "integrityVerificationRequired": true
+  },
+  "validation": {
+    "databaseAndStorageSameRecoveryPointRequired": true,
+    "applicationSmokeRequired": true,
+    "authSmokeRequired": true,
+    "dataApiSecurityRegressionRequired": true,
+    "objectInventoryComparisonRequired": true
+  },
+  "drill": {
+    "maximumIntervalDays": 90,
+    "namedPrimaryOwnerRequired": true,
+    "namedBackupOwnerRequired": true,
+    "evidenceRequired": true,
+    "actualDurationRequired": true,
+    "failureFollowupRequired": true
+  },
+  "security": {
+    "productionSecretsReuseAllowed": false,
+    "credentialsInRepositoryAllowed": false,
+    "credentialsInLogsAllowed": false,
+    "restoredSensitiveDataPublicExposureAllowed": false
+  }
+}
