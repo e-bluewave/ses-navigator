@@ -20,6 +20,10 @@ function validRow(overrides = {}) {
   };
 }
 
+function hasRule(result, rule) {
+  return result.findings.some((finding) => finding.rule === rule);
+}
+
 test('accepts metadata-only inventory', () => {
   const result = validateSecretInventory({ secrets: [validRow()] });
   assert.equal(result.status, 'SECRET_INVENTORY_PASSED');
@@ -30,46 +34,36 @@ test('accepts metadata-only inventory', () => {
 test('rejects missing required metadata and invalid environment', () => {
   const row = validRow({ owner: '', environment: 'prod' });
   const result = validateSecretInventory({ secrets: [row] });
+
   assert.equal(result.status, 'SECRET_INVENTORY_FAILED');
-  assert.ok(
-    result.findings.some(
-      (finding) => finding.rule === 'required-field-missing',
-    ),
-  );
-  assert.ok(
-    result.findings.some((finding) => finding.rule === 'invalid-environment'),
-  );
+  assert.equal(hasRule(result, 'required-field-missing'), true);
+  assert.equal(hasRule(result, 'invalid-environment'), true);
 });
 
 test('rejects duplicate secret ids and direct storage urls', () => {
-  const result = validateSecretInventory({
-    secrets: [validRow(), validRow({ storage: 'https://example.invalid/secret' })],
+  const secondRow = validRow({
+    storage: 'https://example.invalid/secret',
   });
-  assert.ok(
-    result.findings.some((finding) => finding.rule === 'duplicate-secret-id'),
-  );
-  assert.ok(
-    result.findings.some((finding) => finding.rule === 'direct-url-not-allowed'),
-  );
+  const result = validateSecretInventory({
+    secrets: [validRow(), secondRow],
+  });
+
+  assert.equal(hasRule(result, 'duplicate-secret-id'), true);
+  assert.equal(hasRule(result, 'direct-url-not-allowed'), true);
 });
 
 test('detects secret-like values without returning the matched value', () => {
-  const result = validateSecretInventory({
-    secrets: [validRow({ purpose: 'sb_secret_do_not_log_12345' })],
-  });
-  assert.ok(
-    result.findings.some(
-      (finding) => finding.rule === 'supabase-secret-value',
-    ),
-  );
+  const row = validRow({ purpose: 'sb_secret_do_not_log_12345' });
+  const result = validateSecretInventory({ secrets: [row] });
+
+  assert.equal(hasRule(result, 'supabase-secret-value'), true);
   assert.equal(JSON.stringify(result).includes('do_not_log'), false);
 });
 
 test('requires a non-empty secrets array', () => {
-  assert.equal(validateSecretInventory({}).status, 'SECRET_INVENTORY_FAILED');
-  assert.ok(
-    validateSecretInventory({ secrets: [] }).findings.some(
-      (finding) => finding.rule === 'inventory-empty',
-    ),
-  );
+  const missing = validateSecretInventory({});
+  const empty = validateSecretInventory({ secrets: [] });
+
+  assert.equal(missing.status, 'SECRET_INVENTORY_FAILED');
+  assert.equal(hasRule(empty, 'inventory-empty'), true);
 });

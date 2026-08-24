@@ -16,27 +16,26 @@ const REQUIRED_FIELDS = [
   'revocationCondition',
 ];
 
-const ALLOWED_ENVIRONMENTS = new Set([
-  'Local',
-  'CI',
-  'Staging',
-  'Production',
-]);
-const ALLOWED_STATUSES = new Set(['active', 'rotating', 'revoked']);
+const ALLOWED_ENVIRONMENTS = new Set();
+ALLOWED_ENVIRONMENTS.add('Local');
+ALLOWED_ENVIRONMENTS.add('CI');
+ALLOWED_ENVIRONMENTS.add('Staging');
+ALLOWED_ENVIRONMENTS.add('Production');
+
+const ALLOWED_STATUSES = new Set();
+ALLOWED_STATUSES.add('active');
+ALLOWED_STATUSES.add('rotating');
+ALLOWED_STATUSES.add('revoked');
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/u;
+const SUPABASE_SECRET_RE = /\bsb_secret_[A-Za-z0-9_-]+\b/u;
+const JWT_RE = /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/u;
+const OPENAI_KEY_RE = /\bsk-[A-Za-z0-9_-]{16,}\b/u;
+
 const SECRET_VALUE_PATTERNS = [
-  {
-    rule: 'supabase-secret-value',
-    pattern: /\bsb_secret_[A-Za-z0-9_-]+\b/u,
-  },
-  {
-    rule: 'jwt-like-value',
-    pattern: /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/u,
-  },
-  {
-    rule: 'openai-key-like-value',
-    pattern: /\bsk-[A-Za-z0-9_-]{16,}\b/u,
-  },
+  ['supabase-secret-value', SUPABASE_SECRET_RE],
+  ['jwt-like-value', JWT_RE],
+  ['openai-key-like-value', OPENAI_KEY_RE],
 ];
 
 export function validateSecretInventory(document) {
@@ -54,7 +53,7 @@ export function validateSecretInventory(document) {
   }
 
   if (rows.length === 0) {
-    findings.push({ row: null, field: 'secrets', rule: 'inventory-empty' });
+    addFinding(findings, null, 'secrets', 'inventory-empty');
   }
 
   const ids = new Set();
@@ -62,30 +61,25 @@ export function validateSecretInventory(document) {
   rows.forEach((row, index) => {
     const rowNumber = index + 1;
     if (!row || typeof row !== 'object' || Array.isArray(row)) {
-      findings.push({ row: rowNumber, field: null, rule: 'row-object-required' });
+      addFinding(findings, rowNumber, null, 'row-object-required');
       return;
     }
 
-    const keys = Object.keys(row);
-    for (const key of keys) {
+    for (const key of Object.keys(row)) {
       if (!REQUIRED_FIELDS.includes(key)) {
-        findings.push({ row: rowNumber, field: key, rule: 'unknown-field' });
+        addFinding(findings, rowNumber, key, 'unknown-field');
       }
     }
 
     for (const field of REQUIRED_FIELDS) {
       if (!(field in row) || isBlank(row[field])) {
-        findings.push({ row: rowNumber, field, rule: 'required-field-missing' });
+        addFinding(findings, rowNumber, field, 'required-field-missing');
       }
     }
 
     if (typeof row.secretId === 'string' && row.secretId.trim()) {
       if (ids.has(row.secretId)) {
-        findings.push({
-          row: rowNumber,
-          field: 'secretId',
-          rule: 'duplicate-secret-id',
-        });
+        addFinding(findings, rowNumber, 'secretId', 'duplicate-secret-id');
       }
       ids.add(row.secretId);
     }
@@ -94,20 +88,16 @@ export function validateSecretInventory(document) {
       typeof row.environment === 'string' &&
       !ALLOWED_ENVIRONMENTS.has(row.environment)
     ) {
-      findings.push({
-        row: rowNumber,
-        field: 'environment',
-        rule: 'invalid-environment',
-      });
+      addFinding(findings, rowNumber, 'environment', 'invalid-environment');
     }
 
     if (typeof row.status === 'string' && !ALLOWED_STATUSES.has(row.status)) {
-      findings.push({ row: rowNumber, field: 'status', rule: 'invalid-status' });
+      addFinding(findings, rowNumber, 'status', 'invalid-status');
     }
 
     for (const field of ['issuedAt', 'updatedAt', 'nextReviewAt']) {
       if (typeof row[field] === 'string' && !DATE_RE.test(row[field])) {
-        findings.push({ row: rowNumber, field, rule: 'invalid-date-format' });
+        addFinding(findings, rowNumber, field, 'invalid-date-format');
       }
     }
 
@@ -115,58 +105,57 @@ export function validateSecretInventory(document) {
       typeof row.storage === 'string' &&
       /^https?:\/\//iu.test(row.storage.trim())
     ) {
-      findings.push({
-        row: rowNumber,
-        field: 'storage',
-        rule: 'direct-url-not-allowed',
-      });
+      addFinding(findings, rowNumber, 'storage', 'direct-url-not-allowed');
     }
 
     if (!Array.isArray(row.components) || row.components.length === 0) {
-      findings.push({
-        row: rowNumber,
-        field: 'components',
-        rule: 'components-array-required',
-      });
+      addFinding(findings, rowNumber, 'components', 'components-array-required');
     }
 
     scanForSecretLikeValues(row, rowNumber, findings);
   });
 
+  let status = 'SECRET_INVENTORY_PASSED';
+  if (findings.length > 0) {
+    status = 'SECRET_INVENTORY_FAILED';
+  }
+
   return {
-    status:
-      findings.length === 0
-        ? 'SECRET_INVENTORY_PASSED'
-        : 'SECRET_INVENTORY_FAILED',
+    status,
     rowCount: rows.length,
     findings,
   };
 }
 
-export async function runSecretInventoryCheck({
-  path,
-  log = console.log,
-} = {}) {
+export async function runSecretInventoryCheck(options = {}) {
+  const { path, log = console.log } = options;
   if (!path) throw new Error('Secret inventory path is required');
+
   const source = await readFile(path, 'utf8');
   const document = JSON.parse(source);
   const result = validateSecretInventory(document);
   log(JSON.stringify(result, null, 2));
+
   if (result.findings.length > 0) {
-    throw new Error(
-      `Secret inventory check failed (${result.findings.length})`,
-    );
+    const count = result.findings.length;
+    throw new Error(`Secret inventory check failed (${count})`);
   }
+
   return result;
+}
+
+function addFinding(findings, row, field, rule) {
+  findings.push({ row, field, rule });
 }
 
 function scanForSecretLikeValues(row, rowNumber, findings) {
   for (const [field, value] of Object.entries(row)) {
     for (const scalar of flattenScalars(value)) {
       if (typeof scalar !== 'string') continue;
-      for (const { rule, pattern } of SECRET_VALUE_PATTERNS) {
+
+      for (const [rule, pattern] of SECRET_VALUE_PATTERNS) {
         if (pattern.test(scalar)) {
-          findings.push({ row: rowNumber, field, rule });
+          addFinding(findings, rowNumber, field, rule);
         }
       }
     }
@@ -175,26 +164,26 @@ function scanForSecretLikeValues(row, rowNumber, findings) {
 
 function flattenScalars(value) {
   if (Array.isArray(value)) return value.flatMap(flattenScalars);
+
   if (value && typeof value === 'object') {
     return Object.values(value).flatMap(flattenScalars);
   }
+
   return [value];
 }
 
 function isBlank(value) {
-  return (
-    value === null ||
-    value === undefined ||
-    (typeof value === 'string' && value.trim() === '')
-  );
+  if (value === null || value === undefined) return true;
+  if (typeof value !== 'string') return false;
+  return value.trim() === '';
 }
 
 if (isMainModule(import.meta.url)) {
   const path = process.argv[2];
   runSecretInventoryCheck({ path }).catch((error) => {
-    console.error(
-      error instanceof Error ? error.message : 'Secret inventory check failed',
-    );
+    const message =
+      error instanceof Error ? error.message : 'Secret inventory check failed';
+    console.error(message);
     process.exitCode = 1;
   });
 }
