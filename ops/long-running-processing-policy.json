@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "scope": "long-running-processing-boundary",
+  "edge": {
+    "expectedMaxSeconds": 30,
+    "cpuIntensiveAllowed": false,
+    "largeFileTransformationAllowed": false,
+    "restartRequiredAllowed": false,
+    "safeRetryRequired": true,
+    "partialBusinessStateAllowedOnTimeout": false
+  },
+  "worker": {
+    "requiredWhenExpectedSecondsExceed": 30,
+    "cpuIntensiveRequired": true,
+    "bulkProcessingRequired": true,
+    "largeFileProcessingRequired": true,
+    "multiAiCallBatchRequired": true,
+    "progressOrCancellationRequired": true,
+    "retryOrDeadLetterRequired": true
+  },
+  "job": {
+    "jobIdRequired": true,
+    "tenantIdRequired": true,
+    "jobTypeRequired": true,
+    "idempotencyKeyRequired": true,
+    "attemptTrackingRequired": true,
+    "leaseRequired": true,
+    "progressRequired": true,
+    "deadLetterStateRequired": true
+  },
+  "retry": {
+    "retryableVsPermanentClassificationRequired": true,
+    "backoffRequired": true,
+    "duplicateExecutionProtectionRequired": true,
+    "sideEffectIdempotencyRequired": true
+  },
+  "monitoring": {
+    "trackedBy": "BA-013",
+    "queueDepthRequired": true,
+    "oldestQueuedAgeRequired": true,
+    "runningDurationRequired": true,
+    "retryFailureDeadLetterRequired": true,
+    "expiredLeaseRequired": true
+  },
+  "security": {
+    "productionSecretsInPayloadAllowed": false,
+    "unnecessaryPersonalDataInPayloadAllowed": false,
+    "tenantBoundaryRequired": true,
+    "productionIdentifiersInRepositoryAllowed": false,
+    "personalDataInCiLogsAllowed": false
+  }
+}
