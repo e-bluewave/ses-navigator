@@ -34,6 +34,8 @@ jobs:
       - run: pnpm security:data-api-routing
       - run: pnpm security:data-api-routing:check
       - run: pnpm security:data-api-runtime:check
+      - run: pnpm security:data-api-sensitive
+      - run: pnpm security:data-api-sensitive:check
       - run: pnpm security:data-api:all:check
       - run: pnpm security:client-secrets:check
       - run: pnpm security:secret-inventory:check
