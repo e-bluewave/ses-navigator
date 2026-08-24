@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { isMainModule } from './cli-entry.mjs';
 
-const expectedIds = Array.from({ length: 20 }, (_, index) => `BA-${String(index + 1).padStart(3, '0')}`);
+const expectedIds = Array.from(
+  { length: 20 },
+  (_, index) => `BA-${String(index + 1).padStart(3, '0')}`,
+);
 const allowedStatuses = new Set(['verified', 'pending', 'deferred']);
 
 export function evaluateP0ReleaseReadiness(policy) {
@@ -17,7 +20,8 @@ export function evaluateP0ReleaseReadiness(policy) {
   }
 
   const ids = items.map((item) => item?.id);
-  if (new Set(ids).size !== ids.length) failures.push('P0 item IDs must be unique');
+  if (new Set(ids).size !== ids.length)
+    failures.push('P0 item IDs must be unique');
 
   for (const id of expectedIds) {
     if (!ids.includes(id)) failures.push(`missing P0 item: ${id}`);
@@ -35,9 +39,15 @@ export function evaluateP0ReleaseReadiness(policy) {
     }
   }
 
-  const verified = items.filter((item) => item.status === 'verified').map((item) => item.id);
-  const pending = items.filter((item) => item.status === 'pending').map((item) => item.id);
-  const deferred = items.filter((item) => item.status === 'deferred').map((item) => item.id);
+  const verified = items
+    .filter((item) => item.status === 'verified')
+    .map((item) => item.id);
+  const pending = items
+    .filter((item) => item.status === 'pending')
+    .map((item) => item.id);
+  const deferred = items
+    .filter((item) => item.status === 'deferred')
+    .map((item) => item.id);
   const productionReady =
     failures.length === 0 &&
     items.length === expectedIds.length &&
@@ -48,7 +58,10 @@ export function evaluateP0ReleaseReadiness(policy) {
   }
 
   return {
-    status: failures.length === 0 ? 'P0_RELEASE_READINESS_POLICY_PASSED' : 'P0_RELEASE_READINESS_POLICY_FAILED',
+    status:
+      failures.length === 0
+        ? 'P0_RELEASE_READINESS_POLICY_PASSED'
+        : 'P0_RELEASE_READINESS_POLICY_FAILED',
     productionReady,
     verified,
     pending,
@@ -67,7 +80,9 @@ export async function runP0ReleaseReadinessCheck({
   log(JSON.stringify(result, null, 2));
 
   if (result.failures.length > 0) {
-    throw new Error(`P0 release readiness policy check failed (${result.failures.length})`);
+    throw new Error(
+      `P0 release readiness policy check failed (${result.failures.length})`,
+    );
   }
   if (requireReady && !result.productionReady) {
     throw new Error('Production release blocked: unresolved P0 items remain');
@@ -77,8 +92,14 @@ export async function runP0ReleaseReadinessCheck({
 }
 
 if (isMainModule(import.meta.url)) {
-  runP0ReleaseReadinessCheck({ requireReady: process.argv.includes('--require-ready') }).catch((error) => {
-    console.error(error instanceof Error ? error.message : 'P0 release readiness check failed');
+  runP0ReleaseReadinessCheck({
+    requireReady: process.argv.includes('--require-ready'),
+  }).catch((error) => {
+    console.error(
+      error instanceof Error
+        ? error.message
+        : 'P0 release readiness check failed',
+    );
     process.exitCode = 1;
   });
 }
