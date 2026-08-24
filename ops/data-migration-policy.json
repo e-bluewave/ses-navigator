@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "scope": "initial-data-migration",
+  "execution": {
+    "dryRunRequired": true,
+    "runIdRequired": true,
+    "stagingValidationRequired": true,
+    "productionManualBulkEditAllowed": false,
+    "rerunMustBeIdempotent": true,
+    "partialSuccessMustBeVisible": true
+  },
+  "deduplication": {
+    "rulesRequiredPerDataType": true,
+    "stableSourceIdPreferred": true,
+    "nameOnlyAutomaticMergeAllowed": false,
+    "manualReviewPathRequiredForAmbiguousMatches": true
+  },
+  "rollback": {
+    "runScopedRollbackRequired": true,
+    "rollbackDryRunRequired": true,
+    "fullTableDeleteAllowed": false,
+    "irreversibleSideEffectsAllowedInsideMigration": false,
+    "updatedRowRecoveryRequired": true
+  },
+  "validation": {
+    "inputChecksumRequired": true,
+    "createdUpdatedSkippedRejectedCountsRequired": true,
+    "referentialIntegrityRequired": true,
+    "tenantBoundaryValidationRequired": true,
+    "rerunUnexpectedCreateTolerance": 0,
+    "tenantBoundaryViolationTolerance": 0
+  },
+  "security": {
+    "productionSecretsInRepositoryAllowed": false,
+    "productionIdentifiersInRepositoryAllowed": false,
+    "personalDataInRepositoryAllowed": false,
+    "personalDataInCiLogsAllowed": false
+  },
+  "sourceMapping": {
+    "status": "deferred-until-source-confirmed",
+    "actualSourceSystem": null,
+    "actualFileNames": null,
+    "actualDeduplicationKeys": null
+  }
+}
