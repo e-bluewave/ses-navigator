@@ -63,6 +63,8 @@
     "security:retention:check": "node --test scripts/check-retention-policy.test.mjs",
     "security:secret-inventory": "node scripts/check-secret-inventory.mjs",
     "security:secret-inventory:check": "node --test scripts/check-secret-inventory.test.mjs",
+    "security:secret-rotation-evidence": "node scripts/check-secret-rotation-drill-evidence.mjs",
+    "security:secret-rotation-evidence:check": "node --test scripts/check-secret-rotation-drill-evidence.test.mjs",
     "security:service-rpc": "node scripts/service-role-rpc-security-regression.mjs",
     "security:service-rpc:check": "node --test scripts/service-role-rpc-security-regression.test.mjs",
     "security:storage-backup": "node scripts/check-storage-backup-policy.mjs",
