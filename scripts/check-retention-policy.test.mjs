@@ -99,12 +99,21 @@ test('rejects statutory and approved retention drift', () => {
     ...policy,
     categories: policy.categories.map((category) => {
       if (category.id === 'invoices') return { ...category, retentionYears: 5 };
-      if (category.id === 'contracts') return { ...category, retentionYears: 7 };
+      if (category.id === 'contracts')
+        return { ...category, retentionYears: 7 };
       return category;
     }),
   });
-  assert.ok(result.failures.includes('invoices approved retention value must not drift'));
-  assert.ok(result.failures.includes('contracts approved retention value must not drift'));
+  assert.ok(
+    result.failures.includes(
+      'invoices approved retention value must not drift',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'contracts approved retention value must not drift',
+    ),
+  );
 });
 
 test('requires purpose-ended deletion and legal hold', () => {
@@ -127,14 +136,20 @@ test('requires purpose-ended deletion and legal hold', () => {
 test('rejects missing category and repository exposure', () => {
   const result = validateRetentionPolicy({
     ...policy,
-    categories: policy.categories.filter((category) => category.id !== 'engineer-resumes'),
+    categories: policy.categories.filter(
+      (category) => category.id !== 'engineer-resumes',
+    ),
     globalRules: {
       ...policy.globalRules,
       personalDataInRepositoryAllowed: true,
     },
   });
   assert.ok(
-    result.failures.includes('required retention category missing: engineer-resumes'),
+    result.failures.includes(
+      'required retention category missing: engineer-resumes',
+    ),
   );
-  assert.ok(result.failures.includes('personal data must not be stored in repository'));
+  assert.ok(
+    result.failures.includes('personal data must not be stored in repository'),
+  );
 });
