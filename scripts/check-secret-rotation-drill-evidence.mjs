@@ -26,7 +26,12 @@ const optionalFields = [
 ];
 
 const allowedFields = new Set([...requiredFields, ...optionalFields]);
-const nonProductionEnvironments = new Set(['Local', 'CI', 'Preview', 'Staging']);
+const nonProductionEnvironments = new Set([
+  'Local',
+  'CI',
+  'Preview',
+  'Staging',
+]);
 const secretLikePatterns = [
   /\bsb_secret_[A-Za-z0-9_-]+\b/u,
   /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/u,
@@ -86,7 +91,10 @@ export function validateSecretRotationDrillEvidence(document) {
   }
 
   for (const field of ['startedAt', 'completedAt']) {
-    if (typeof document[field] === 'string' && Number.isNaN(Date.parse(document[field]))) {
+    if (
+      typeof document[field] === 'string' &&
+      Number.isNaN(Date.parse(document[field]))
+    ) {
       findings.push(`invalid-timestamp:${field}`);
     }
   }
@@ -147,12 +155,14 @@ function isBlank(value) {
 }
 
 if (isMainModule(import.meta.url)) {
-  runSecretRotationDrillEvidenceCheck({ path: process.argv[2] }).catch((error) => {
-    console.error(
-      error instanceof Error
-        ? error.message
-        : 'Secret rotation drill evidence check failed',
-    );
-    process.exitCode = 1;
-  });
+  runSecretRotationDrillEvidenceCheck({ path: process.argv[2] }).catch(
+    (error) => {
+      console.error(
+        error instanceof Error
+          ? error.message
+          : 'Secret rotation drill evidence check failed',
+      );
+      process.exitCode = 1;
+    },
+  );
 }
