@@ -32,6 +32,8 @@
     "security:data-api:all:check": "node --test scripts/data-api-security-suite.test.mjs",
     "security:client-secrets": "node scripts/check-client-secret-boundary.mjs",
     "security:client-secrets:check": "node --test scripts/check-client-secret-boundary.test.mjs",
+    "security:db-backup": "node scripts/check-database-backup-policy.mjs",
+    "security:db-backup:check": "node --test scripts/check-database-backup-policy.test.mjs",
     "security:db-connectivity": "node scripts/check-database-connectivity-policy.mjs",
     "security:db-connectivity:check": "node --test scripts/check-database-connectivity-policy.test.mjs",
     "security:env-separation": "node scripts/check-environment-separation.mjs",

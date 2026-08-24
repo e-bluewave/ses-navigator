@@ -38,6 +38,8 @@ jobs:
       - run: pnpm security:data-api-sensitive:check
       - run: pnpm security:data-api:all:check
       - run: pnpm security:client-secrets:check
+      - run: pnpm security:db-backup
+      - run: pnpm security:db-backup:check
       - run: pnpm security:db-connectivity
       - run: pnpm security:db-connectivity:check
       - run: pnpm security:env-separation

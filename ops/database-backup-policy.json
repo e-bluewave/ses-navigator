@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "scope": "database-logical-backup",
+  "method": "supabase-cli-db-dump",
+  "frequencyHours": 24,
+  "retentionDays": 35,
+  "connection": {
+    "mode": "direct-or-session-pooler",
+    "transactionPoolerAllowed": false
+  },
+  "artifacts": {
+    "roles": true,
+    "schema": true,
+    "data": true,
+    "dataUseCopy": true,
+    "excludedDataObjects": [
+      "storage.buckets_vectors",
+      "storage.vector_indexes"
+    ]
+  },
+  "destination": {
+    "offsiteRequired": true,
+    "repositoryAllowed": false,
+    "sameSupabaseProjectAllowed": false,
+    "longTermGitHubActionsArtifactAllowed": false
+  },
+  "encryption": {
+    "inTransit": "tls",
+    "atRestRequired": true
+  },
+  "security": {
+    "databaseUrlInLogsAllowed": false,
+    "databasePasswordInRepositoryAllowed": false,
+    "backupContainsSecretsReviewRequired": true
+  },
+  "verification": {
+    "manifestRequired": true,
+    "checksumRequired": true,
+    "restoreDrillTrackedBy": "BA-008"
+  }
+}
