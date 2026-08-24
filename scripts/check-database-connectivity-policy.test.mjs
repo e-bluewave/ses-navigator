@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { validateDatabaseConnectivityPolicy } from './check-database-connectivity-policy.mjs';
+import {
+  validateDatabaseConnectivityPolicy,
+} from './check-database-connectivity-policy.mjs';
 
 const policy = {
   version: 1,
