@@ -114,7 +114,10 @@ export function validateRestoreDrillEvidence(document) {
     if (document[field] !== 'PASS') findings.push(`${field}-must-pass`);
   }
 
-  for (const field of ['rtoMinutesMeasured', 'recoveryPointAgeMinutesMeasured']) {
+  for (const field of [
+    'rtoMinutesMeasured',
+    'recoveryPointAgeMinutesMeasured',
+  ]) {
     if (!isNonNegativeNumber(document[field])) {
       findings.push(`${field}-must-be-non-negative-number`);
     }
@@ -208,7 +211,9 @@ function isBlank(value) {
 if (isMainModule(import.meta.url)) {
   runRestoreDrillEvidenceCheck({ path: process.argv[2] }).catch((error) => {
     console.error(
-      error instanceof Error ? error.message : 'Restore drill evidence check failed',
+      error instanceof Error
+        ? error.message
+        : 'Restore drill evidence check failed',
     );
     process.exitCode = 1;
   });
