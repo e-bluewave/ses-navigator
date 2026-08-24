@@ -48,7 +48,9 @@ test('rejects unmatched runtime modes and invalid admin paths', () => {
     result.findings.includes('migration-mode-must-be-direct-or-session-pooler'),
   );
   assert.ok(
-    result.findings.includes('backup-restore-mode-must-be-direct-or-session-pooler'),
+    result.findings.includes(
+      'backup-restore-mode-must-be-direct-or-session-pooler',
+    ),
   );
 });
 
