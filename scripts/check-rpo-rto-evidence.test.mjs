@@ -59,7 +59,9 @@ test('requires owner approvals and BA-008 measurement source', () => {
   const result = validateRpoRtoEvidence(evidence, policy);
   assert.ok(result.findings.includes('businessOwnerApproved-must-be-true'));
   assert.ok(result.findings.includes('technicalOwnerApproved-must-be-true'));
-  assert.ok(result.findings.includes('measurementsTakenFromBa008-must-be-true'));
+  assert.ok(
+    result.findings.includes('measurementsTakenFromBa008-must-be-true'),
+  );
 });
 
 test('requires approval and expiry metadata for exceptions', () => {
@@ -79,7 +81,11 @@ test('rejects invalid measurements and invalid policy targets', () => {
   invalidPolicy.tiers.tier2.rpoMinutes = 0;
   const result = validateRpoRtoEvidence(evidence, invalidPolicy);
   assert.ok(result.findings.includes('invalid-policy-target:tier2'));
-  assert.ok(result.findings.includes('tier3RtoMinutesMeasured-must-be-non-negative-number'));
+  assert.ok(
+    result.findings.includes(
+      'tier3RtoMinutesMeasured-must-be-non-negative-number',
+    ),
+  );
 });
 
 test('rejects unknown fields, invalid timestamps, and sensitive values', () => {
