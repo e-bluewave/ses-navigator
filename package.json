@@ -42,6 +42,8 @@
     "security:env-separation:check": "node --test scripts/check-environment-separation.test.mjs",
     "security:file-malware-scanning": "node scripts/check-file-malware-scanning-policy.mjs",
     "security:file-malware-scanning:check": "node --test scripts/check-file-malware-scanning-policy.test.mjs",
+    "security:finance": "node scripts/check-finance-policy.mjs",
+    "security:finance:check": "node --test scripts/check-finance-policy.test.mjs",
     "security:load-test": "node scripts/check-load-test-policy.mjs",
     "security:load-test:check": "node --test scripts/check-load-test-policy.test.mjs",
     "security:monitoring": "node scripts/check-monitoring-policy.mjs",
