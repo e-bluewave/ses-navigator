@@ -63,6 +63,8 @@
     "security:personal-data-erasure:check": "node --test scripts/check-personal-data-erasure-policy.test.mjs",
     "security:restore-drill": "node scripts/check-restore-drill-policy.mjs",
     "security:restore-drill:check": "node --test scripts/check-restore-drill-policy.test.mjs",
+    "security:restore-drill-evidence": "node scripts/check-restore-drill-evidence.mjs",
+    "security:restore-drill-evidence:check": "node --test scripts/check-restore-drill-evidence.test.mjs",
     "security:rpo-rto": "node scripts/check-rpo-rto-policy.mjs",
     "security:rpo-rto:check": "node --test scripts/check-rpo-rto-policy.test.mjs",
     "security:retention": "node scripts/check-retention-policy.mjs",
