@@ -26,6 +26,8 @@ jobs:
       - run: pnpm test
       - run: pnpm cli:entry:check
       - run: pnpm smoke:auth-project:check
+      - run: pnpm release:readiness
+      - run: pnpm release:readiness:check
       - run: pnpm security:data-api:check
       - run: pnpm security:data-api-writes
       - run: pnpm security:data-api-writes:check
