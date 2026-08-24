@@ -16,13 +16,27 @@ const REQUIRED_FIELDS = [
   'revocationCondition',
 ];
 
-const ALLOWED_ENVIRONMENTS = new Set(['Local', 'CI', 'Staging', 'Production']);
+const ALLOWED_ENVIRONMENTS = new Set([
+  'Local',
+  'CI',
+  'Staging',
+  'Production',
+]);
 const ALLOWED_STATUSES = new Set(['active', 'rotating', 'revoked']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/u;
 const SECRET_VALUE_PATTERNS = [
-  { rule: 'supabase-secret-value', pattern: /\bsb_secret_[A-Za-z0-9_-]+\b/u },
-  { rule: 'jwt-like-value', pattern: /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/u },
-  { rule: 'openai-key-like-value', pattern: /\bsk-[A-Za-z0-9_-]{16,}\b/u },
+  {
+    rule: 'supabase-secret-value',
+    pattern: /\bsb_secret_[A-Za-z0-9_-]+\b/u,
+  },
+  {
+    rule: 'jwt-like-value',
+    pattern: /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/u,
+  },
+  {
+    rule: 'openai-key-like-value',
+    pattern: /\bsk-[A-Za-z0-9_-]{16,}\b/u,
+  },
 ];
 
 export function validateSecretInventory(document) {
@@ -33,7 +47,9 @@ export function validateSecretInventory(document) {
     return {
       status: 'SECRET_INVENTORY_FAILED',
       rowCount: 0,
-      findings: [{ row: null, field: 'secrets', rule: 'secrets-array-required' }],
+      findings: [
+        { row: null, field: 'secrets', rule: 'secrets-array-required' },
+      ],
     };
   }
 
@@ -65,7 +81,11 @@ export function validateSecretInventory(document) {
 
     if (typeof row.secretId === 'string' && row.secretId.trim()) {
       if (ids.has(row.secretId)) {
-        findings.push({ row: rowNumber, field: 'secretId', rule: 'duplicate-secret-id' });
+        findings.push({
+          row: rowNumber,
+          field: 'secretId',
+          rule: 'duplicate-secret-id',
+        });
       }
       ids.add(row.secretId);
     }
@@ -74,7 +94,11 @@ export function validateSecretInventory(document) {
       typeof row.environment === 'string' &&
       !ALLOWED_ENVIRONMENTS.has(row.environment)
     ) {
-      findings.push({ row: rowNumber, field: 'environment', rule: 'invalid-environment' });
+      findings.push({
+        row: rowNumber,
+        field: 'environment',
+        rule: 'invalid-environment',
+      });
     }
 
     if (typeof row.status === 'string' && !ALLOWED_STATUSES.has(row.status)) {
@@ -87,32 +111,51 @@ export function validateSecretInventory(document) {
       }
     }
 
-    if (typeof row.storage === 'string' && /^https?:\/\//iu.test(row.storage.trim())) {
-      findings.push({ row: rowNumber, field: 'storage', rule: 'direct-url-not-allowed' });
+    if (
+      typeof row.storage === 'string' &&
+      /^https?:\/\//iu.test(row.storage.trim())
+    ) {
+      findings.push({
+        row: rowNumber,
+        field: 'storage',
+        rule: 'direct-url-not-allowed',
+      });
     }
 
     if (!Array.isArray(row.components) || row.components.length === 0) {
-      findings.push({ row: rowNumber, field: 'components', rule: 'components-array-required' });
+      findings.push({
+        row: rowNumber,
+        field: 'components',
+        rule: 'components-array-required',
+      });
     }
 
     scanForSecretLikeValues(row, rowNumber, findings);
   });
 
   return {
-    status: findings.length === 0 ? 'SECRET_INVENTORY_PASSED' : 'SECRET_INVENTORY_FAILED',
+    status:
+      findings.length === 0
+        ? 'SECRET_INVENTORY_PASSED'
+        : 'SECRET_INVENTORY_FAILED',
     rowCount: rows.length,
     findings,
   };
 }
 
-export async function runSecretInventoryCheck({ path, log = console.log } = {}) {
+export async function runSecretInventoryCheck({
+  path,
+  log = console.log,
+} = {}) {
   if (!path) throw new Error('Secret inventory path is required');
   const source = await readFile(path, 'utf8');
   const document = JSON.parse(source);
   const result = validateSecretInventory(document);
   log(JSON.stringify(result, null, 2));
   if (result.findings.length > 0) {
-    throw new Error(`Secret inventory check failed (${result.findings.length})`);
+    throw new Error(
+      `Secret inventory check failed (${result.findings.length})`,
+    );
   }
   return result;
 }
@@ -132,18 +175,26 @@ function scanForSecretLikeValues(row, rowNumber, findings) {
 
 function flattenScalars(value) {
   if (Array.isArray(value)) return value.flatMap(flattenScalars);
-  if (value && typeof value === 'object') return Object.values(value).flatMap(flattenScalars);
+  if (value && typeof value === 'object') {
+    return Object.values(value).flatMap(flattenScalars);
+  }
   return [value];
 }
 
 function isBlank(value) {
-  return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+  return (
+    value === null ||
+    value === undefined ||
+    (typeof value === 'string' && value.trim() === '')
+  );
 }
 
 if (isMainModule(import.meta.url)) {
   const path = process.argv[2];
   runSecretInventoryCheck({ path }).catch((error) => {
-    console.error(error instanceof Error ? error.message : 'Secret inventory check failed');
+    console.error(
+      error instanceof Error ? error.message : 'Secret inventory check failed',
+    );
     process.exitCode = 1;
   });
 }

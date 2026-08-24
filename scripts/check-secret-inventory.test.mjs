@@ -31,23 +31,37 @@ test('rejects missing required metadata and invalid environment', () => {
   const row = validRow({ owner: '', environment: 'prod' });
   const result = validateSecretInventory({ secrets: [row] });
   assert.equal(result.status, 'SECRET_INVENTORY_FAILED');
-  assert.ok(result.findings.some((finding) => finding.rule === 'required-field-missing'));
-  assert.ok(result.findings.some((finding) => finding.rule === 'invalid-environment'));
+  assert.ok(
+    result.findings.some(
+      (finding) => finding.rule === 'required-field-missing',
+    ),
+  );
+  assert.ok(
+    result.findings.some((finding) => finding.rule === 'invalid-environment'),
+  );
 });
 
 test('rejects duplicate secret ids and direct storage urls', () => {
   const result = validateSecretInventory({
     secrets: [validRow(), validRow({ storage: 'https://example.invalid/secret' })],
   });
-  assert.ok(result.findings.some((finding) => finding.rule === 'duplicate-secret-id'));
-  assert.ok(result.findings.some((finding) => finding.rule === 'direct-url-not-allowed'));
+  assert.ok(
+    result.findings.some((finding) => finding.rule === 'duplicate-secret-id'),
+  );
+  assert.ok(
+    result.findings.some((finding) => finding.rule === 'direct-url-not-allowed'),
+  );
 });
 
 test('detects secret-like values without returning the matched value', () => {
   const result = validateSecretInventory({
     secrets: [validRow({ purpose: 'sb_secret_do_not_log_12345' })],
   });
-  assert.ok(result.findings.some((finding) => finding.rule === 'supabase-secret-value'));
+  assert.ok(
+    result.findings.some(
+      (finding) => finding.rule === 'supabase-secret-value',
+    ),
+  );
   assert.equal(JSON.stringify(result).includes('do_not_log'), false);
 });
 
