@@ -69,6 +69,8 @@
     "security:storage-backup:check": "node --test scripts/check-storage-backup-policy.test.mjs",
     "security:supabase-config": "node scripts/check-supabase-config.mjs",
     "security:supabase-config:check": "node --test scripts/check-supabase-config.test.mjs",
+    "smoke:auth-lifecycle": "node scripts/auth-lifecycle-access-probe.mjs",
+    "smoke:auth-lifecycle:check": "node --test scripts/auth-lifecycle-access-probe.test.mjs",
     "smoke:auth-project": "node scripts/auth-project-smoke.mjs",
     "smoke:auth-project:check": "node --test scripts/auth-project-smoke.test.mjs",
     "test": "pnpm -r test",
