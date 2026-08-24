@@ -3,9 +3,9 @@
 対象：
 
 - Repository：`e-bluewave/ses-navigator`
-- Branch：`ddl-initial`
-- PostgreSQL：16
-- Supabase Migration：001～119
+- Branch：`Main`
+- PostgreSQL：17
+- Supabase Migration：001～158
 
 ## 実行順
 
@@ -122,12 +122,12 @@ pnpm security:data-api:all
 
 - `01_precheck.sql`：`READY`
 - `02_setup.sql`：`READY_FOR_VALIDATION`
-- `03_validation.ps1`：18/18 PASS
-- `04_service_role_rpc_validation.ps1`：19/19 PASS
-- Data API総合検証：37/37 PASS
-- Data APIスキーマ・書込み境界：実行待ち（8件）
-- `05_cleanup.sql`：`CLEANUP_PASSED`（検証データ残存0件）
+- `03_validation.ps1`／Node限定View検証：18/18 PASS
+- `04_service_role_rpc_validation.ps1`／Node Service Role・RPC検証：19/19 PASS
+- Data APIスキーマ・書込み境界：8/8 PASS
+- `pnpm security:data-api:all`：`DATA_API_SECURITY_SUITE_PASSED`（45/45、`databaseChanges: false`）
+- `05_cleanup.sql`：`CLEANUP_PASSED`（検証用アプリケーション行51件削除、残存0件、User A保持、User B削除）
 - Migration 118・119 SQL回帰確認：3/3 PASS
 - Migration 118・119適用後の6 View簡易回帰確認：6/6 PASS
 
-検証データの後片付けおよびMigration 118・119適用後の回帰確認まで完了している。
+Migration 158適用、DashboardのExposed schemas設定、Data API統合実環境検証45件、検証データの後片付けまで完了している。
