@@ -43,6 +43,7 @@ jobs:
       - run: pnpm security:client-secrets:check
       - run: pnpm security:data-migration
       - run: pnpm security:data-migration:check
+      - run: node --test scripts/check-data-migration-evidence.test.mjs
       - run: pnpm security:db-backup
       - run: pnpm security:db-backup:check
       - run: pnpm security:db-backup-evidence:check
