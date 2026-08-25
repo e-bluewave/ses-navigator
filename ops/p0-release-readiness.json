@@ -23,7 +23,7 @@
     { "id": "BA-016", "status": "pending", "evidence": "invoice templates, transaction types, and Staging finance validation required" },
     { "id": "BA-017", "status": "pending", "evidence": "queue and worker implementation plus Staging failure-mode validation required" },
     { "id": "BA-018", "status": "verified", "evidence": "integrated Data API permission regression verified in real environment" },
-    { "id": "BA-019", "status": "pending", "evidence": "Migration 159 real-environment application and regression verification required" },
+    { "id": "BA-019", "status": "verified", "evidence": "Migration 159 real-environment application and BA-019 postcheck passed; raw sensitive surface closed and project source summary verified" },
     { "id": "BA-020", "status": "verified", "evidence": "Dashboard exposed schemas aligned and integrated real-environment verification passed" }
   ]
 }
