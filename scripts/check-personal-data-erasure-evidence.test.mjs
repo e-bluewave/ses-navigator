@@ -61,7 +61,9 @@ test('rejects incomplete deletion surfaces', () => {
   const result = validatePersonalDataErasureEvidence(evidence, policy);
   assert.ok(result.findings.includes('databaseDeletionCompleted-must-be-true'));
   assert.ok(result.findings.includes('storageDeletionCompleted-must-be-true'));
-  assert.ok(result.findings.includes('derivedDataDeletionCompleted-must-be-true'));
+  assert.ok(
+    result.findings.includes('derivedDataDeletionCompleted-must-be-true'),
+  );
 });
 
 test('rejects reidentification key and policy-incompatible disposition', () => {
@@ -69,7 +71,9 @@ test('rejects reidentification key and policy-incompatible disposition', () => {
   evidence.reidentificationKeyPresent = true;
   evidence.dispositionMode = 'soft-delete-only';
   const result = validatePersonalDataErasureEvidence(evidence, policy);
-  assert.ok(result.findings.includes('reidentificationKeyPresent-must-be-false'));
+  assert.ok(
+    result.findings.includes('reidentificationKeyPresent-must-be-false'),
+  );
   assert.ok(result.findings.includes('disposition-mode-not-allowed'));
 });
 
@@ -78,10 +82,17 @@ test('requires Legal Hold, tombstone, and restore safeguards in policy', () => {
   invalidPolicy.legalHold.overridesDeletion = false;
   invalidPolicy.execution.backupTombstoneLedgerRequired = false;
   invalidPolicy.execution.restoreReapplyDeletionRequired = false;
-  const result = validatePersonalDataErasureEvidence(validEvidence(), invalidPolicy);
+  const result = validatePersonalDataErasureEvidence(
+    validEvidence(),
+    invalidPolicy,
+  );
   assert.ok(result.findings.includes('policy-legal-hold-override-required'));
-  assert.ok(result.findings.includes('policy-backup-tombstone-ledger-required'));
-  assert.ok(result.findings.includes('policy-restore-reapply-deletion-required'));
+  assert.ok(
+    result.findings.includes('policy-backup-tombstone-ledger-required'),
+  );
+  assert.ok(
+    result.findings.includes('policy-restore-reapply-deletion-required'),
+  );
 });
 
 test('requires follow-up reference when follow-up is required', () => {
@@ -98,7 +109,9 @@ test('rejects sensitive values, Production identifiers, and personal data', () =
   evidence.personalDataRecorded = true;
   evidence.notes = 'postgresql://example.invalid';
   const result = validatePersonalDataErasureEvidence(evidence, policy);
-  assert.ok(result.findings.includes('productionIdentifiersRecorded-must-be-false'));
+  assert.ok(
+    result.findings.includes('productionIdentifiersRecorded-must-be-false'),
+  );
   assert.ok(result.findings.includes('personalDataRecorded-must-be-false'));
   assert.ok(result.findings.includes('sensitive-erasure-value:notes'));
 });
