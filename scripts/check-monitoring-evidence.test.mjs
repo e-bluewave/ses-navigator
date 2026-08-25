@@ -67,7 +67,9 @@ test('requires alert delivery, deduplication, recovery, and routing', () => {
   const result = validateMonitoringEvidence(evidence, policy);
   assert.ok(result.findings.includes('criticalAlertDelivered-must-be-true'));
   assert.ok(result.findings.includes('deduplicationVerified-must-be-true'));
-  assert.ok(result.findings.includes('recoveryNotificationVerified-must-be-true'));
+  assert.ok(
+    result.findings.includes('recoveryNotificationVerified-must-be-true'),
+  );
   assert.ok(result.findings.includes('ownerRoutingVerified-must-be-true'));
 });
 
@@ -80,8 +82,12 @@ test('rejects sensitive alert content and Production identifiers', () => {
   const result = validateMonitoringEvidence(evidence, policy);
   assert.ok(result.findings.includes('secretsInAlerts-must-be-false'));
   assert.ok(result.findings.includes('personalDataInAlerts-must-be-false'));
-  assert.ok(result.findings.includes('queryParameterValuesInAlerts-must-be-false'));
-  assert.ok(result.findings.includes('productionIdentifiersRecorded-must-be-false'));
+  assert.ok(
+    result.findings.includes('queryParameterValuesInAlerts-must-be-false'),
+  );
+  assert.ok(
+    result.findings.includes('productionIdentifiersRecorded-must-be-false'),
+  );
 });
 
 test('requires all monitoring signals in policy', () => {
