@@ -62,6 +62,7 @@ jobs:
       - run: pnpm security:long-running-processing:check
       - run: pnpm security:monitoring
       - run: pnpm security:monitoring:check
+      - run: node --test scripts/check-monitoring-evidence.test.mjs
       - run: pnpm security:personal-data-erasure
       - run: pnpm security:personal-data-erasure:check
       - run: node --test scripts/check-personal-data-erasure-evidence.test.mjs
