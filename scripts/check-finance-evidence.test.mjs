@@ -87,13 +87,17 @@ test('requires tax and withholding validations', () => {
   evidence.taxRoundingOncePerInvoicePerRateValidated = false;
   evidence.withholdingOverrideValidated = false;
   const result = validateFinanceEvidence(evidence, policy);
-  assert.ok(result.findings.includes('taxRatesTenAndEightValidated-must-be-true'));
+  assert.ok(
+    result.findings.includes('taxRatesTenAndEightValidated-must-be-true'),
+  );
   assert.ok(
     result.findings.includes(
       'taxRoundingOncePerInvoicePerRateValidated-must-be-true',
     ),
   );
-  assert.ok(result.findings.includes('withholdingOverrideValidated-must-be-true'));
+  assert.ok(
+    result.findings.includes('withholdingOverrideValidated-must-be-true'),
+  );
 });
 
 test('requires immutable confirmed invoice history behavior', () => {
@@ -103,9 +107,13 @@ test('requires immutable confirmed invoice history behavior', () => {
   evidence.originalInvoiceLinkValidated = false;
   evidence.issuedNumberReuseBlocked = false;
   const result = validateFinanceEvidence(evidence, policy);
-  assert.ok(result.findings.includes('confirmedInvoiceOverwriteBlocked-must-be-true'));
+  assert.ok(
+    result.findings.includes('confirmedInvoiceOverwriteBlocked-must-be-true'),
+  );
   assert.ok(result.findings.includes('revisionHistoryValidated-must-be-true'));
-  assert.ok(result.findings.includes('originalInvoiceLinkValidated-must-be-true'));
+  assert.ok(
+    result.findings.includes('originalInvoiceLinkValidated-must-be-true'),
+  );
   assert.ok(result.findings.includes('issuedNumberReuseBlocked-must-be-true'));
 });
 
@@ -122,13 +130,19 @@ test('rejects incompatible finance policy changes', () => {
   );
   assert.ok(result.findings.includes('policy-rounding-method-must-be-floor'));
   assert.ok(
-    result.findings.includes('policy-industry-name-only-inference-must-be-forbidden'),
+    result.findings.includes(
+      'policy-industry-name-only-inference-must-be-forbidden',
+    ),
   );
   assert.ok(
-    result.findings.includes('policy-confirmed-invoice-overwrite-must-be-forbidden'),
+    result.findings.includes(
+      'policy-confirmed-invoice-overwrite-must-be-forbidden',
+    ),
   );
   assert.ok(
-    result.findings.includes('policy-vendor-specific-codes-must-not-be-hardcoded'),
+    result.findings.includes(
+      'policy-vendor-specific-codes-must-not-be-hardcoded',
+    ),
   );
 });
 
