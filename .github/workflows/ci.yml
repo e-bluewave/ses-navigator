@@ -64,6 +64,7 @@ jobs:
       - run: pnpm security:monitoring:check
       - run: pnpm security:personal-data-erasure
       - run: pnpm security:personal-data-erasure:check
+      - run: node --test scripts/check-personal-data-erasure-evidence.test.mjs
       - run: pnpm security:restore-drill
       - run: pnpm security:restore-drill:check
       - run: pnpm security:restore-drill-evidence:check
