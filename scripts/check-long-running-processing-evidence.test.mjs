@@ -108,9 +108,17 @@ test('requires worker recovery and duplicate protections', () => {
   evidence.restartRecoveryValidated = false;
   evidence.duplicateExecutionProtectionValidated = false;
   const result = validateLongRunningProcessingEvidence(evidence, policy);
-  assert.ok(result.findings.includes('workerInterruptionRecoveryValidated-must-be-true'));
+  assert.ok(
+    result.findings.includes(
+      'workerInterruptionRecoveryValidated-must-be-true',
+    ),
+  );
   assert.ok(result.findings.includes('restartRecoveryValidated-must-be-true'));
-  assert.ok(result.findings.includes('duplicateExecutionProtectionValidated-must-be-true'));
+  assert.ok(
+    result.findings.includes(
+      'duplicateExecutionProtectionValidated-must-be-true',
+    ),
+  );
 });
 
 test('requires dead-letter and timeout safety', () => {
@@ -119,7 +127,11 @@ test('requires dead-letter and timeout safety', () => {
   evidence.timeoutLeavesNoPartialBusinessState = false;
   const result = validateLongRunningProcessingEvidence(evidence, policy);
   assert.ok(result.findings.includes('deadLetterFlowValidated-must-be-true'));
-  assert.ok(result.findings.includes('timeoutLeavesNoPartialBusinessState-must-be-true'));
+  assert.ok(
+    result.findings.includes(
+      'timeoutLeavesNoPartialBusinessState-must-be-true',
+    ),
+  );
 });
 
 test('rejects unsafe policy changes', () => {
@@ -128,10 +140,19 @@ test('rejects unsafe policy changes', () => {
   invalidPolicy.edge.cpuIntensiveAllowed = true;
   invalidPolicy.retry.duplicateExecutionProtectionRequired = false;
   invalidPolicy.security.tenantBoundaryRequired = false;
-  const result = validateLongRunningProcessingEvidence(validEvidence(), invalidPolicy);
+  const result = validateLongRunningProcessingEvidence(
+    validEvidence(),
+    invalidPolicy,
+  );
   assert.ok(result.findings.includes('policy-edge-budget-must-be-30-seconds'));
-  assert.ok(result.findings.includes('policy-edge-cpu-intensive-must-be-forbidden'));
-  assert.ok(result.findings.includes('policy-retry-duplicateExecutionProtectionRequired-must-be-true'));
+  assert.ok(
+    result.findings.includes('policy-edge-cpu-intensive-must-be-forbidden'),
+  );
+  assert.ok(
+    result.findings.includes(
+      'policy-retry-duplicateExecutionProtectionRequired-must-be-true',
+    ),
+  );
   assert.ok(result.findings.includes('policy-tenant-boundary-required'));
 });
 
