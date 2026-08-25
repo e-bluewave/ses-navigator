@@ -59,9 +59,13 @@ test('rejects reintroduced deleted data and sensitive evidence', () => {
   evidence.secretOrPersonalDataExposed = true;
   const result = validateRetentionEvidence(evidence, policy);
   assert.ok(
-    result.findings.includes('deletedDataReintroducedAfterRestore-must-be-false'),
+    result.findings.includes(
+      'deletedDataReintroducedAfterRestore-must-be-false',
+    ),
   );
-  assert.ok(result.findings.includes('secretOrPersonalDataExposed-must-be-false'));
+  assert.ok(
+    result.findings.includes('secretOrPersonalDataExposed-must-be-false'),
+  );
 });
 
 test('requires policy safeguards', () => {
@@ -71,7 +75,9 @@ test('requires policy safeguards', () => {
   invalidPolicy.globalRules.deletionEvidenceRequired = false;
   const result = validateRetentionEvidence(validEvidence(), invalidPolicy);
   assert.ok(result.findings.includes('policy-legal-hold-override-required'));
-  assert.ok(result.findings.includes('policy-backup-reintroduction-guard-required'));
+  assert.ok(
+    result.findings.includes('policy-backup-reintroduction-guard-required'),
+  );
   assert.ok(result.findings.includes('policy-deletion-evidence-required'));
 });
 
