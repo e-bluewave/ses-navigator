@@ -20,7 +20,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npx prettier --write scripts/check-data-migration-evidence.mjs scripts/check-data-migration-evidence.test.mjs && git diff -- scripts/check-data-migration-evidence.mjs scripts/check-data-migration-evidence.test.mjs && false
+      - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
