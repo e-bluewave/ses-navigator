@@ -93,11 +93,16 @@ export function validateLongRunningProcessingEvidence(document, policy) {
     if (document[field] !== false) findings.push(`${field}-must-be-false`);
   }
 
-  if (policy.edge?.expectedMaxSeconds !== 30) findings.push('policy-edge-budget-must-be-30-seconds');
-  if (policy.edge?.cpuIntensiveAllowed !== false) findings.push('policy-edge-cpu-intensive-must-be-forbidden');
-  if (policy.edge?.largeFileTransformationAllowed !== false) findings.push('policy-edge-large-file-transform-must-be-forbidden');
-  if (policy.edge?.safeRetryRequired !== true) findings.push('policy-edge-safe-retry-required');
-  if (policy.edge?.partialBusinessStateAllowedOnTimeout !== false) findings.push('policy-timeout-partial-state-must-be-forbidden');
+  if (policy.edge?.expectedMaxSeconds !== 30)
+    findings.push('policy-edge-budget-must-be-30-seconds');
+  if (policy.edge?.cpuIntensiveAllowed !== false)
+    findings.push('policy-edge-cpu-intensive-must-be-forbidden');
+  if (policy.edge?.largeFileTransformationAllowed !== false)
+    findings.push('policy-edge-large-file-transform-must-be-forbidden');
+  if (policy.edge?.safeRetryRequired !== true)
+    findings.push('policy-edge-safe-retry-required');
+  if (policy.edge?.partialBusinessStateAllowedOnTimeout !== false)
+    findings.push('policy-timeout-partial-state-must-be-forbidden');
 
   for (const key of [
     'cpuIntensiveRequired',
@@ -107,9 +112,11 @@ export function validateLongRunningProcessingEvidence(document, policy) {
     'progressOrCancellationRequired',
     'retryOrDeadLetterRequired',
   ]) {
-    if (policy.worker?.[key] !== true) findings.push(`policy-worker-${key}-must-be-true`);
+    if (policy.worker?.[key] !== true)
+      findings.push(`policy-worker-${key}-must-be-true`);
   }
-  if (policy.worker?.requiredWhenExpectedSecondsExceed !== 30) findings.push('policy-worker-threshold-must-be-30-seconds');
+  if (policy.worker?.requiredWhenExpectedSecondsExceed !== 30)
+    findings.push('policy-worker-threshold-must-be-30-seconds');
 
   for (const key of [
     'jobIdRequired',
@@ -121,7 +128,8 @@ export function validateLongRunningProcessingEvidence(document, policy) {
     'progressRequired',
     'deadLetterStateRequired',
   ]) {
-    if (policy.job?.[key] !== true) findings.push(`policy-job-${key}-must-be-true`);
+    if (policy.job?.[key] !== true)
+      findings.push(`policy-job-${key}-must-be-true`);
   }
 
   for (const key of [
@@ -130,7 +138,8 @@ export function validateLongRunningProcessingEvidence(document, policy) {
     'duplicateExecutionProtectionRequired',
     'sideEffectIdempotencyRequired',
   ]) {
-    if (policy.retry?.[key] !== true) findings.push(`policy-retry-${key}-must-be-true`);
+    if (policy.retry?.[key] !== true)
+      findings.push(`policy-retry-${key}-must-be-true`);
   }
 
   for (const key of [
@@ -140,20 +149,33 @@ export function validateLongRunningProcessingEvidence(document, policy) {
     'retryFailureDeadLetterRequired',
     'expiredLeaseRequired',
   ]) {
-    if (policy.monitoring?.[key] !== true) findings.push(`policy-monitoring-${key}-must-be-true`);
+    if (policy.monitoring?.[key] !== true)
+      findings.push(`policy-monitoring-${key}-must-be-true`);
   }
-  if (policy.monitoring?.trackedBy !== 'BA-013') findings.push('policy-monitoring-must-be-tracked-by-ba-013');
+  if (policy.monitoring?.trackedBy !== 'BA-013')
+    findings.push('policy-monitoring-must-be-tracked-by-ba-013');
 
-  if (policy.security?.productionSecretsInPayloadAllowed !== false) findings.push('policy-production-secrets-in-payload-must-be-forbidden');
-  if (policy.security?.unnecessaryPersonalDataInPayloadAllowed !== false) findings.push('policy-unnecessary-personal-data-must-be-forbidden');
-  if (policy.security?.tenantBoundaryRequired !== true) findings.push('policy-tenant-boundary-required');
-  if (policy.security?.productionIdentifiersInRepositoryAllowed !== false) findings.push('policy-production-identifiers-in-repo-must-be-forbidden');
-  if (policy.security?.personalDataInCiLogsAllowed !== false) findings.push('policy-personal-data-in-ci-must-be-forbidden');
+  if (policy.security?.productionSecretsInPayloadAllowed !== false)
+    findings.push('policy-production-secrets-in-payload-must-be-forbidden');
+  if (policy.security?.unnecessaryPersonalDataInPayloadAllowed !== false)
+    findings.push('policy-unnecessary-personal-data-must-be-forbidden');
+  if (policy.security?.tenantBoundaryRequired !== true)
+    findings.push('policy-tenant-boundary-required');
+  if (policy.security?.productionIdentifiersInRepositoryAllowed !== false)
+    findings.push('policy-production-identifiers-in-repo-must-be-forbidden');
+  if (policy.security?.personalDataInCiLogsAllowed !== false)
+    findings.push('policy-personal-data-in-ci-must-be-forbidden');
 
-  if (typeof document.completedAt === 'string' && Number.isNaN(Date.parse(document.completedAt))) {
+  if (
+    typeof document.completedAt === 'string' &&
+    Number.isNaN(Date.parse(document.completedAt))
+  ) {
     findings.push('invalid-timestamp:completedAt');
   }
-  if (document.followUpRequired === true && document.followUpReferencePresent !== true) {
+  if (
+    document.followUpRequired === true &&
+    document.followUpReferencePresent !== true
+  ) {
     findings.push('follow-up-reference-required');
   }
 
@@ -168,7 +190,10 @@ export function validateLongRunningProcessingEvidence(document, policy) {
   }
 
   return {
-    status: findings.length === 0 ? 'LONG_RUNNING_PROCESSING_EVIDENCE_PASSED' : 'LONG_RUNNING_PROCESSING_EVIDENCE_FAILED',
+    status:
+      findings.length === 0
+        ? 'LONG_RUNNING_PROCESSING_EVIDENCE_PASSED'
+        : 'LONG_RUNNING_PROCESSING_EVIDENCE_FAILED',
     complete: findings.length === 0,
     findings,
   };
@@ -179,11 +204,18 @@ export async function runLongRunningProcessingEvidenceCheck({
   policyPath = 'ops/long-running-processing-policy.json',
   log = console.log,
 } = {}) {
-  if (!evidencePath) throw new Error('Long-running processing evidence path is required');
-  const [document, policy] = await Promise.all([readJson(evidencePath), readJson(policyPath)]);
+  if (!evidencePath)
+    throw new Error('Long-running processing evidence path is required');
+  const [document, policy] = await Promise.all([
+    readJson(evidencePath),
+    readJson(policyPath),
+  ]);
   const result = validateLongRunningProcessingEvidence(document, policy);
   log(JSON.stringify(result, null, 2));
-  if (!result.complete) throw new Error(`Long-running processing evidence check failed (${result.findings.length})`);
+  if (!result.complete)
+    throw new Error(
+      `Long-running processing evidence check failed (${result.findings.length})`,
+    );
   return result;
 }
 
@@ -197,12 +229,22 @@ function isBlank(value) {
 }
 
 function failed(rule) {
-  return { status: 'LONG_RUNNING_PROCESSING_EVIDENCE_FAILED', complete: false, findings: [rule] };
+  return {
+    status: 'LONG_RUNNING_PROCESSING_EVIDENCE_FAILED',
+    complete: false,
+    findings: [rule],
+  };
 }
 
 if (isMainModule(import.meta.url)) {
-  runLongRunningProcessingEvidenceCheck({ evidencePath: process.argv[2] }).catch((error) => {
-    console.error(error instanceof Error ? error.message : 'Long-running processing evidence check failed');
+  runLongRunningProcessingEvidenceCheck({
+    evidencePath: process.argv[2],
+  }).catch((error) => {
+    console.error(
+      error instanceof Error
+        ? error.message
+        : 'Long-running processing evidence check failed',
+    );
     process.exitCode = 1;
   });
 }
