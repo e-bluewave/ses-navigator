@@ -42,7 +42,7 @@ Required checks:
 Validate outside the repository or against a temporary local file:
 
 ```bash
-pnpm security:retention-evidence -- path/to/secret-free-evidence.json
+node scripts/check-retention-evidence.mjs path/to/secret-free-evidence.json
 ```
 
 Expected result:
