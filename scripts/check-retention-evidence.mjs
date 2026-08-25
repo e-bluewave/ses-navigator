@@ -100,7 +100,10 @@ export function validateRetentionEvidence(document, policy) {
     findings.push('invalid-timestamp:completedAt');
   }
 
-  if (document.followUpRequired === true && document.followUpReferencePresent !== true) {
+  if (
+    document.followUpRequired === true &&
+    document.followUpReferencePresent !== true
+  ) {
     findings.push('follow-up-reference-required');
   }
 
@@ -137,7 +140,9 @@ export async function runRetentionEvidenceCheck({
   const result = validateRetentionEvidence(document, policy);
   log(JSON.stringify(result, null, 2));
   if (!result.complete) {
-    throw new Error(`Retention evidence check failed (${result.findings.length})`);
+    throw new Error(
+      `Retention evidence check failed (${result.findings.length})`,
+    );
   }
   return result;
 }
@@ -160,8 +165,14 @@ function failed(rule) {
 }
 
 if (isMainModule(import.meta.url)) {
-  runRetentionEvidenceCheck({ evidencePath: process.argv[2] }).catch((error) => {
-    console.error(error instanceof Error ? error.message : 'Retention evidence check failed');
-    process.exitCode = 1;
-  });
+  runRetentionEvidenceCheck({ evidencePath: process.argv[2] }).catch(
+    (error) => {
+      console.error(
+        error instanceof Error
+          ? error.message
+          : 'Retention evidence check failed',
+      );
+      process.exitCode = 1;
+    },
+  );
 }
