@@ -108,9 +108,14 @@ export function validateFinanceEvidence(document, policy) {
     findings.push('policy-qualified-invoice-support-required');
   }
   if (policy.qualifiedInvoice?.registrationNumberStoredInRepository !== false) {
-    findings.push('policy-registration-number-must-not-be-stored-in-repository');
+    findings.push(
+      'policy-registration-number-must-not-be-stored-in-repository',
+    );
   }
-  if (policy.qualifiedInvoice?.taxRoundingFrequency !== 'once-per-invoice-per-tax-rate') {
+  if (
+    policy.qualifiedInvoice?.taxRoundingFrequency !==
+    'once-per-invoice-per-tax-rate'
+  ) {
     findings.push('policy-tax-rounding-frequency-invalid');
   }
   if (policy.qualifiedInvoice?.lineItemTaxRoundingAllowed !== false) {
@@ -118,7 +123,11 @@ export function validateFinanceEvidence(document, policy) {
   }
 
   const supportedRates = policy.consumptionTax?.supportedRatesPercent;
-  if (!Array.isArray(supportedRates) || !supportedRates.includes(10) || !supportedRates.includes(8)) {
+  if (
+    !Array.isArray(supportedRates) ||
+    !supportedRates.includes(10) ||
+    !supportedRates.includes(8)
+  ) {
     findings.push('policy-tax-rates-10-and-8-required');
   }
   if (policy.consumptionTax?.defaultRatePercent !== 10) {
@@ -144,7 +153,9 @@ export function validateFinanceEvidence(document, policy) {
     findings.push('policy-withholding-business-review-required');
   }
 
-  if (policy.invoiceCorrection?.confirmedInvoiceDirectOverwriteAllowed !== false) {
+  if (
+    policy.invoiceCorrection?.confirmedInvoiceDirectOverwriteAllowed !== false
+  ) {
     findings.push('policy-confirmed-invoice-overwrite-must-be-forbidden');
   }
   if (policy.invoiceCorrection?.revisionHistoryRequired !== true) {
@@ -166,8 +177,13 @@ export function validateFinanceEvidence(document, policy) {
   if (policy.accountingMapping?.configurableMappingRequired !== true) {
     findings.push('policy-configurable-accounting-mapping-required');
   }
-  if (policy.accountingMapping?.retroactiveChangeToConfirmedInvoicesAllowed !== false) {
-    findings.push('policy-confirmed-invoice-mapping-retroactive-change-must-be-forbidden');
+  if (
+    policy.accountingMapping?.retroactiveChangeToConfirmedInvoicesAllowed !==
+    false
+  ) {
+    findings.push(
+      'policy-confirmed-invoice-mapping-retroactive-change-must-be-forbidden',
+    );
   }
   if (policy.production?.businessReviewRequired !== true) {
     findings.push('policy-production-business-review-required');
@@ -223,7 +239,9 @@ export async function runFinanceEvidenceCheck({
   const result = validateFinanceEvidence(document, policy);
   log(JSON.stringify(result, null, 2));
   if (!result.complete) {
-    throw new Error(`Finance evidence check failed (${result.findings.length})`);
+    throw new Error(
+      `Finance evidence check failed (${result.findings.length})`,
+    );
   }
   return result;
 }
@@ -247,7 +265,9 @@ function failed(rule) {
 
 if (isMainModule(import.meta.url)) {
   runFinanceEvidenceCheck({ evidencePath: process.argv[2] }).catch((error) => {
-    console.error(error instanceof Error ? error.message : 'Finance evidence check failed');
+    console.error(
+      error instanceof Error ? error.message : 'Finance evidence check failed',
+    );
     process.exitCode = 1;
   });
 }
