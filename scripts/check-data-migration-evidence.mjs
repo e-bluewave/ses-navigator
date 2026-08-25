@@ -104,15 +104,23 @@ export function validateDataMigrationEvidence(document, policy) {
     if (document[field] !== false) findings.push(`${field}-must-be-false`);
   }
 
-  if (document.rerunUnexpectedCreateCount !== policy.validation?.rerunUnexpectedCreateTolerance) {
+  if (
+    document.rerunUnexpectedCreateCount !==
+    policy.validation?.rerunUnexpectedCreateTolerance
+  ) {
     findings.push('rerun-unexpected-create-tolerance-exceeded');
   }
-  if (document.tenantBoundaryViolationCount !== policy.validation?.tenantBoundaryViolationTolerance) {
+  if (
+    document.tenantBoundaryViolationCount !==
+    policy.validation?.tenantBoundaryViolationTolerance
+  ) {
     findings.push('tenant-boundary-violation-tolerance-exceeded');
   }
 
-  if (policy.execution?.dryRunRequired !== true) findings.push('policy-dry-run-required');
-  if (policy.execution?.runIdRequired !== true) findings.push('policy-run-id-required');
+  if (policy.execution?.dryRunRequired !== true)
+    findings.push('policy-dry-run-required');
+  if (policy.execution?.runIdRequired !== true)
+    findings.push('policy-run-id-required');
   if (policy.execution?.stagingValidationRequired !== true) {
     findings.push('policy-staging-validation-required');
   }
@@ -125,7 +133,9 @@ export function validateDataMigrationEvidence(document, policy) {
   if (policy.rollback?.fullTableDeleteAllowed !== false) {
     findings.push('policy-full-table-delete-must-be-forbidden');
   }
-  if (policy.rollback?.irreversibleSideEffectsAllowedInsideMigration !== false) {
+  if (
+    policy.rollback?.irreversibleSideEffectsAllowedInsideMigration !== false
+  ) {
     findings.push('policy-irreversible-side-effects-must-be-forbidden');
   }
 
@@ -168,7 +178,8 @@ export async function runDataMigrationEvidenceCheck({
   policyPath = 'ops/data-migration-policy.json',
   log = console.log,
 } = {}) {
-  if (!evidencePath) throw new Error('Data migration evidence path is required');
+  if (!evidencePath)
+    throw new Error('Data migration evidence path is required');
   const [document, policy] = await Promise.all([
     readJson(evidencePath),
     readJson(policyPath),
@@ -176,7 +187,9 @@ export async function runDataMigrationEvidenceCheck({
   const result = validateDataMigrationEvidence(document, policy);
   log(JSON.stringify(result, null, 2));
   if (!result.complete) {
-    throw new Error(`Data migration evidence check failed (${result.findings.length})`);
+    throw new Error(
+      `Data migration evidence check failed (${result.findings.length})`,
+    );
   }
   return result;
 }
@@ -199,8 +212,14 @@ function failed(rule) {
 }
 
 if (isMainModule(import.meta.url)) {
-  runDataMigrationEvidenceCheck({ evidencePath: process.argv[2] }).catch((error) => {
-    console.error(error instanceof Error ? error.message : 'Data migration evidence check failed');
-    process.exitCode = 1;
-  });
+  runDataMigrationEvidenceCheck({ evidencePath: process.argv[2] }).catch(
+    (error) => {
+      console.error(
+        error instanceof Error
+          ? error.message
+          : 'Data migration evidence check failed',
+      );
+      process.exitCode = 1;
+    },
+  );
 }
