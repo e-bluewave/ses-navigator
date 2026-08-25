@@ -20,7 +20,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm format:check
+      - run: npx prettier --write scripts/check-finance-evidence.mjs scripts/check-finance-evidence.test.mjs && git diff -- scripts/check-finance-evidence.mjs scripts/check-finance-evidence.test.mjs && false
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
