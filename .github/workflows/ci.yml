@@ -57,6 +57,7 @@ jobs:
       - run: pnpm security:file-malware-scanning:check
       - run: pnpm security:finance
       - run: pnpm security:finance:check
+      - run: node --test scripts/check-finance-evidence.test.mjs
       - run: pnpm security:load-test
       - run: pnpm security:load-test:check
       - run: pnpm security:long-running-processing
