@@ -70,8 +70,12 @@ test('rejects non-idempotent rerun and tenant violations', () => {
   evidence.rerunUnexpectedCreateCount = 1;
   evidence.tenantBoundaryViolationCount = 1;
   const result = validateDataMigrationEvidence(evidence, policy);
-  assert.ok(result.findings.includes('rerun-unexpected-create-tolerance-exceeded'));
-  assert.ok(result.findings.includes('tenant-boundary-violation-tolerance-exceeded'));
+  assert.ok(
+    result.findings.includes('rerun-unexpected-create-tolerance-exceeded'),
+  );
+  assert.ok(
+    result.findings.includes('tenant-boundary-violation-tolerance-exceeded'),
+  );
 });
 
 test('rejects unsafe deduplication and rollback behaviors', () => {
@@ -80,9 +84,13 @@ test('rejects unsafe deduplication and rollback behaviors', () => {
   evidence.fullTableDeleteUsed = true;
   evidence.irreversibleSideEffectsUsed = true;
   const result = validateDataMigrationEvidence(evidence, policy);
-  assert.ok(result.findings.includes('nameOnlyAutomaticMergeUsed-must-be-false'));
+  assert.ok(
+    result.findings.includes('nameOnlyAutomaticMergeUsed-must-be-false'),
+  );
   assert.ok(result.findings.includes('fullTableDeleteUsed-must-be-false'));
-  assert.ok(result.findings.includes('irreversibleSideEffectsUsed-must-be-false'));
+  assert.ok(
+    result.findings.includes('irreversibleSideEffectsUsed-must-be-false'),
+  );
 });
 
 test('requires core migration policy safeguards', () => {
@@ -101,7 +109,9 @@ test('requires core migration policy safeguards', () => {
   assert.ok(
     result.findings.includes('policy-name-only-auto-merge-must-be-forbidden'),
   );
-  assert.ok(result.findings.includes('policy-full-table-delete-must-be-forbidden'));
+  assert.ok(
+    result.findings.includes('policy-full-table-delete-must-be-forbidden'),
+  );
 });
 
 test('requires follow-up reference when follow-up is required', () => {
