@@ -169,7 +169,9 @@ export async function runMonitoringEvidenceCheck({
   const result = validateMonitoringEvidence(document, policy);
   log(JSON.stringify(result, null, 2));
   if (!result.complete) {
-    throw new Error(`Monitoring evidence check failed (${result.findings.length})`);
+    throw new Error(
+      `Monitoring evidence check failed (${result.findings.length})`,
+    );
   }
   return result;
 }
@@ -192,8 +194,14 @@ function failed(rule) {
 }
 
 if (isMainModule(import.meta.url)) {
-  runMonitoringEvidenceCheck({ evidencePath: process.argv[2] }).catch((error) => {
-    console.error(error instanceof Error ? error.message : 'Monitoring evidence check failed');
-    process.exitCode = 1;
-  });
+  runMonitoringEvidenceCheck({ evidencePath: process.argv[2] }).catch(
+    (error) => {
+      console.error(
+        error instanceof Error
+          ? error.message
+          : 'Monitoring evidence check failed',
+      );
+      process.exitCode = 1;
+    },
+  );
 }
