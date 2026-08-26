@@ -110,8 +110,10 @@ export function registerResumeExtractionRoutes(
           typeof b.correctedResult !== 'object')
       )
         throw invalid();
-      if (b.correctedResult != null)
-        assertResumeExtractionResult(b.correctedResult, 400);
+      const correctedResult = b.correctedResult ?? null;
+      if (correctedResult !== null)
+        assertResumeExtractionResult(correctedResult, 400);
+      const notes = typeof b.notes === 'string' ? b.notes : null;
       if (!(await repository.canReview(request.user.accessToken)))
         throw new ApiError(403, 'forbidden', 'ai.review is required');
       return repository.review(
@@ -120,8 +122,8 @@ export function registerResumeExtractionRoutes(
         versionId,
         extractionId,
         b.decision as 'approved' | 'rejected',
-        b.correctedResult ?? null,
-        b.notes ?? null,
+        correctedResult,
+        notes,
         request.id,
       );
     },
