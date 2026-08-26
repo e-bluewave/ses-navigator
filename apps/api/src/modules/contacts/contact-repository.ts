@@ -292,7 +292,7 @@ export class SupabaseContactRepository implements ContactRepository {
           'content-type': 'application/json',
           ...init.headers,
         },
-      } as unknown as RequestInit,
+      },
     )) as unknown as FetchResponse;
     if (!response.ok)
       throw new Error(`Supabase Data API failed with ${response.status}`);
