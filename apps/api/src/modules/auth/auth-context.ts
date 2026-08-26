@@ -6,6 +6,11 @@ export interface AuthContextRepository {
   requiresMfa(token: string): Promise<boolean>;
 }
 
+interface FetchResponse {
+  ok: boolean;
+  json(): Promise<unknown>;
+}
+
 export class SupabaseAuthContextRepository implements AuthContextRepository {
   async requiresMfa(token: string): Promise<boolean> {
     const checks = await Promise.all([
@@ -17,7 +22,7 @@ export class SupabaseAuthContextRepository implements AuthContextRepository {
   }
 
   private async rpc(token: string, name: string, body: object) {
-    const response = await fetch(
+    const response = (await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1/rpc/${name}`,
       {
         method: 'POST',
@@ -29,14 +34,15 @@ export class SupabaseAuthContextRepository implements AuthContextRepository {
         },
         body: JSON.stringify(body),
       },
-    );
+    )) as unknown as FetchResponse;
     if (!response.ok)
       throw new ApiError(
         502,
         'data_api_error',
         'The data service could not complete the request',
       );
-    return (await response.json()) === true;
+    const result = await response.json();
+    return result === true;
   }
 }
 
