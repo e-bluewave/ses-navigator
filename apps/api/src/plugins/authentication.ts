@@ -17,18 +17,28 @@ declare module 'fastify' {
   }
 }
 
+interface FetchResponse {
+  ok: boolean;
+  json(): Promise<unknown>;
+}
+
 class SupabaseAuthenticationService implements AuthenticationService {
   async authenticate(accessToken: string): Promise<AuthenticatedUser> {
     const url = requiredEnv('SUPABASE_URL');
     const anonKey = requiredEnv('SUPABASE_ANON_KEY');
-    const response = await fetch(`${url}/auth/v1/user`, {
+    const response = (await fetch(`${url}/auth/v1/user`, {
       headers: { apikey: anonKey, authorization: `Bearer ${accessToken}` },
-    });
+    })) as unknown as FetchResponse;
     if (!response.ok) {
       throw new ApiError(401, 'unauthorized', 'Authentication is required');
     }
-    const body = (await response.json()) as { id?: unknown };
-    if (typeof body.id !== 'string') {
+    const body = await response.json();
+    if (
+      typeof body !== 'object' ||
+      body === null ||
+      !('id' in body) ||
+      typeof body.id !== 'string'
+    ) {
       throw new ApiError(401, 'unauthorized', 'Authentication is required');
     }
     return { id: body.id, accessToken };
