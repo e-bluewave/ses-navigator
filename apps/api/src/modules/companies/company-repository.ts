@@ -2,6 +2,17 @@ import { dataApiSchemaHeaders } from '../../shared/supabase-schema.js';
 import { requiredEnv } from '../../plugins/authentication.js';
 import { ApiError } from '../../shared/errors.js';
 
+interface FetchRequestInit {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+interface FetchResponse {
+  ok: boolean;
+  json(): Promise<unknown>;
+}
+
 export interface Company {
   id: string;
   managementNo: string;
@@ -261,8 +272,12 @@ export class SupabaseCompanyRepository implements CompanyRepository {
     }));
   }
 
-  private async request(token: string, path: string, init: RequestInit = {}) {
-    const response = await fetch(
+  private async request(
+    token: string,
+    path: string,
+    init: FetchRequestInit = {},
+  ): Promise<FetchResponse> {
+    const response = (await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
       {
         ...init,
@@ -274,7 +289,7 @@ export class SupabaseCompanyRepository implements CompanyRepository {
           ...init.headers,
         },
       },
-    );
+    )) as unknown as FetchResponse;
     if (!response.ok)
       throw new ApiError(
         502,

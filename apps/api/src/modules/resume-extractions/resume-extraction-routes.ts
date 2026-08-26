@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { ApiError } from '../../shared/errors.js';
 import type { ResumeExtractionRepository } from './resume-extraction-repository.js';
-import type { ResumeExtractor } from './resume-extraction-service.js';
+import type {
+  ResumeExtractionResult,
+  ResumeExtractor,
+} from './resume-extraction-service.js';
 import { assertResumeExtractionResult } from './resume-extraction-service.js';
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -110,8 +113,12 @@ export function registerResumeExtractionRoutes(
           typeof b.correctedResult !== 'object')
       )
         throw invalid();
-      if (b.correctedResult != null)
+      let correctedResult: ResumeExtractionResult | null = null;
+      if (b.correctedResult != null) {
         assertResumeExtractionResult(b.correctedResult, 400);
+        correctedResult = b.correctedResult;
+      }
+      const notes = typeof b.notes === 'string' ? b.notes : null;
       if (!(await repository.canReview(request.user.accessToken)))
         throw new ApiError(403, 'forbidden', 'ai.review is required');
       return repository.review(
@@ -120,8 +127,8 @@ export function registerResumeExtractionRoutes(
         versionId,
         extractionId,
         b.decision as 'approved' | 'rejected',
-        b.correctedResult ?? null,
-        b.notes ?? null,
+        correctedResult,
+        notes,
         request.id,
       );
     },
