@@ -95,17 +95,19 @@ export function registerAccountingExportRoutes(
       const id = parseId(request.params);
       const version = parseIfMatch(request.headers['if-match']);
       const body = object(request.body);
-      const reference =
-        body.exportReference === null ||
-        body.exportReference === undefined ||
-        body.exportReference === ''
-          ? null
-          : body.exportReference;
+      let reference: string | null = null;
       if (
-        reference !== null &&
-        (typeof reference !== 'string' || reference.length > 1000)
-      )
-        throw invalid('exportReference is invalid');
+        body.exportReference !== null &&
+        body.exportReference !== undefined &&
+        body.exportReference !== ''
+      ) {
+        if (
+          typeof body.exportReference !== 'string' ||
+          body.exportReference.length > 1000
+        )
+          throw invalid('exportReference is invalid');
+        reference = body.exportReference;
+      }
       await requirePermission(repository, request.user.accessToken, true);
       const batch = await repository.markExported(
         request.user.accessToken,
