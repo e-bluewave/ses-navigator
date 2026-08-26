@@ -93,6 +93,17 @@ type AuditRow = {
   request_id: string | null;
 };
 
+type FetchRequestInit = {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+};
+
+interface FetchResponse {
+  ok: boolean;
+  json(): Promise<unknown>;
+}
+
 export class SupabaseProjectRepository implements ProjectRepository {
   async canRead(token: string): Promise<boolean> {
     const response = await this.request(token, '/rpc/has_permission', {
@@ -263,9 +274,9 @@ export class SupabaseProjectRepository implements ProjectRepository {
   private async request(
     token: string,
     path: string,
-    init: RequestInit = {},
-  ): Promise<Response> {
-    const response = await fetch(
+    init: FetchRequestInit = {},
+  ): Promise<FetchResponse> {
+    const response = (await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
       {
         ...init,
@@ -277,7 +288,7 @@ export class SupabaseProjectRepository implements ProjectRepository {
           ...init.headers,
         },
       },
-    );
+    )) as unknown as FetchResponse;
     if (!response.ok)
       throw new ApiError(
         502,
