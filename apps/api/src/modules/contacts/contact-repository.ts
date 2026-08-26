@@ -99,6 +99,19 @@ type AuditRow = {
   action: string;
   request_id: string | null;
 };
+
+type FetchRequestInit = {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+};
+
+type FetchResponse = {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+};
+
 const select =
   'id,company_id,management_no,family_name,given_name,department_name,position_title,email,phone,mobile_phone,is_primary,contact_status,updated_at,row_version';
 
@@ -263,8 +276,12 @@ export class SupabaseContactRepository implements ContactRepository {
       requestId: row.request_id,
     }));
   }
-  private async request(token: string, path: string, init: RequestInit = {}) {
-    const response = await fetch(
+  private async request(
+    token: string,
+    path: string,
+    init: FetchRequestInit = {},
+  ): Promise<FetchResponse> {
+    const response = (await fetch(
       `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
       {
         ...init,
@@ -275,8 +292,8 @@ export class SupabaseContactRepository implements ContactRepository {
           'content-type': 'application/json',
           ...init.headers,
         },
-      },
-    );
+      } as unknown as RequestInit,
+    )) as unknown as FetchResponse;
     if (!response.ok)
       throw new Error(`Supabase Data API failed with ${response.status}`);
     return response;
