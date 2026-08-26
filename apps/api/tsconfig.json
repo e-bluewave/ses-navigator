@@ -4,5 +4,5 @@
     "lib": ["ES2022"],
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["server.ts", "src/**/*.ts", "test/**/*.ts"]
 }
