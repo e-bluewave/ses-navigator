@@ -253,17 +253,19 @@ function parseContractInput(value: unknown): ContractInput {
       throw invalid(`parties[${index}].billingRole is invalid`);
     if (typeof party.isPrimary !== 'boolean')
       throw invalid(`parties[${index}].isPrimary must be a boolean`);
-    const contactId =
-      party.contactId === null ||
-      party.contactId === undefined ||
-      party.contactId === ''
-        ? null
-        : party.contactId;
+    let contactId: string | null = null;
     if (
-      contactId !== null &&
-      (typeof contactId !== 'string' || !uuidPattern.test(contactId))
-    )
-      throw invalid(`parties[${index}].contactId must be a UUID`);
+      party.contactId !== null &&
+      party.contactId !== undefined &&
+      party.contactId !== ''
+    ) {
+      if (
+        typeof party.contactId !== 'string' ||
+        !uuidPattern.test(party.contactId)
+      )
+        throw invalid(`parties[${index}].contactId must be a UUID`);
+      contactId = party.contactId;
+    }
     return {
       companyId: party.companyId,
       contactId,
