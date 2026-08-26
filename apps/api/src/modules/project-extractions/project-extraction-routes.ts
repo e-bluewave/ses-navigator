@@ -3,6 +3,7 @@ import { ApiError } from '../../shared/errors.js';
 import type { ProjectExtractionRepository } from './project-extraction-repository.js';
 import {
   assertProjectExtractionResult,
+  type ProjectExtractionResult,
   type ProjectExtractor,
 } from './project-extraction-service.js';
 
@@ -107,8 +108,12 @@ export function registerProjectExtractionRoutes(
           typeof body.correctedResult !== 'object')
       )
         throw invalid();
-      if (body.correctedResult != null)
+      let correctedResult: ProjectExtractionResult | null = null;
+      if (body.correctedResult != null) {
         assertProjectExtractionResult(body.correctedResult, 400);
+        correctedResult = body.correctedResult;
+      }
+      const notes = typeof body.notes === 'string' ? body.notes : null;
       if (!(await repository.canReview(request.user.accessToken)))
         throw new ApiError(403, 'forbidden', 'ai.review is required');
       return repository.review(
@@ -116,8 +121,8 @@ export function registerProjectExtractionRoutes(
         id,
         extractionId,
         body.decision as 'approved' | 'rejected',
-        body.correctedResult ?? null,
-        body.notes ?? null,
+        correctedResult,
+        notes,
         request.id,
       );
     },
