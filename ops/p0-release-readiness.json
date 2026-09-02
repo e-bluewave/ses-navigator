@@ -5,7 +5,7 @@
   "requireAllP0Verified": true,
   "allowedStatuses": ["verified", "pending", "deferred"],
   "items": [
-    { "id": "BA-001", "status": "pending", "evidence": "real environment separation verification required" },
+    { "id": "BA-001", "status": "verified", "evidence": "real environment separation and runtime binding verified; Staging Auth/API and Data API runtime smoke passed; Production read-only health smoke passed; migration parity confirmed" },
     { "id": "BA-002", "status": "pending", "evidence": "real region, binding, and latency verification required" },
     { "id": "BA-003", "status": "pending", "evidence": "non-Production account lifecycle drill required" },
     { "id": "BA-004", "status": "verified", "evidence": "integrated Data API security suite 45/45 PASS and cleanup complete" },
