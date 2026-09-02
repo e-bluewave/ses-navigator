@@ -6,7 +6,7 @@
   "allowedStatuses": ["verified", "pending", "deferred"],
   "items": [
     { "id": "BA-001", "status": "verified", "evidence": "real environment separation and runtime binding verified; Staging Auth/API and Data API runtime smoke passed; Production read-only health smoke passed; migration parity confirmed" },
-    { "id": "BA-002", "status": "pending", "evidence": "real region, binding, and latency verification required" },
+    { "id": "BA-002", "status": "verified", "evidence": "Staging/Production region alignment verified in Tokyo; Vercel Functions pinned to hnd1; runtime database mode data-api; runtime binding PASS; Staging authenticated API latency measured over 100 successful requests with 0 percent errors; Production health confirmed in hnd1" },
     { "id": "BA-003", "status": "pending", "evidence": "non-Production account lifecycle drill required" },
     { "id": "BA-004", "status": "verified", "evidence": "integrated Data API security suite 45/45 PASS and cleanup complete" },
     { "id": "BA-005", "status": "pending", "evidence": "external secret inventory and rotation drill required" },
