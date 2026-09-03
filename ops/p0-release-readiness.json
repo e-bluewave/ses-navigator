@@ -9,7 +9,7 @@
     { "id": "BA-002", "status": "verified", "evidence": "Staging/Production region alignment verified in Tokyo; Vercel Functions pinned to hnd1; runtime database mode data-api; runtime binding PASS; Staging authenticated API latency measured over 100 successful requests with 0 percent errors; Production health confirmed in hnd1" },
     { "id": "BA-003", "status": "verified", "evidence": "non-Production lifecycle drill passed: baseline access, suspension boundary, old-session rejection, global session revoke, refresh-token rejection, fresh-login/business denial while suspended, administrator access revoke, and least-privilege reactivation verified" },
     { "id": "BA-004", "status": "verified", "evidence": "integrated Data API security suite 45/45 PASS and cleanup complete" },
-    { "id": "BA-005", "status": "pending", "evidence": "external secret inventory and rotation drill required" },
+    { "id": "BA-005", "status": "verified", "evidence": "external secret inventory validated; non-Production Supabase Secret key rotation drill passed; old credential worked before rotation, replacement credential worked, old credential was revoked and rejected with HTTP 401, replacement remained valid, and secret-free evidence validator passed" },
     { "id": "BA-006", "status": "pending", "evidence": "external destination and Staging logical backup proof required" },
     { "id": "BA-007", "status": "pending", "evidence": "external Storage destination and initial Staging backup proof required" },
     { "id": "BA-008", "status": "pending", "evidence": "separate-environment DB and Storage restore drill required" },
