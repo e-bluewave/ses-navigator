@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "scope": "supabase-storage-object-backup",
   "source": {
     "protocol": "s3-compatible",
@@ -16,7 +16,16 @@
     "sameSupabaseProjectAllowed": false,
     "repositoryAllowed": false,
     "githubActionsArtifactLongTermAllowed": false,
-    "versioningRequired": true,
+    "generationProtectionRequired": true,
+    "allowedGenerationProtectionModes": [
+      "native-versioning",
+      "immutable-snapshot"
+    ],
+    "immutableSnapshot": {
+      "timestampedPrefixRequired": true,
+      "overwriteProtectionRequired": true,
+      "minimumRetentionDays": 35
+    },
     "encryptionAtRestRequired": true
   },
   "transfer": {
