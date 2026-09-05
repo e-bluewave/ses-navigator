@@ -73,7 +73,9 @@ export function validateStorageBackupPolicy(policy) {
     }
     for (const requiredMode of allowedGenerationProtectionModes) {
       if (!configured.has(requiredMode)) {
-        failures.push(`generation protection mode must be allowed: ${requiredMode}`);
+        failures.push(
+          `generation protection mode must be allowed: ${requiredMode}`,
+        );
       }
     }
   }
