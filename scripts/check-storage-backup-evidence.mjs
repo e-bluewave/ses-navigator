@@ -19,7 +19,10 @@ const requiredFields = [
   'sameSupabaseProjectDestination',
   'repositoryDestination',
   'githubActionsArtifactLongTermDestination',
-  'destinationVersioningEnabled',
+  'generationProtectionMode',
+  'generationProtectionVerified',
+  'timestampedSnapshotPrefixUsed',
+  'retentionLockEnabled',
   'encryptedAtRest',
   'tlsInTransit',
   'retentionDays',
@@ -35,6 +38,10 @@ const requiredFields = [
 const allowedFields = new Set([...requiredFields, 'notes']);
 const allowedEnvironments = new Set(['Staging', 'Production']);
 const allowedIntegrity = new Set(['checksum', 'etag-and-size', 'equivalent']);
+const allowedGenerationProtectionModes = new Set([
+  'native-versioning',
+  'immutable-snapshot',
+]);
 const sensitivePatterns = [
   /https?:\/\/[a-z0-9-]+\.supabase\.co/iu,
   /\bsb_(?:secret|publishable)_[A-Za-z0-9_-]+\b/u,
@@ -68,7 +75,7 @@ export function validateStorageBackupEvidence(document) {
     'bucketAndObjectKeyPreserved',
     'manifestCreated',
     'offsiteDestinationConfirmed',
-    'destinationVersioningEnabled',
+    'generationProtectionVerified',
     'encryptedAtRest',
     'tlsInTransit',
     'dedicatedBackupCredentialUsed',
@@ -87,6 +94,18 @@ export function validateStorageBackupEvidence(document) {
     'objectDataExposed',
   ]) {
     if (document[field] !== false) findings.push(`${field}-must-be-false`);
+  }
+
+  if (!allowedGenerationProtectionModes.has(document.generationProtectionMode)) {
+    findings.push('generation-protection-mode-invalid');
+  }
+  if (document.generationProtectionMode === 'immutable-snapshot') {
+    if (document.timestampedSnapshotPrefixUsed !== true) {
+      findings.push('immutable-snapshot-requires-timestamped-prefix');
+    }
+    if (document.retentionLockEnabled !== true) {
+      findings.push('immutable-snapshot-requires-retention-lock');
+    }
   }
 
   for (const field of [
