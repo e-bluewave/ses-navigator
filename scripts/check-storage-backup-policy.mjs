@@ -1,16 +1,22 @@
 import { readFile } from 'node:fs/promises';
 import { isMainModule } from './cli-entry.mjs';
 
+const allowedGenerationProtectionModes = new Set([
+  'native-versioning',
+  'immutable-snapshot',
+]);
+
 export function validateStorageBackupPolicy(policy) {
   const failures = [];
   const source = policy?.source ?? {};
   const schedule = policy?.schedule ?? {};
   const destination = policy?.destination ?? {};
+  const immutableSnapshot = destination?.immutableSnapshot ?? {};
   const transfer = policy?.transfer ?? {};
   const coordination = policy?.coordination ?? {};
   const security = policy?.security ?? {};
 
-  if (policy?.version !== 1) failures.push('policy version must be 1');
+  if (policy?.version !== 2) failures.push('policy version must be 2');
   if (policy?.scope !== 'supabase-storage-object-backup') {
     failures.push('scope must be supabase-storage-object-backup');
   }
@@ -53,8 +59,37 @@ export function validateStorageBackupPolicy(policy) {
       'GitHub Actions artifacts must not be long-term backup storage',
     );
   }
-  if (destination.versioningRequired !== true) {
-    failures.push('destination versioning is required');
+  if (destination.generationProtectionRequired !== true) {
+    failures.push('destination generation protection is required');
+  }
+  if (!Array.isArray(destination.allowedGenerationProtectionModes)) {
+    failures.push('generation protection modes must be configured');
+  } else {
+    const configured = new Set(destination.allowedGenerationProtectionModes);
+    for (const mode of configured) {
+      if (!allowedGenerationProtectionModes.has(mode)) {
+        failures.push(`unsupported generation protection mode: ${mode}`);
+      }
+    }
+    for (const requiredMode of allowedGenerationProtectionModes) {
+      if (!configured.has(requiredMode)) {
+        failures.push(
+          `generation protection mode must be allowed: ${requiredMode}`,
+        );
+      }
+    }
+  }
+  if (immutableSnapshot.timestampedPrefixRequired !== true) {
+    failures.push('immutable snapshots must use timestamped prefixes');
+  }
+  if (immutableSnapshot.overwriteProtectionRequired !== true) {
+    failures.push('immutable snapshots must prevent overwrite');
+  }
+  if (
+    !Number.isInteger(immutableSnapshot.minimumRetentionDays) ||
+    immutableSnapshot.minimumRetentionDays < 35
+  ) {
+    failures.push('immutable snapshot retention must be at least 35 days');
   }
   if (destination.encryptionAtRestRequired !== true) {
     failures.push('destination encryption at rest is required');

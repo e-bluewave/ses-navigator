@@ -4,7 +4,7 @@ import test from 'node:test';
 import { validateStorageBackupPolicy } from './check-storage-backup-policy.mjs';
 
 const policy = {
-  version: 1,
+  version: 2,
   scope: 'supabase-storage-object-backup',
   source: {
     protocol: 's3-compatible',
@@ -21,7 +21,16 @@ const policy = {
     sameSupabaseProjectAllowed: false,
     repositoryAllowed: false,
     githubActionsArtifactLongTermAllowed: false,
-    versioningRequired: true,
+    generationProtectionRequired: true,
+    allowedGenerationProtectionModes: [
+      'native-versioning',
+      'immutable-snapshot',
+    ],
+    immutableSnapshot: {
+      timestampedPrefixRequired: true,
+      overwriteProtectionRequired: true,
+      minimumRetentionDays: 35,
+    },
     encryptionAtRestRequired: true,
   },
   transfer: {
@@ -66,7 +75,7 @@ test('rejects incomplete bucket coverage and loss of object keys', () => {
   assert.ok(result.failures.includes('source versioning must not be assumed'));
 });
 
-test('rejects weak destination retention and delete propagation', () => {
+test('rejects weak generation protection retention and delete propagation', () => {
   const result = validateStorageBackupPolicy({
     ...policy,
     schedule: { maximumIntervalHours: 48, retentionDays: 7 },
@@ -74,7 +83,13 @@ test('rejects weak destination retention and delete propagation', () => {
       ...policy.destination,
       sameSupabaseProjectAllowed: true,
       repositoryAllowed: true,
-      versioningRequired: false,
+      generationProtectionRequired: false,
+      allowedGenerationProtectionModes: ['native-versioning'],
+      immutableSnapshot: {
+        timestampedPrefixRequired: false,
+        overwriteProtectionRequired: false,
+        minimumRetentionDays: 7,
+      },
       encryptionAtRestRequired: false,
     },
     transfer: {
@@ -96,7 +111,27 @@ test('rejects weak destination retention and delete propagation', () => {
   assert.ok(
     result.failures.includes('repository backup storage must be prohibited'),
   );
-  assert.ok(result.failures.includes('destination versioning is required'));
+  assert.ok(
+    result.failures.includes('destination generation protection is required'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'generation protection mode must be allowed: immutable-snapshot',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'immutable snapshots must use timestamped prefixes',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('immutable snapshots must prevent overwrite'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'immutable snapshot retention must be at least 35 days',
+    ),
+  );
   assert.ok(
     result.failures.includes('destination encryption at rest is required'),
   );
@@ -105,7 +140,26 @@ test('rejects weak destination retention and delete propagation', () => {
   );
 });
 
-test('requires integrity, DB coordination and safe credentials', () => {
+test('rejects unsupported generation protection modes', () => {
+  const result = validateStorageBackupPolicy({
+    ...policy,
+    destination: {
+      ...policy.destination,
+      allowedGenerationProtectionModes: [
+        'native-versioning',
+        'immutable-snapshot',
+        'copy-only',
+      ],
+    },
+  });
+  assert.ok(
+    result.failures.includes(
+      'unsupported generation protection mode: copy-only',
+    ),
+  );
+});
+
+test('requires integrity DB coordination and safe credentials', () => {
   const result = validateStorageBackupPolicy({
     ...policy,
     transfer: {
