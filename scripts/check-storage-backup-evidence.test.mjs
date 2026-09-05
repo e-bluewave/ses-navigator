@@ -5,9 +5,9 @@ import { validateStorageBackupEvidence } from './check-storage-backup-evidence.m
 
 function validEvidence() {
   return {
-    evidenceId: 'BA007-STORAGE-BACKUP-20260825-01',
+    evidenceId: 'BA007-STORAGE-BACKUP-20260905-01',
     environment: 'Staging',
-    completedAt: '2026-08-25T08:00:00+09:00',
+    completedAt: '2026-09-05T08:00:00+09:00',
     allFileBucketsIncluded: true,
     bucketAndObjectKeyPreserved: true,
     sourceObjectCount: 100,
@@ -22,7 +22,10 @@ function validEvidence() {
     sameSupabaseProjectDestination: false,
     repositoryDestination: false,
     githubActionsArtifactLongTermDestination: false,
-    destinationVersioningEnabled: true,
+    generationProtectionMode: 'immutable-snapshot',
+    generationProtectionVerified: true,
+    timestampedSnapshotPrefixUsed: true,
+    retentionLockEnabled: true,
     encryptedAtRest: true,
     tlsInTransit: true,
     retentionDays: 35,
@@ -37,11 +40,41 @@ function validEvidence() {
   };
 }
 
-test('accepts complete BA-007 storage backup evidence', () => {
+test('accepts complete BA-007 immutable snapshot evidence', () => {
   const result = validateStorageBackupEvidence(validEvidence());
   assert.equal(result.status, 'STORAGE_BACKUP_EVIDENCE_PASSED');
   assert.equal(result.complete, true);
   assert.deepEqual(result.findings, []);
+});
+
+test('accepts native destination versioning as an alternative generation mode', () => {
+  const evidence = validEvidence();
+  evidence.generationProtectionMode = 'native-versioning';
+  evidence.timestampedSnapshotPrefixUsed = false;
+  evidence.retentionLockEnabled = false;
+  const result = validateStorageBackupEvidence(evidence);
+  assert.equal(result.status, 'STORAGE_BACKUP_EVIDENCE_PASSED');
+  assert.deepEqual(result.findings, []);
+});
+
+test('requires timestamped prefixes and retention lock for immutable snapshots', () => {
+  const evidence = validEvidence();
+  evidence.timestampedSnapshotPrefixUsed = false;
+  evidence.retentionLockEnabled = false;
+  const result = validateStorageBackupEvidence(evidence);
+  assert.ok(
+    result.findings.includes('immutable-snapshot-requires-timestamped-prefix'),
+  );
+  assert.ok(
+    result.findings.includes('immutable-snapshot-requires-retention-lock'),
+  );
+});
+
+test('rejects invalid generation protection mode', () => {
+  const evidence = validEvidence();
+  evidence.generationProtectionMode = 'copy-only';
+  const result = validateStorageBackupEvidence(evidence);
+  assert.ok(result.findings.includes('generation-protection-mode-invalid'));
 });
 
 test('rejects unsafe destination and deletion propagation', () => {
