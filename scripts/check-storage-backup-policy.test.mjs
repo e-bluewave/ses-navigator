@@ -120,7 +120,9 @@ test('rejects weak generation protection retention and delete propagation', () =
     ),
   );
   assert.ok(
-    result.failures.includes('immutable snapshots must use timestamped prefixes'),
+    result.failures.includes(
+      'immutable snapshots must use timestamped prefixes',
+    ),
   );
   assert.ok(
     result.failures.includes('immutable snapshots must prevent overwrite'),
@@ -151,7 +153,9 @@ test('rejects unsupported generation protection modes', () => {
     },
   });
   assert.ok(
-    result.failures.includes('unsupported generation protection mode: copy-only'),
+    result.failures.includes(
+      'unsupported generation protection mode: copy-only',
+    ),
   );
 });
 
