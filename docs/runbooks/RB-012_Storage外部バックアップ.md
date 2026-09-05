@@ -8,7 +8,7 @@ Supabase Storageに保存された実オブジェクトを、対象Supabase Proj
 
 - Database backupには`storage.buckets`や`storage.objects`等のメタデータは含まれるが、Storage APIで保存したファイル本体は含まれない。
 - Supabase StorageはS3互換APIを提供し、一括一覧・取得にはS3互換クライアントを利用できる。
-- Supabase StorageのS3互換機能ではSource側のobject versioningを前提にできない。削除済みオブジェクトをSource側だけで復元できると考えない。
+- Supabase StorageのSource側versioningを前提にしない。削除済みオブジェクトをSource側だけで復元できると考えない。
 - DB論理バックアップはBA-006、DB・Storage統合復旧訓練はBA-008で管理する。
 
 ## 標準方針
@@ -24,7 +24,24 @@ Supabase Storageに保存された実オブジェクトを、対象Supabase Proj
 - 最大バックアップ間隔: 24時間
 - 最低保持期間: 35日
 - Source側削除を外部バックアップへ即時伝播しない。
-- 外部保存先ではversioningを有効化し、上書き・誤削除から過去世代を保護する。
+- 外部保存先では、過去世代を誤削除・上書きから保護できるgeneration protectionを必須とする。
+
+### Generation protection
+
+保存先の世代保護方式は、次のいずれかを許可する。
+
+1. `native-versioning`
+   - 保存先のネイティブversioningを有効化する。
+   - 上書き・削除後も過去versionを保持できることを確認する。
+
+2. `immutable-snapshot`
+   - 各backup runを一意のtimestamp付きprefixへ保存し、既存世代を上書きしない。
+   - snapshot対象prefixまたはbucket全体に、35日以上の削除・上書き防止retention lockを適用する。
+   - lifecycle削除を使う場合、retention lockより短い期間で実データが削除されないことを確認する。
+
+BA-007で重要なのは特定providerのS3 Versioning機能そのものではなく、バックアップ世代が35日以上、Sourceの上書き・削除から独立して保持されることである。
+
+MVP初期実装は`immutable-snapshot`方式を採用する。具体的なprovider名、bucket名、account ID、endpoint、credentialは公開GitHubへ記録せず、運用証跡側で管理する。
 
 ### 保存先
 
@@ -35,9 +52,7 @@ Supabase Storageに保存された実オブジェクトを、対象Supabase Proj
 - GitHub Actions Artifactを長期バックアップ保存先にしない。
 - 保存時暗号化を有効化する。
 - TLSで転送する。
-- versioningを有効化する。
-
-具体的なprovider名、bucket名、account ID、endpoint、credential、secret retrieval URLは公開GitHubへ記録しない。
+- `native-versioning`または`immutable-snapshot`のどちらかで世代保護する。
 
 ## 推奨転送方式
 
@@ -56,12 +71,14 @@ S3互換クライアントを使用し、Sourceの全対象bucketを外部保存
 1. 実行対象をStagingまたはProductionとして明示する。
 2. 対象bucket一覧を取得し、運用台帳の対象一覧と照合する。
 3. 専用backup credentialを安全な実行環境へ注入する。
-4. Sourceのobject一覧を取得し、manifestを生成する。
-5. 外部保存先へ新規・更新objectをコピーする。
-6. Sourceで消えたobjectを外部保存先から自動削除しない。
-7. object数・総bytes・integrity情報を照合する。
-8. backup run ID、開始/終了日時、対象環境、object数、総bytes、結果、manifest/checksum evidenceの所在だけを運用台帳へ記録する。
-9. credential、署名URL、Project Ref、object本文・個人情報をGitHub/PR/chat/logへ記録しない。
+4. backup run IDとtimestamp付きsnapshot prefixを確定する。
+5. Sourceのobject一覧を取得し、manifestを生成する。
+6. 外部保存先へ全対象objectをbucket名/object keyを保持してコピーする。
+7. Sourceで消えたobjectを既存snapshotから自動削除しない。
+8. object数・総bytes・integrity情報を照合する。
+9. generation protection、retention lock、暗号化、TLSを確認する。
+10. backup run ID、開始/終了日時、対象環境、object数、総bytes、結果、manifest/checksum evidenceの所在だけを運用台帳へ記録する。
+11. credential、署名URL、Project Ref、object本文・個人情報をGitHub/PR/chat/logへ記録しない。
 
 ## 整合性確認
 
@@ -72,6 +89,8 @@ S3互換クライアントを使用し、Sourceの全対象bucketを外部保存
 - 転送エラーが0件、または全エラーが再実行済みである。
 - checksum、ETag、size等、利用可能な手段で転送後integrityを検証する。
 - manifest自体をバックアップ本体とは別の検証可能な証跡として保持する。
+- `immutable-snapshot`ではtimestamp付きprefixを使用し、同一runの再実行でも既存完了snapshotを上書きしない。
+- retention lockにより保存期間中の削除・上書きが拒否されることを確認する。
 
 S3互換実装でchecksum方式に制約がある場合は、size + ETag等の代替方式を採用し、その方式を運用台帳へ記録する。
 
@@ -95,18 +114,29 @@ S3互換実装でchecksum方式に制約がある場合は、size + ETag等の�
 - 一部失敗: 失敗objectのみ再実行し、manifestを更新する。
 - 認証失敗: credentialの有効性・権限・ローテーション状況を確認する。
 - 保存先容量/保持失敗: 新規バックアップを止めず、保存先拡張または別保存先へ切り替える。
-- Source誤削除発見時: 外部保存先の世代を削除せず、BA-008の復旧手順へ移行する。
+- Source誤削除発見時: 外部保存先の既存世代を削除せず、BA-008の復旧手順へ移行する。
 
 ## BA-007完了条件
 
 GitHub上のRunbook・policy・CIだけではBA-007を完了扱いにしない。次を実環境で確認して完了とする。
 
 1. 外部保存先が確定している。
-2. 保存先versioning・保存時暗号化・35日以上の保持が確認済み。
-3. Stagingの全対象Files bucketで初回外部バックアップが成功している。
-4. manifestとintegrity evidenceを保存している。
-5. Source削除が外部バックアップへ即時伝播しないことを確認している。
-6. BA-006のDBバックアップとの対応関係を記録している。
+2. 保存先暗号化・TLS・35日以上の保持が確認済み。
+3. `native-versioning`または`immutable-snapshot`によるgeneration protectionが実環境で確認済み。
+4. Stagingの全対象Files bucketで初回外部バックアップが成功している。
+5. manifestとintegrity evidenceを保存している。
+6. Source削除が外部バックアップへ即時伝播しないことを確認している。
+7. BA-006のDBバックアップとの対応関係を記録している。
+
+## CI検証
+
+```bash
+pnpm security:storage-backup
+pnpm security:storage-backup:check
+pnpm security:storage-backup-evidence:check
+```
+
+CIはpolicy・validator・単体テストを検証し、実Storage objectやcredentialを読み込まない。
 
 ## 関連
 
