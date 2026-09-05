@@ -96,7 +96,9 @@ export function validateStorageBackupEvidence(document) {
     if (document[field] !== false) findings.push(`${field}-must-be-false`);
   }
 
-  if (!allowedGenerationProtectionModes.has(document.generationProtectionMode)) {
+  if (
+    !allowedGenerationProtectionModes.has(document.generationProtectionMode)
+  ) {
     findings.push('generation-protection-mode-invalid');
   }
   if (document.generationProtectionMode === 'immutable-snapshot') {
