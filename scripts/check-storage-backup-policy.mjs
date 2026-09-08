@@ -16,7 +16,7 @@ export function validateStorageBackupPolicy(policy) {
   const coordination = policy?.coordination ?? {};
   const security = policy?.security ?? {};
 
-  if (policy?.version !== 2) failures.push('policy version must be 2');
+  if (policy?.version !== 3) failures.push('policy version must be 3');
   if (policy?.scope !== 'supabase-storage-object-backup') {
     failures.push('scope must be supabase-storage-object-backup');
   }
@@ -104,8 +104,14 @@ export function validateStorageBackupPolicy(policy) {
   if (transfer.deletePropagationAllowed !== false) {
     failures.push('source deletes must not automatically propagate');
   }
-  if (coordination.databaseMetadataBackupRequired !== true) {
-    failures.push('database metadata backup coordination is required');
+  if (coordination.databaseRecoveryPointCoordinationRequired !== true) {
+    failures.push('database recovery point coordination is required');
+  }
+  if (coordination.storageManagedSchemaExcludedFromDbDump !== true) {
+    failures.push('Supabase managed Storage schema exclusion must be explicit');
+  }
+  if (coordination.storageMetadataRecreatedByStorageApi !== true) {
+    failures.push('Storage metadata must be recreated through the Storage API');
   }
   if (coordination.databaseBackupTrackedBy !== 'BA-006') {
     failures.push('database backup must be tracked by BA-006');
