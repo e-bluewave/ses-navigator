@@ -190,7 +190,9 @@ test('requires integrity recovery point coordination and safe credentials', () =
     result.failures.includes('object integrity verification is required'),
   );
   assert.ok(
-    result.failures.includes('database recovery point coordination is required'),
+    result.failures.includes(
+      'database recovery point coordination is required',
+    ),
   );
   assert.ok(
     result.failures.includes(
