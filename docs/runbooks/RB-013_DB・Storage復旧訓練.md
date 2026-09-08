@@ -13,6 +13,7 @@ BA-006のDB論理バックアップとBA-007のStorage外部バックアップ�
 - credential、接続文字列、Project Ref、個人情報、復旧データ本体をGitHub/PR/chat/logへ記録しない。
 - 最大訓練間隔は90日とする。
 - 主担当と副担当を運用台帳で明示する。
+- Supabase CLI `db dump` は`auth`・`storage`等のSupabase管理schemaを通常dumpから除外するため、Storage管理metadataの復旧をBA-006 dumpへ依存しない。
 
 ## 事前準備
 
@@ -44,20 +45,26 @@ psql \
   --variable ON_ERROR_STOP=1 \
   --file roles.sql \
   --file schema.sql \
-  --command 'SET session_replication_role = replica' \
   --file data.sql \
   --dbname "$TARGET_DB_URL"
 ```
 
 実際の接続文字列やpasswordは表示・保存しない。
 
+Supabaseの新規Projectへ復旧する場合は、対象Projectに既に存在するSupabase管理schemaを直接上書きしない。BA-006 dumpに含まれるApplication schema/dataとcustom roleを復旧対象とし、Supabase管理schemaは復旧先Projectが管理する状態を維持する。
+
 ## Storage復旧
 
-1. DB側のbucket/object metadataを確認する。
-2. BA-007の外部Storage backupから対象bucket/objectを復旧先へコピーする。
-3. bucket名とobject keyを維持する。
-4. object数、総bytes、manifest、checksum/ETag/size等でintegrityを確認する。
-5. DB metadataに存在するが実objectがないもの、実objectはあるがmetadataにないものを不整合として記録する。
+Storage復旧は、`storage` schemaのSQL restoreではなくStorage API/S3互換APIを標準とする。
+
+1. BA-007 manifestから復旧対象bucket/object inventoryを取得する。
+2. 復旧先に対象bucketをStorage API/S3互換APIで作成する。
+3. bucket固有設定が記録されている場合は、その設定を復旧する。暗黙にdefaultへ置き換えない。
+4. BA-007の外部Storage backupから対象objectを復旧先へコピーする。
+5. bucket名とobject keyを維持する。
+6. Storage APIを通じてobjectを作成し、復旧先のStorage管理metadataを再生成する。
+7. object数、総bytes、manifest、checksum/ETag/size等でintegrityを確認する。
+8. 復旧後のStorage inventoryとmanifestを照合し、欠損・余剰objectを不整合として記録する。
 
 ## 復旧後検証
 
@@ -72,6 +79,8 @@ psql \
 - 代表ファイルの取得
 - RLS/権限境界
 - SecretがProduction値へ向いていないこと
+
+Auth SmokeはAuth利用可否と認証境界の確認を目的とし、BA-006論理dumpが`auth.users`等のSupabase管理Auth dataを復元することを成功条件にはしない。必要な検証ユーザーは復旧先専用として作成する。
 
 ## 成功条件
 
