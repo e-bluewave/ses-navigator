@@ -41,7 +41,7 @@ Staging StorageのFiles bucket一覧をS3互換APIで確認したところ、実
 |保存時暗号化|PASS|
 |source削除後のbackup残存|PASS|
 |source削除後のbackup SHA-256|PASS|
-|BA-006 DBメタデータbackup連携|PASS|
+|BA-006 DB復旧ポイント連携|PASS|
 |storage backup evidence validator|`STORAGE_BACKUP_EVIDENCE_PASSED` / complete true / findings 0|
 |database backup evidence validator|`DATABASE_BACKUP_EVIDENCE_PASSED` / complete true / findings 0|
 |Production touched|false|
@@ -51,6 +51,8 @@ Staging StorageのFiles bucket一覧をS3互換APIで確認したところ、実
 R2等の具体的な保存先サービス名・bucket名・アカウント識別子・Endpoint・Access Key等は、このGitHub証跡へ記録しない。詳細manifestおよび実証跡JSONはGitリポジトリ外の運用証跡領域へ保存する。
 
 実Files bucketが0件だったため、初回実データbackupの代わりに一時validation objectを使用して、実環境でtransfer、checksum、immutable snapshot、retention lock、overwrite/delete protection、source deletion non-propagationを実証した。将来Files bucketが作成された場合も、RB-012の24時間以内のbackup頻度で全bucketを対象とする。
+
+Supabase CLI `db dump` は`auth`・`storage`等のSupabase管理schemaを通常dumpから除外する。したがって、この証跡で確認したBA-006連携はApplication DBとStorage backupの復旧ポイント対応関係を意味し、`storage.buckets` / `storage.objects`をBA-006 SQL dumpから直接復元できることを意味しない。Storage管理metadataの再生成はBA-008でStorage API/S3互換APIを用いて検証する。
 
 BA-007はbackup取得可能性の確認を対象とし、別環境へのStorage復旧可否はBA-008の復旧訓練で確認する。
 
@@ -70,4 +72,4 @@ GitHub証跡には次を記録していない。
 
 ## 判定
 
-Stagingで専用資格情報によるS3互換Storage接続、一時validation objectの外部backup、bucket/object key保持、timestamp付きimmutable snapshot、SHA-256再取得照合、35日以上のretention lock、overwrite/delete protection、source削除非伝播、BA-006 DBメタデータbackup連携、秘密情報非露出、専用evidence validator PASSまで確認済みのため、BA-007を`verified`とする。
+Stagingで専用資格情報によるS3互換Storage接続、一時validation objectの外部backup、bucket/object key保持、timestamp付きimmutable snapshot、SHA-256再取得照合、35日以上のretention lock、overwrite/delete protection、source削除非伝播、BA-006 DB復旧ポイント連携、秘密情報非露出、専用evidence validator PASSまで確認済みのため、BA-007を`verified`とする。

@@ -4,7 +4,7 @@ import test from 'node:test';
 import { validateStorageBackupPolicy } from './check-storage-backup-policy.mjs';
 
 const policy = {
-  version: 2,
+  version: 3,
   scope: 'supabase-storage-object-backup',
   source: {
     protocol: 's3-compatible',
@@ -40,7 +40,9 @@ const policy = {
     deletePropagationAllowed: false,
   },
   coordination: {
-    databaseMetadataBackupRequired: true,
+    databaseRecoveryPointCoordinationRequired: true,
+    storageManagedSchemaExcludedFromDbDump: true,
+    storageMetadataRecreatedByStorageApi: true,
     databaseBackupTrackedBy: 'BA-006',
     restoreDrillTrackedBy: 'BA-008',
   },
@@ -159,7 +161,7 @@ test('rejects unsupported generation protection modes', () => {
   );
 });
 
-test('requires integrity DB coordination and safe credentials', () => {
+test('requires integrity recovery point coordination and safe credentials', () => {
   const result = validateStorageBackupPolicy({
     ...policy,
     transfer: {
@@ -169,7 +171,9 @@ test('requires integrity DB coordination and safe credentials', () => {
       deletePropagationAllowed: false,
     },
     coordination: {
-      databaseMetadataBackupRequired: false,
+      databaseRecoveryPointCoordinationRequired: false,
+      storageManagedSchemaExcludedFromDbDump: false,
+      storageMetadataRecreatedByStorageApi: false,
       databaseBackupTrackedBy: 'none',
       restoreDrillTrackedBy: 'none',
     },
@@ -187,7 +191,17 @@ test('requires integrity DB coordination and safe credentials', () => {
   );
   assert.ok(
     result.failures.includes(
-      'database metadata backup coordination is required',
+      'database recovery point coordination is required',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'Supabase managed Storage schema exclusion must be explicit',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'Storage metadata must be recreated through the Storage API',
     ),
   );
   assert.ok(

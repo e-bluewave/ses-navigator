@@ -6,7 +6,9 @@ Supabase Storageに保存された実オブジェクトを、対象Supabase Proj
 
 ## 前提
 
-- Database backupには`storage.buckets`や`storage.objects`等のメタデータは含まれるが、Storage APIで保存したファイル本体は含まれない。
+- Supabase CLI `db dump` はSupabase管理schemaを除外し、`auth`・`storage`等を通常の論理dumpへ含めない。
+- したがって、BA-006のroles/schema/data論理バックアップだけで`storage.buckets` / `storage.objects`等のStorage管理metadataを直接復元できるとは考えない。
+- Storage object本体とbucket/object inventoryはBA-007で独立管理し、復旧時はBA-008でStorage API/S3互換APIを通じてbucket/objectを再作成してStorage管理metadataを再生成する。
 - Supabase StorageはS3互換APIを提供し、一括一覧・取得にはS3互換クライアントを利用できる。
 - Supabase StorageのSource側versioningを前提にしない。削除済みオブジェクトをSource側だけで復元できると考えない。
 - DB論理バックアップはBA-006、DB・Storage統合復旧訓練はBA-008で管理する。
@@ -94,13 +96,16 @@ S3互換クライアントを使用し、Sourceの全対象bucketを外部保存
 
 S3互換実装でchecksum方式に制約がある場合は、size + ETag等の代替方式を採用し、その方式を運用台帳へ記録する。
 
-## DBメタデータとの同期
+## DB復旧ポイントとの同期
 
-完全復旧にはStorage object本体だけでなく、`storage.buckets` / `storage.objects`等のDBメタデータも必要になる。
+完全復旧ではApplication DBとStorage objectを同一または説明可能な近接復旧ポイントへ戻す必要がある。
 
 - BA-006のDBバックアップと同一運用日・近接時刻で取得する。
 - Storage backup manifestに対応するDB backup run IDを記録する。
-- 復旧時はBA-008の手順に従い、DB metadataとobject本体の双方を検証する。
+- BA-006の通常dumpがStorage管理schemaを含むとはみなさない。
+- 復旧時はBA-008で先にApplication DBを復旧し、その後Storage API/S3互換APIでbucket/objectを再作成してStorage管理metadataを生成する。
+- bucket固有設定が存在する場合は、Source inventoryまたは運用台帳の設定値を用いて復旧し、暗黙のdefault値への置換を行わない。
+- 最後にDB側のApplication状態、Storage inventory、object取得結果をまとめて整合確認する。
 
 ## Secret管理
 
@@ -126,7 +131,7 @@ GitHub上のRunbook・policy・CIだけではBA-007を完了扱いにしない�
 4. Stagingの全対象Files bucketで初回外部バックアップが成功している。
 5. manifestとintegrity evidenceを保存している。
 6. Source削除が外部バックアップへ即時伝播しないことを確認している。
-7. BA-006のDBバックアップとの対応関係を記録している。
+7. BA-006のDBバックアップとの復旧ポイント対応関係を記録している。
 
 ## CI検証
 
