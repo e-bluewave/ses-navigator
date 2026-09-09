@@ -72,6 +72,8 @@ jobs:
       - run: pnpm security:restore-drill
       - run: pnpm security:restore-drill:check
       - run: pnpm security:restore-preflight:check
+      - run: pnpm security:restore-target-probe:check
+      - run: pnpm security:restore-local-preflight:check
       - run: pnpm security:restore-drill-evidence:check
       - run: pnpm security:rpo-rto
       - run: pnpm security:rpo-rto:check
