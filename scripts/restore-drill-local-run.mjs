@@ -22,13 +22,13 @@ export function validateLocalRestoreRunFacts(document) {
     return failedFacts('run-facts-object-required');
   }
 
-  if (document.environment !== undefined && document.environment !== 'Disposable') {
+  if (
+    document.environment !== undefined &&
+    document.environment !== 'Disposable'
+  ) {
     findings.push('environment-must-be-disposable');
   }
-  for (const field of [
-    'databaseRecoveryPointAt',
-    'storageRecoveryPointAt',
-  ]) {
+  for (const field of ['databaseRecoveryPointAt', 'storageRecoveryPointAt']) {
     if (!validTimestamp(document[field])) {
       findings.push(`${field}-valid-timestamp-required`);
     }
@@ -116,7 +116,8 @@ export function calculateRestoreTimeline({
     storageRecoveryPointAt,
     'storageRecoveryPointAt',
   );
-  if (usable < start) throw new Error('Business usable time precedes drill start');
+  if (usable < start)
+    throw new Error('Business usable time precedes drill start');
 
   const jointRecoveryPoint = Math.min(databasePoint, storagePoint);
   if (jointRecoveryPoint > start) {
@@ -158,12 +159,16 @@ export function buildRestoreDrillEvidence({
   storageResult,
   liveResult,
 }) {
-  if (dbResult?.complete !== true) throw new Error('DB restore result must pass');
+  if (dbResult?.complete !== true)
+    throw new Error('DB restore result must pass');
   if (storageResult?.complete !== true) {
     throw new Error('Storage restore result must pass');
   }
   if (liveResult?.complete !== true) {
     throw new Error('Live validation result must pass');
+  }
+  if (dbResult.customRoleReplay !== 'INTENTIONAL_SKIP_EMPTY_CUSTOM_SET') {
+    throw new Error('Unexpected DB role replay result');
   }
 
   const timeline = calculateRestoreTimeline({
@@ -180,8 +185,9 @@ export function buildRestoreDrillEvidence({
     throw new Error('RPO/RTO follow-up reference is required');
   }
 
-  const evidenceId =
-    nonBlankString(facts.evidenceId) ? facts.evidenceId.trim() : evidenceIdFrom(startedAt);
+  const evidenceId = nonBlankString(facts.evidenceId)
+    ? facts.evidenceId.trim()
+    : evidenceIdFrom(startedAt);
   const notes = buildEvidenceNotes(facts.notes);
   const evidence = {
     evidenceId,
@@ -194,10 +200,11 @@ export function buildRestoreDrillEvidence({
     databaseBackupRunLinked: true,
     storageBackupRunLinked: true,
     restorePointAlignment: 'PASS',
-    rolesRestore: dbResult.customRoleReplay === 'INTENTIONAL_SKIP_EMPTY_CUSTOM_SET' ? 'PASS' : 'PASS',
+    rolesRestore: 'PASS',
     schemaRestore: dbResult.schemaRestore,
     dataRestore: dbResult.dataRestore,
-    databaseRestoreTransactional: dbResult.databaseRestoreTransactional === true,
+    databaseRestoreTransactional:
+      dbResult.databaseRestoreTransactional === true,
     databaseOnErrorStop: dbResult.databaseOnErrorStop === true,
     storageRestore: storageResult.storageRestore,
     storageObjectCountParity: storageResult.storageObjectCountParity,
@@ -242,7 +249,8 @@ export async function runLocalRestoreDrill({
   log = console.log,
 } = {}) {
   if (!runFactsPath) throw new Error('Private run facts path is required');
-  if (!outputPath) throw new Error('Restore drill evidence output path is required');
+  if (!outputPath)
+    throw new Error('Restore drill evidence output path is required');
 
   const text = await readFileImpl(runFactsPath, 'utf8');
   if (text.charCodeAt(0) === 0xfeff) {
@@ -251,7 +259,9 @@ export async function runLocalRestoreDrill({
   const facts = JSON.parse(text);
   const factsResult = validateLocalRestoreRunFacts(facts);
   if (!factsResult.complete) {
-    throw new Error(`Local restore run facts failed (${factsResult.findings.length})`);
+    throw new Error(
+      `Local restore run facts failed (${factsResult.findings.length})`,
+    );
   }
 
   const repoRoot = resolve(facts.repoRoot ?? '.');
@@ -275,7 +285,8 @@ export async function runLocalRestoreDrill({
     sourceRoot: facts.storage.sourceRoot,
     environment: 'Disposable',
     cleanupExisting: facts.storage.cleanupExisting === true,
-    env,
+    targetUrl: env.SESN_RESTORE_STORAGE_URL,
+    serviceRoleKey: env.SESN_RESTORE_STORAGE_SERVICE_ROLE_KEY,
     log: () => {},
   });
 
@@ -300,7 +311,11 @@ export async function runLocalRestoreDrill({
     );
   }
 
-  await writeFileImpl(outputPath, `${JSON.stringify(assembled.evidence, null, 2)}\n`, 'utf8');
+  await writeFileImpl(
+    outputPath,
+    `${JSON.stringify(assembled.evidence, null, 2)}\n`,
+    'utf8',
+  );
 
   const summary = {
     status: 'LOCAL_RESTORE_DRILL_PASSED',
@@ -327,9 +342,13 @@ export async function runDefaultLiveValidation({
   findPort = findAvailablePort,
 } = {}) {
   const beforeInstallStatus = trackedStatus(repoRoot, runCommand);
-  const install = runCommand(pnpmExecutable(), ['install', '--frozen-lockfile'], {
-    cwd: repoRoot,
-  });
+  const install = runCommand(
+    pnpmExecutable(),
+    ['install', '--frozen-lockfile'],
+    {
+      cwd: repoRoot,
+    },
+  );
   if (install.status !== 0) throw new Error('Dependency readiness failed');
   const afterInstallStatus = trackedStatus(repoRoot, runCommand);
   if (afterInstallStatus !== beforeInstallStatus) {
@@ -349,10 +368,17 @@ export async function runDefaultLiveValidation({
     ['--filter', '@sesn/api', 'start'],
     {
       cwd: repoRoot,
-      env: { ...env, HOST: '127.0.0.1', PORT: String(port) },
+      env: {
+        ...env,
+        SUPABASE_URL: env.SUPABASE_URL ?? env.SESN_SUPABASE_URL,
+        SUPABASE_ANON_KEY:
+          env.SUPABASE_ANON_KEY ?? env.SESN_SUPABASE_PUBLISHABLE_KEY,
+        HOST: '127.0.0.1',
+        PORT: String(port),
+      },
       windowsHide: true,
       stdio: ['ignore', 'ignore', 'ignore'],
-      shell: false,
+      shell: process.platform === 'win32',
     },
   );
   try {
@@ -407,7 +433,9 @@ function runCommandSafe(command, args, options = {}) {
     cwd: options.cwd,
     encoding: 'utf8',
     windowsHide: true,
-    shell: false,
+    shell:
+      options.shell ??
+      (process.platform === 'win32' && command === pnpmExecutable()),
     maxBuffer: 16 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -419,13 +447,14 @@ function runCommandSafe(command, args, options = {}) {
 }
 
 function pnpmExecutable() {
-  return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+  return 'pnpm';
 }
 
 async function waitForHealth({ port, child, fetchImpl, timeoutMs = 30_000 }) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    if (child.exitCode !== null) throw new Error('API server exited before health check');
+    if (child.exitCode !== null)
+      throw new Error('API server exited before health check');
     try {
       const response = await fetchImpl(`http://127.0.0.1:${port}/health`, {
         signal: AbortSignal.timeout(1_000),
@@ -469,11 +498,15 @@ function findAvailablePort() {
 function buildEvidenceNotes(userNotes) {
   const standard =
     'Automated Disposable Local restore. Custom application role set was empty; Supabase-managed roles remained target-native. Storage metadata was recreated through the Storage API.';
-  return nonBlankString(userNotes) ? `${standard} ${userNotes.trim()}` : standard;
+  return nonBlankString(userNotes)
+    ? `${standard} ${userNotes.trim()}`
+    : standard;
 }
 
 function evidenceIdFrom(startedAt) {
-  return `BA008-LOCAL-${String(startedAt).replace(/[-:.TZ]/gu, '').slice(0, 14)}`;
+  return `BA008-LOCAL-${String(startedAt)
+    .replace(/[-:.TZ]/gu, '')
+    .slice(0, 14)}`;
 }
 
 function roundMinutes(milliseconds) {
@@ -481,7 +514,8 @@ function roundMinutes(milliseconds) {
 }
 
 function parseTimestamp(value, field) {
-  if (!validTimestamp(value)) throw new Error(`${field} must be a valid timestamp`);
+  if (!validTimestamp(value))
+    throw new Error(`${field} must be a valid timestamp`);
   return Date.parse(value);
 }
 
