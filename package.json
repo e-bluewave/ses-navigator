@@ -94,7 +94,9 @@
     "smoke:auth-project": "node scripts/auth-project-smoke.mjs",
     "smoke:auth-project:check": "node --test scripts/auth-project-smoke.test.mjs",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "security:restore-local-db": "node scripts/restore-drill-local-db-restore.mjs",
+    "security:restore-local-db:check": "node --test scripts/restore-drill-local-db-restore.test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
