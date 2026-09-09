@@ -15,7 +15,7 @@ export function validateDatabaseBackupPolicy(policy) {
   const security = policy?.security ?? {};
   const verification = policy?.verification ?? {};
 
-  if (policy?.version !== 1) failures.push('policy version must be 1');
+  if (policy?.version !== 2) failures.push('policy version must be 2');
   if (policy?.scope !== 'database-logical-backup')
     failures.push('scope must be database-logical-backup');
   if (policy?.method !== 'supabase-cli-db-dump')
@@ -45,6 +45,14 @@ export function validateDatabaseBackupPolicy(policy) {
   }
   if (artifacts.dataUseCopy !== true)
     failures.push('data backup must use COPY mode');
+  if (artifacts.supabaseManagedSchemasExcluded !== true) {
+    failures.push(
+      'Supabase managed schemas must be excluded from logical dump',
+    );
+  }
+  if (artifacts.storageManagedSchemaExcluded !== true) {
+    failures.push('Storage managed schema must be excluded from logical dump');
+  }
 
   const excluded = new Set(
     Array.isArray(artifacts.excludedDataObjects)
@@ -84,6 +92,23 @@ export function validateDatabaseBackupPolicy(policy) {
     failures.push('backup manifest is required');
   if (verification.checksumRequired !== true)
     failures.push('backup checksum is required');
+  if (verification.backupSetStartTimestampRequired !== true) {
+    failures.push('backup set start timestamp is required');
+  }
+  if (verification.migrationBaselineRequired !== true) {
+    failures.push('migration baseline is required');
+  }
+  if (verification.applicationSchemaBaselineRequired !== true) {
+    failures.push('application schema baseline is required');
+  }
+  if (verification.recoveryPointUsesBackupSetStart !== true) {
+    failures.push(
+      'backup set start must define the conservative recovery point',
+    );
+  }
+  if (verification.strictUtf8NoBomEvidenceRequired !== true) {
+    failures.push('database backup evidence must use UTF-8 without BOM');
+  }
   if (verification.restoreDrillTrackedBy !== 'BA-008')
     failures.push('restore drill must be tracked by BA-008');
 

@@ -4,6 +4,7 @@ import { isMainModule } from './cli-entry.mjs';
 const requiredFields = [
   'evidenceId',
   'environment',
+  'startedAt',
   'completedAt',
   'allFileBucketsIncluded',
   'bucketAndObjectKeyPreserved',
@@ -30,6 +31,10 @@ const requiredFields = [
   'sourceDeletionPropagatesImmediately',
   'dedicatedBackupCredentialUsed',
   'databaseBackupRunLinked',
+  'databaseRecoveryPointRecorded',
+  'storageRecoveryPointRecorded',
+  'recoveryPointSkewMinutesMeasured',
+  'jointRecoveryPointEstablished',
   'credentialExposed',
   'objectDataExposed',
   'secretFreeEvidence',
@@ -80,6 +85,9 @@ export function validateStorageBackupEvidence(document) {
     'tlsInTransit',
     'dedicatedBackupCredentialUsed',
     'databaseBackupRunLinked',
+    'databaseRecoveryPointRecorded',
+    'storageRecoveryPointRecorded',
+    'jointRecoveryPointEstablished',
     'secretFreeEvidence',
   ]) {
     if (document[field] !== true) findings.push(`${field}-must-be-true`);
@@ -159,11 +167,26 @@ export function validateStorageBackupEvidence(document) {
   ) {
     findings.push('frequency-hours-must-be-between-1-and-24');
   }
+  if (!isNonNegativeNumber(document.recoveryPointSkewMinutesMeasured)) {
+    findings.push('recovery-point-skew-minutes-must-be-non-negative-number');
+  }
+
+  for (const field of ['startedAt', 'completedAt']) {
+    if (
+      typeof document[field] === 'string' &&
+      Number.isNaN(Date.parse(document[field]))
+    ) {
+      findings.push(`invalid-timestamp:${field}`);
+    }
+  }
   if (
+    typeof document.startedAt === 'string' &&
     typeof document.completedAt === 'string' &&
-    Number.isNaN(Date.parse(document.completedAt))
+    !Number.isNaN(Date.parse(document.startedAt)) &&
+    !Number.isNaN(Date.parse(document.completedAt)) &&
+    Date.parse(document.completedAt) < Date.parse(document.startedAt)
   ) {
-    findings.push('invalid-timestamp:completedAt');
+    findings.push('completed-at-must-not-precede-started-at');
   }
 
   for (const [field, value] of Object.entries(document)) {
@@ -186,13 +209,27 @@ export function validateStorageBackupEvidence(document) {
   };
 }
 
+export function validateStorageBackupEvidenceText(text) {
+  if (typeof text !== 'string') return failed('evidence-text-required');
+  if (text.charCodeAt(0) === 0xfeff) return failed('utf8-bom-not-allowed');
+
+  let document;
+  try {
+    document = JSON.parse(text);
+  } catch {
+    return failed('invalid-json');
+  }
+  return validateStorageBackupEvidence(document);
+}
+
 export async function runStorageBackupEvidenceCheck({
   path,
   log = console.log,
 } = {}) {
   if (!path) throw new Error('Storage backup evidence path is required');
-  const document = JSON.parse(await readFile(path, 'utf8'));
-  const result = validateStorageBackupEvidence(document);
+  const result = validateStorageBackupEvidenceText(
+    await readFile(path, 'utf8'),
+  );
   log(JSON.stringify(result, null, 2));
   if (!result.complete) {
     throw new Error(
@@ -200,6 +237,10 @@ export async function runStorageBackupEvidenceCheck({
     );
   }
   return result;
+}
+
+function isNonNegativeNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
 function failed(rule) {

@@ -4,7 +4,7 @@ import test from 'node:test';
 import { validateStorageBackupPolicy } from './check-storage-backup-policy.mjs';
 
 const policy = {
-  version: 3,
+  version: 4,
   scope: 'supabase-storage-object-backup',
   source: {
     protocol: 's3-compatible',
@@ -41,10 +41,17 @@ const policy = {
   },
   coordination: {
     databaseRecoveryPointCoordinationRequired: true,
+    databaseRecoveryPointTimestampRequired: true,
+    storageRecoveryPointTimestampRequired: true,
+    recoveryPointSkewMeasurementRequired: true,
+    jointRecoveryPointEvidenceRequired: true,
     storageManagedSchemaExcludedFromDbDump: true,
     storageMetadataRecreatedByStorageApi: true,
     databaseBackupTrackedBy: 'BA-006',
     restoreDrillTrackedBy: 'BA-008',
+  },
+  verification: {
+    strictUtf8NoBomEvidenceRequired: true,
   },
   security: {
     dedicatedBackupCredentialRequired: true,
@@ -161,7 +168,50 @@ test('rejects unsupported generation protection modes', () => {
   );
 });
 
-test('requires integrity recovery point coordination and safe credentials', () => {
+test('requires measured DB and Storage recovery point coordination', () => {
+  const result = validateStorageBackupPolicy({
+    ...policy,
+    coordination: {
+      ...policy.coordination,
+      databaseRecoveryPointCoordinationRequired: false,
+      databaseRecoveryPointTimestampRequired: false,
+      storageRecoveryPointTimestampRequired: false,
+      recoveryPointSkewMeasurementRequired: false,
+      jointRecoveryPointEvidenceRequired: false,
+    },
+    verification: {
+      strictUtf8NoBomEvidenceRequired: false,
+    },
+  });
+  assert.ok(
+    result.failures.includes(
+      'database recovery point coordination is required',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('database recovery point timestamp is required'),
+  );
+  assert.ok(
+    result.failures.includes('storage recovery point timestamp is required'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'DB and Storage recovery point skew measurement is required',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'joint DB and Storage recovery point evidence is required',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'storage backup evidence must use UTF-8 without BOM',
+    ),
+  );
+});
+
+test('requires integrity managed-schema coordination and safe credentials', () => {
   const result = validateStorageBackupPolicy({
     ...policy,
     transfer: {
@@ -171,7 +221,7 @@ test('requires integrity recovery point coordination and safe credentials', () =
       deletePropagationAllowed: false,
     },
     coordination: {
-      databaseRecoveryPointCoordinationRequired: false,
+      ...policy.coordination,
       storageManagedSchemaExcludedFromDbDump: false,
       storageMetadataRecreatedByStorageApi: false,
       databaseBackupTrackedBy: 'none',
@@ -188,11 +238,6 @@ test('requires integrity recovery point coordination and safe credentials', () =
   assert.ok(result.failures.includes('object inventory is required'));
   assert.ok(
     result.failures.includes('object integrity verification is required'),
-  );
-  assert.ok(
-    result.failures.includes(
-      'database recovery point coordination is required',
-    ),
   );
   assert.ok(
     result.failures.includes(

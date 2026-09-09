@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "scope": "supabase-storage-object-backup",
   "source": {
     "protocol": "s3-compatible",
@@ -36,10 +36,17 @@
   },
   "coordination": {
     "databaseRecoveryPointCoordinationRequired": true,
+    "databaseRecoveryPointTimestampRequired": true,
+    "storageRecoveryPointTimestampRequired": true,
+    "recoveryPointSkewMeasurementRequired": true,
+    "jointRecoveryPointEvidenceRequired": true,
     "storageManagedSchemaExcludedFromDbDump": true,
     "storageMetadataRecreatedByStorageApi": true,
     "databaseBackupTrackedBy": "BA-006",
     "restoreDrillTrackedBy": "BA-008"
+  },
+  "verification": {
+    "strictUtf8NoBomEvidenceRequired": true
   },
   "security": {
     "dedicatedBackupCredentialRequired": true,

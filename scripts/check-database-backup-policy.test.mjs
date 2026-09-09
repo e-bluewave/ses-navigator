@@ -4,7 +4,7 @@ import test from 'node:test';
 import { validateDatabaseBackupPolicy } from './check-database-backup-policy.mjs';
 
 const policy = {
-  version: 1,
+  version: 2,
   scope: 'database-logical-backup',
   method: 'supabase-cli-db-dump',
   frequencyHours: 24,
@@ -18,6 +18,8 @@ const policy = {
     schema: true,
     data: true,
     dataUseCopy: true,
+    supabaseManagedSchemasExcluded: true,
+    storageManagedSchemaExcluded: true,
     excludedDataObjects: ['storage.buckets_vectors', 'storage.vector_indexes'],
   },
   destination: {
@@ -38,6 +40,11 @@ const policy = {
   verification: {
     manifestRequired: true,
     checksumRequired: true,
+    backupSetStartTimestampRequired: true,
+    migrationBaselineRequired: true,
+    applicationSchemaBaselineRequired: true,
+    recoveryPointUsesBackupSetStart: true,
+    strictUtf8NoBomEvidenceRequired: true,
     restoreDrillTrackedBy: 'BA-008',
   },
 };
@@ -78,7 +85,7 @@ test('rejects a backup interval longer than 24 hours and short retention', () =>
   );
 });
 
-test('requires roles, schema, data COPY mode and Supabase vector exclusions', () => {
+test('requires dump artifacts COPY mode and managed-schema exclusions', () => {
   const result = validateDatabaseBackupPolicy({
     ...policy,
     artifacts: {
@@ -86,6 +93,8 @@ test('requires roles, schema, data COPY mode and Supabase vector exclusions', ()
       schema: true,
       data: true,
       dataUseCopy: false,
+      supabaseManagedSchemasExcluded: false,
+      storageManagedSchemaExcluded: false,
       excludedDataObjects: [],
     },
   });
@@ -95,6 +104,16 @@ test('requires roles, schema, data COPY mode and Supabase vector exclusions', ()
     ),
   );
   assert.ok(result.failures.includes('data backup must use COPY mode'));
+  assert.ok(
+    result.failures.includes(
+      'Supabase managed schemas must be excluded from logical dump',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'Storage managed schema must be excluded from logical dump',
+    ),
+  );
   assert.ok(
     result.failures.includes(
       'required data exclusion missing: storage.buckets_vectors',
@@ -107,7 +126,43 @@ test('requires roles, schema, data COPY mode and Supabase vector exclusions', ()
   );
 });
 
-test('requires encryption, secret handling, manifest, checksum and BA-008 restore tracking', () => {
+test('requires recovery metadata and BA-008 restore tracking', () => {
+  const result = validateDatabaseBackupPolicy({
+    ...policy,
+    verification: {
+      manifestRequired: false,
+      checksumRequired: false,
+      backupSetStartTimestampRequired: false,
+      migrationBaselineRequired: false,
+      applicationSchemaBaselineRequired: false,
+      recoveryPointUsesBackupSetStart: false,
+      strictUtf8NoBomEvidenceRequired: false,
+      restoreDrillTrackedBy: 'none',
+    },
+  });
+  assert.ok(result.failures.includes('backup manifest is required'));
+  assert.ok(result.failures.includes('backup checksum is required'));
+  assert.ok(result.failures.includes('backup set start timestamp is required'));
+  assert.ok(result.failures.includes('migration baseline is required'));
+  assert.ok(
+    result.failures.includes('application schema baseline is required'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'backup set start must define the conservative recovery point',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'database backup evidence must use UTF-8 without BOM',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('restore drill must be tracked by BA-008'),
+  );
+});
+
+test('requires encryption and safe secret handling', () => {
   const result = validateDatabaseBackupPolicy({
     ...policy,
     encryption: { inTransit: 'plain', atRestRequired: false },
@@ -115,11 +170,6 @@ test('requires encryption, secret handling, manifest, checksum and BA-008 restor
       databaseUrlInLogsAllowed: true,
       databasePasswordInRepositoryAllowed: true,
       backupContainsSecretsReviewRequired: false,
-    },
-    verification: {
-      manifestRequired: false,
-      checksumRequired: false,
-      restoreDrillTrackedBy: 'none',
     },
   });
   assert.equal(result.status, 'DATABASE_BACKUP_POLICY_FAILED');
@@ -139,10 +189,5 @@ test('requires encryption, secret handling, manifest, checksum and BA-008 restor
   );
   assert.ok(
     result.failures.includes('backup secret-content review must be required'),
-  );
-  assert.ok(result.failures.includes('backup manifest is required'));
-  assert.ok(result.failures.includes('backup checksum is required'));
-  assert.ok(
-    result.failures.includes('restore drill must be tracked by BA-008'),
   );
 });
