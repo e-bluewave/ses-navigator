@@ -21,13 +21,91 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Apply fail-closed integration fixes
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'scripts/restore-drill-local-run.mjs';
+          let text = fs.readFileSync(path, 'utf8');
+
+          const liveAnchor = `  if (liveResult?.complete !== true) {
+              throw new Error('Live validation result must pass');
+            }
+          `;
+          if (!text.includes(liveAnchor)) throw new Error('live result anchor missing');
+          text = text.replace(
+            liveAnchor,
+            `${liveAnchor}  if (dbResult.customRoleReplay !== 'INTENTIONAL_SKIP_EMPTY_CUSTOM_SET') {
+              throw new Error('Unexpected DB role replay result');
+            }
+          `,
+          );
+
+          const roleLine = `    rolesRestore: dbResult.customRoleReplay === 'INTENTIONAL_SKIP_EMPTY_CUSTOM_SET' ? 'PASS' : 'PASS',`;
+          if (!text.includes(roleLine)) throw new Error('role line missing');
+          text = text.replace(roleLine, `    rolesRestore: 'PASS',`);
+
+          const storageAnchor = `    cleanupExisting: facts.storage.cleanupExisting === true,
+              env,
+              log: () => {},`;
+          if (!text.includes(storageAnchor)) throw new Error('storage anchor missing');
+          text = text.replace(
+            storageAnchor,
+            `    cleanupExisting: facts.storage.cleanupExisting === true,
+              targetUrl: env.SESN_RESTORE_STORAGE_URL,
+              serviceRoleKey: env.SESN_RESTORE_STORAGE_SERVICE_ROLE_KEY,
+              log: () => {},`,
+          );
+
+          const processEnvAnchor = `      env: { ...env, HOST: '127.0.0.1', PORT: String(port) },`;
+          if (!text.includes(processEnvAnchor)) throw new Error('process env anchor missing');
+          text = text.replace(
+            processEnvAnchor,
+            `      env: {
+                ...env,
+                SUPABASE_URL: env.SUPABASE_URL ?? env.SESN_SUPABASE_URL,
+                SUPABASE_ANON_KEY:
+                  env.SUPABASE_ANON_KEY ?? env.SESN_SUPABASE_PUBLISHABLE_KEY,
+                HOST: '127.0.0.1',
+                PORT: String(port),
+              },`,
+          );
+
+          const shellLine = `      shell: false,`;
+          if (!text.includes(shellLine)) throw new Error('start shell anchor missing');
+          text = text.replace(shellLine, `      shell: process.platform === 'win32',`);
+
+          const runShellLine = `    shell: false,`;
+          if (!text.includes(runShellLine)) throw new Error('run shell anchor missing');
+          text = text.replace(
+            runShellLine,
+            `    shell:
+              options.shell ??
+              (process.platform === 'win32' && command === pnpmExecutable()),`,
+          );
+
+          const pnpmFunction = `function pnpmExecutable() {
+            return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+          }`;
+          if (!text.includes(pnpmFunction)) throw new Error('pnpm function anchor missing');
+          text = text.replace(
+            pnpmFunction,
+            `function pnpmExecutable() {
+            return 'pnpm';
+          }`,
+          );
+
+          fs.writeFileSync(path, text);
+          NODE
       - run: >-
           pnpm exec prettier --write
           scripts/restore-drill-local-run.mjs
           scripts/restore-drill-local-run.test.mjs
       - run: node --test scripts/restore-drill-local-run.test.mjs
-      - name: Commit formatter output only
-        if: success()
+      - run: node --test scripts/restore-drill-local-db-restore.test.mjs
+      - run: node --test scripts/restore-drill-local-storage-restore.test.mjs
+      - name: Commit verified implementation
         shell: bash
         run: |
           git add scripts/restore-drill-local-run.mjs scripts/restore-drill-local-run.test.mjs
@@ -36,5 +114,5 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Format restore evidence assembler"
+          git commit -m "Harden and format restore evidence assembler"
           git push origin HEAD:feature/restore-evidence-assembler
