@@ -65,6 +65,8 @@
     "security:restore-drill:check": "node --test scripts/check-restore-drill-policy.test.mjs",
     "security:restore-drill-evidence": "node scripts/check-restore-drill-evidence.mjs",
     "security:restore-drill-evidence:check": "node --test scripts/check-restore-drill-evidence.test.mjs",
+    "security:restore-preflight": "node scripts/restore-drill-preflight.mjs",
+    "security:restore-preflight:check": "node --test scripts/restore-drill-preflight.test.mjs",
     "security:rpo-rto": "node scripts/check-rpo-rto-policy.mjs",
     "security:rpo-rto:check": "node --test scripts/check-rpo-rto-policy.test.mjs",
     "security:rpo-rto-evidence": "node scripts/check-rpo-rto-evidence.mjs",

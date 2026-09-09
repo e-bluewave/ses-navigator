@@ -6,11 +6,12 @@ export function validateRestoreDrillPolicy(policy) {
   const target = policy?.target ?? {};
   const database = policy?.database ?? {};
   const storage = policy?.storage ?? {};
+  const preflight = policy?.preflight ?? {};
   const validation = policy?.validation ?? {};
   const drill = policy?.drill ?? {};
   const security = policy?.security ?? {};
 
-  if (policy?.version !== 1) failures.push('policy version must be 1');
+  if (policy?.version !== 2) failures.push('policy version must be 2');
   if (policy?.scope !== 'database-storage-restore-drill') {
     failures.push('scope must be database-storage-restore-drill');
   }
@@ -86,6 +87,48 @@ export function validateRestoreDrillPolicy(policy) {
   }
   if (storage.ghostMetadataCleanupViaStorageApiRequired !== true) {
     failures.push('ghost Storage metadata cleanup must use Storage API');
+  }
+
+  for (const [field, message] of [
+    [
+      'machineValidatedGateRequired',
+      'machine-validated restore preflight is required',
+    ],
+    ['secretFreeFactsRequired', 'restore preflight facts must be secret-free'],
+    [
+      'artifactEncodingInspectionRequired',
+      'restore preflight artifact encoding inspection is required',
+    ],
+    [
+      'storageSqlContaminationCheckRequired',
+      'restore preflight Storage SQL contamination check is required',
+    ],
+    [
+      'roleClassificationRequired',
+      'restore preflight role classification is required',
+    ],
+    [
+      'defaultAclConfirmationRequired',
+      'restore preflight default ACL confirmation is required',
+    ],
+    [
+      'migrationBaselineConfirmationRequired',
+      'restore preflight migration baseline confirmation is required',
+    ],
+    [
+      'restoreCommandSafetyConfirmationRequired',
+      'restore preflight command safety confirmation is required',
+    ],
+    [
+      'dependencyReadinessCheckRequired',
+      'restore preflight dependency readiness check is required',
+    ],
+    [
+      'falsePassGuardConfirmationRequired',
+      'restore preflight false PASS guard confirmation is required',
+    ],
+  ]) {
+    if (preflight[field] !== true) failures.push(message);
   }
 
   if (validation.databaseAndStorageSameRecoveryPointRequired !== true) {
