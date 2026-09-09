@@ -98,7 +98,9 @@
     "security:restore-local-db": "node scripts/restore-drill-local-db-restore.mjs",
     "security:restore-local-db:check": "node --test scripts/restore-drill-local-db-restore.test.mjs",
     "security:restore-local-storage": "node scripts/restore-drill-local-storage-restore.mjs",
-    "security:restore-local-storage:check": "node --test scripts/restore-drill-local-storage-restore.test.mjs"
+    "security:restore-local-storage:check": "node --test scripts/restore-drill-local-storage-restore.test.mjs",
+    "security:restore-local-run": "node scripts/restore-drill-local-run.mjs",
+    "security:restore-local-run:check": "node --test scripts/restore-drill-local-run.test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

@@ -1,0 +1,26 @@
+{
+  "environment": "Disposable",
+  "repoRoot": "<local repository path>",
+  "databaseRecoveryPointAt": "2026-09-09T00:00:00+09:00",
+  "storageRecoveryPointAt": "2026-09-09T00:00:00+09:00",
+  "databaseBackupRunLinked": true,
+  "storageBackupRunLinked": true,
+  "restorePointAlignment": "PASS",
+  "migrationParity": "PASS",
+  "deletionTombstonesReapplied": "PASS",
+  "followUpReferencePresent": true,
+  "db": {
+    "factsPath": "<private DB preflight facts path>",
+    "rolesPath": "<private BA-006 roles.sql path>",
+    "schemaPath": "<private BA-006 schema.sql path>",
+    "dataPath": "<private BA-006 data.sql path>",
+    "containerName": "<disposable local DB container name>",
+    "requiredNameToken": "restore"
+  },
+  "storage": {
+    "manifestPath": "<private BA-007 restore manifest path>",
+    "sourceRoot": "<private materialized BA-007 snapshot root>",
+    "cleanupExisting": true
+  },
+  "notes": "Secret-free operational note only."
+}
