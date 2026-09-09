@@ -4,7 +4,69 @@ BA-008のDB/Storage復旧を開始する前に、`security:restore-preflight`へ
 
 このfacts JSONは **Secret-free** とする。DB URL、Supabase URL、Project Ref、JWT、API key、backup run ID、bucket名、担当者名、メールアドレス、復旧データ本文を含めない。
 
-## JSON template
+## Disposable Local Supabase 推奨モード
+
+Disposable Local SupabaseをDockerで使用する場合は、`security:restore-local-preflight`を優先する。このモードでは次の5項目をDocker/DB実体から自動取得するため、facts JSONへ手入力しなくてよい。
+
+- `environment`
+- `productionTarget`
+- `separateRestoreEnvironment`
+- `targetIdentityVerified`
+- `targetDefaultAclNormalized`
+
+ローカルtarget probeはDB URLやpasswordを受け取らず、`docker inspect`と対象Supabase PostgreSQL container内の`psql`だけを使用する。container名にはrestore専用であることを示す4文字以上の安全tokenを含め、そのtoken一致を機械確認する。
+
+### Local用の簡略facts JSON
+
+```json
+{
+  "version": 1,
+  "productionSecretsReused": false,
+  "databaseBackupRunLinked": true,
+  "storageBackupRunLinked": true,
+  "restorePointAlignment": "PASS",
+  "migrationBaselineRecorded": true,
+  "applicationSchemaBaselineRecorded": true,
+  "restoreCommandSingleTransaction": true,
+  "restoreCommandOnErrorStop": true,
+  "artifactCopyHashParity": "NOT_APPLICABLE",
+  "customRoleCount": 0,
+  "roleReplayMode": "intentional-skip-empty-custom-set",
+  "reservedRoleReplayPlanned": false,
+  "storageRestoreViaApiOrS3Planned": true,
+  "storageProtectDeleteDisablePlanned": false,
+  "falsePassGuardReady": true,
+  "secretFreeFacts": true
+}
+```
+
+実行例:
+
+```powershell
+& {
+  $ErrorActionPreference = 'Stop'
+
+  npx.cmd pnpm@10.15.0 security:restore-local-preflight -- `
+    --facts  'C:\private-evidence\restore-preflight.json' `
+    --roles  'C:\private-evidence\roles.sql' `
+    --schema 'C:\private-evidence\schema.sql' `
+    --data   'C:\private-evidence\data.sql' `
+    --repo   'D:\path\to\ses-navigator' `
+    --environment 'Disposable' `
+    --container '<disposable-local-supabase-db-container>' `
+    --required-name-token 'restore-drill'
+
+  if ($LASTEXITCODE -ne 0) {
+    throw "Local restore preflight failed"
+  }
+}
+```
+
+成功時のstatusは`RESTORE_LOCAL_PREFLIGHT_PASSED`。target probeだけを単独実行した場合は`RESTORE_TARGET_PROBE_PASSED`となる。FAIL時はrestoreを開始しない。
+
+## 汎用facts JSON template
+
+Staging等でlocal Docker target probeを使用しない場合は、従来どおりtarget確認結果もfactsへ含める。
 
 ```json
 {
@@ -39,7 +101,7 @@ BA-008のDB/Storage復旧を開始する前に、`security:restore-preflight`へ
 
 `customRoleCount`が0の場合、`roleReplayMode`は`intentional-skip-empty-custom-set`とする。1件以上の場合は`custom-only`とし、Supabase管理reserved roleをreplayしない。
 
-## 実行例
+## 汎用実行例
 
 PowerShellでは1ブロックで実行し、途中失敗後に後続PASS処理を継続させない。
 
@@ -66,6 +128,8 @@ PowerShellでは1ブロックで実行し、途中失敗後に後続PASS処理�
 
 - facts JSON / roles.sql / schema.sql / data.sqlのstrict UTF-8とBOM禁止
 - Production target禁止、別restore環境、target identity確認
+- Disposable Local SupabaseではDocker container実体、Supabase PostgreSQL image、安全token一致をmachine probe
+- Disposable Local Supabaseでは`pg_default_acl`を直接読み、`PUBLIC` / `anon` / `authenticated` / `service_role`への危険なdefault ACLが0件であることをmachine probe
 - Production Secret再利用禁止
 - BA-006 / BA-007 linkageとrestore point alignment
 - default ACL正規化済み
@@ -78,4 +142,4 @@ PowerShellでは1ブロックで実行し、途中失敗後に後続PASS処理�
 - `pnpm-lock.yaml`、TypeScript binary、package manager pinの依存関係readiness
 - false PASS防止準備
 
-出力はboolean/count/findingsだけとし、role名、SQL本文、ファイルpath、Secret値を表示しない。
+出力はboolean/count/findingsだけとし、container名、role名、SQL本文、ファイルpath、Secret値を表示しない。
