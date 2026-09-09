@@ -16,6 +16,8 @@
     "supabaseManagedSchemasExcluded": true,
     "storageManagedSchemaExcluded": true,
     "excludedDataObjects": [
+      "storage.buckets",
+      "storage.objects",
       "storage.buckets_vectors",
       "storage.vector_indexes"
     ]

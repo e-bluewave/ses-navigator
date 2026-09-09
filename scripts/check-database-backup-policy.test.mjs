@@ -20,7 +20,12 @@ const policy = {
     dataUseCopy: true,
     supabaseManagedSchemasExcluded: true,
     storageManagedSchemaExcluded: true,
-    excludedDataObjects: ['storage.buckets_vectors', 'storage.vector_indexes'],
+    excludedDataObjects: [
+      'storage.buckets',
+      'storage.objects',
+      'storage.buckets_vectors',
+      'storage.vector_indexes',
+    ],
   },
   destination: {
     offsiteRequired: true,
@@ -114,16 +119,18 @@ test('requires dump artifacts COPY mode and managed-schema exclusions', () => {
       'Storage managed schema must be excluded from logical dump',
     ),
   );
-  assert.ok(
-    result.failures.includes(
-      'required data exclusion missing: storage.buckets_vectors',
-    ),
-  );
-  assert.ok(
-    result.failures.includes(
-      'required data exclusion missing: storage.vector_indexes',
-    ),
-  );
+  for (const objectName of [
+    'storage.buckets',
+    'storage.objects',
+    'storage.buckets_vectors',
+    'storage.vector_indexes',
+  ]) {
+    assert.ok(
+      result.failures.includes(
+        `required data exclusion missing: ${objectName}`,
+      ),
+    );
+  }
 });
 
 test('requires recovery metadata and BA-008 restore tracking', () => {
