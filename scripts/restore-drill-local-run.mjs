@@ -10,6 +10,20 @@ import { runLocalDbRestore } from './restore-drill-local-db-restore.mjs';
 import { runLocalStorageRestore } from './restore-drill-local-storage-restore.mjs';
 
 const minuteMilliseconds = 60_000;
+const loopbackHosts = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+const requiredRuntimeVariables = [
+  'SESN_RESTORE_STORAGE_URL',
+  'SESN_RESTORE_STORAGE_SERVICE_ROLE_KEY',
+  'SESN_SUPABASE_URL',
+  'SESN_SUPABASE_PUBLISHABLE_KEY',
+  'SESN_SUPABASE_SECRET_KEY',
+  'SESN_TEST_EMAIL',
+  'SESN_TEST_PASSWORD',
+  'SESN_TEST_USER_A_EMAIL',
+  'SESN_TEST_USER_A_PASSWORD',
+  'SESN_TEST_USER_B_EMAIL',
+  'SESN_TEST_USER_B_PASSWORD',
+];
 const tierTargets = {
   tier1: { rpo: 60, rto: 240 },
   tier2: { rpo: 240, rto: 480 },
@@ -95,6 +109,47 @@ export function validateLocalRestoreRunFacts(document) {
       findings.length === 0
         ? 'LOCAL_RESTORE_RUN_FACTS_PASSED'
         : 'LOCAL_RESTORE_RUN_FACTS_FAILED',
+    complete: findings.length === 0,
+    findings,
+  };
+}
+
+export function validateLocalRestoreRuntimeEnvironment(env = {}) {
+  const findings = [];
+  for (const name of requiredRuntimeVariables) {
+    if (!nonBlankString(env[name]))
+      findings.push(`missing-runtime-variable:${name}`);
+  }
+  if (findings.length > 0) {
+    return {
+      status: 'LOCAL_RESTORE_RUNTIME_ENV_FAILED',
+      complete: false,
+      findings,
+    };
+  }
+
+  const supabaseUrl = parseLoopbackUrl(
+    env.SESN_SUPABASE_URL,
+    'SESN_SUPABASE_URL',
+    findings,
+  );
+  const storageUrl = parseLoopbackUrl(
+    env.SESN_RESTORE_STORAGE_URL,
+    'SESN_RESTORE_STORAGE_URL',
+    findings,
+  );
+  if (supabaseUrl && storageUrl && supabaseUrl.origin !== storageUrl.origin) {
+    findings.push('storage-and-supabase-origin-must-match');
+  }
+  if (env.SESN_SUPABASE_SECRET_KEY.startsWith('sb_publishable_')) {
+    findings.push('supabase-secret-key-must-not-be-publishable');
+  }
+
+  return {
+    status:
+      findings.length === 0
+        ? 'LOCAL_RESTORE_RUNTIME_ENV_PASSED'
+        : 'LOCAL_RESTORE_RUNTIME_ENV_FAILED',
     complete: findings.length === 0,
     findings,
   };
@@ -264,6 +319,13 @@ export async function runLocalRestoreDrill({
     );
   }
 
+  const runtimeResult = validateLocalRestoreRuntimeEnvironment(env);
+  if (!runtimeResult.complete) {
+    throw new Error(
+      `Local restore runtime preflight failed (${runtimeResult.findings.length})`,
+    );
+  }
+
   const repoRoot = resolve(facts.repoRoot ?? '.');
   const startedAtMilliseconds = now();
   const startedAt = new Date(startedAtMilliseconds).toISOString();
@@ -370,9 +432,8 @@ export async function runDefaultLiveValidation({
       cwd: repoRoot,
       env: {
         ...env,
-        SUPABASE_URL: env.SUPABASE_URL ?? env.SESN_SUPABASE_URL,
-        SUPABASE_ANON_KEY:
-          env.SUPABASE_ANON_KEY ?? env.SESN_SUPABASE_PUBLISHABLE_KEY,
+        SUPABASE_URL: env.SESN_SUPABASE_URL,
+        SUPABASE_ANON_KEY: env.SESN_SUPABASE_PUBLISHABLE_KEY,
         HOST: '127.0.0.1',
         PORT: String(port),
       },
@@ -493,6 +554,24 @@ function findAvailablePort() {
       server.close((error) => (error ? reject(error) : resolvePort(port)));
     });
   });
+}
+
+function parseLoopbackUrl(value, field, findings) {
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      findings.push(`${field}-must-use-http-or-https`);
+      return null;
+    }
+    if (!loopbackHosts.has(url.hostname)) {
+      findings.push(`${field}-must-be-loopback`);
+      return null;
+    }
+    return url;
+  } catch {
+    findings.push(`${field}-must-be-valid-url`);
+    return null;
+  }
 }
 
 function buildEvidenceNotes(userNotes) {

@@ -7,6 +7,7 @@ import {
   evaluateRestoreTargets,
   runLocalRestoreDrill,
   validateLocalRestoreRunFacts,
+  validateLocalRestoreRuntimeEnvironment,
 } from './restore-drill-local-run.mjs';
 
 test('run facts require linked backups, recovery points and verified parity facts', () => {
@@ -21,6 +22,29 @@ test('run facts require linked backups, recovery points and verified parity fact
   assert.equal(failed.complete, false);
   assert.ok(failed.findings.includes('databaseBackupRunLinked-must-be-true'));
   assert.ok(failed.findings.includes('migrationParity-must-pass'));
+});
+
+test('runtime preflight rejects remote or mismatched Supabase and Storage targets', () => {
+  assert.equal(
+    validateLocalRestoreRuntimeEnvironment(baseRuntimeEnv()).complete,
+    true,
+  );
+
+  const remote = validateLocalRestoreRuntimeEnvironment({
+    ...baseRuntimeEnv(),
+    SESN_SUPABASE_URL: 'https://example.com',
+  });
+  assert.equal(remote.complete, false);
+  assert.ok(remote.findings.includes('SESN_SUPABASE_URL-must-be-loopback'));
+
+  const mismatch = validateLocalRestoreRuntimeEnvironment({
+    ...baseRuntimeEnv(),
+    SESN_RESTORE_STORAGE_URL: 'http://127.0.0.1:54322',
+  });
+  assert.equal(mismatch.complete, false);
+  assert.ok(
+    mismatch.findings.includes('storage-and-supabase-origin-must-match'),
+  );
 });
 
 test('timeline chooses the older DB/Storage point and stops RTO at business usability', () => {
@@ -122,6 +146,7 @@ test('orchestrator runs DB then Storage then live validation and writes BOM-free
   const result = await runLocalRestoreDrill({
     runFactsPath: 'private-run-facts.json',
     outputPath: 'private-evidence.json',
+    env: baseRuntimeEnv(),
     readFileImpl: async () => JSON.stringify(facts),
     writeFileImpl: async (_path, text, encoding) => {
       written = { text, encoding };
@@ -150,6 +175,22 @@ test('orchestrator runs DB then Storage then live validation and writes BOM-free
   const validation = validateRestoreDrillEvidence(JSON.parse(written.text));
   assert.equal(validation.complete, true, validation.findings.join(', '));
 });
+
+function baseRuntimeEnv() {
+  return {
+    SESN_RESTORE_STORAGE_URL: 'http://127.0.0.1:54321',
+    SESN_RESTORE_STORAGE_SERVICE_ROLE_KEY: 'local-service-role-test',
+    SESN_SUPABASE_URL: 'http://127.0.0.1:54321',
+    SESN_SUPABASE_PUBLISHABLE_KEY: 'local-publishable-test',
+    SESN_SUPABASE_SECRET_KEY: 'local-secret-test',
+    SESN_TEST_EMAIL: 'test-user-a@example.test',
+    SESN_TEST_PASSWORD: 'local-test-password',
+    SESN_TEST_USER_A_EMAIL: 'test-user-a@example.test',
+    SESN_TEST_USER_A_PASSWORD: 'local-test-password',
+    SESN_TEST_USER_B_EMAIL: 'test-user-b@example.test',
+    SESN_TEST_USER_B_PASSWORD: 'local-test-password',
+  };
+}
 
 function baseFacts() {
   return {
