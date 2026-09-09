@@ -4,7 +4,8 @@
   "target": {
     "separateEnvironmentRequired": true,
     "productionDirectRestoreAllowed": false,
-    "disposableOrDedicatedStagingTargetRequired": true
+    "disposableOrDedicatedStagingTargetRequired": true,
+    "targetIdentityVerificationRequired": true
   },
   "database": {
     "backupTrackedBy": "BA-006",
@@ -12,20 +13,33 @@
     "schemaRequired": true,
     "dataRequired": true,
     "singleTransactionRequired": true,
-    "onErrorStopRequired": true
+    "onErrorStopRequired": true,
+    "reservedManagedRolesReplayAllowed": false,
+    "emptyCustomRoleSetMaySkipRoleReplay": true,
+    "targetDefaultAclNormalizationRequired": true,
+    "storageManagedSchemaSqlRestoreAllowed": false,
+    "migrationBaselineEvidenceRequired": true
   },
   "storage": {
     "backupTrackedBy": "BA-007",
     "objectsRequired": true,
     "bucketAndObjectKeyPreservationRequired": true,
-    "integrityVerificationRequired": true
+    "integrityVerificationRequired": true,
+    "restoreViaApiOrS3Required": true,
+    "managedMetadataSqlRestoreAllowed": false,
+    "protectDeleteDisableAllowed": false,
+    "ghostMetadataCleanupViaStorageApiRequired": true
   },
   "validation": {
     "databaseAndStorageSameRecoveryPointRequired": true,
     "applicationSmokeRequired": true,
     "authSmokeRequired": true,
     "dataApiSecurityRegressionRequired": true,
-    "objectInventoryComparisonRequired": true
+    "objectInventoryComparisonRequired": true,
+    "strictUtf8NoBomEvidenceRequired": true,
+    "processExitCodeAuthoritative": true,
+    "applicationDependenciesReadyBeforeSmokeRequired": true,
+    "falsePassGuardRequired": true
   },
   "drill": {
     "maximumIntervalDays": 90,
@@ -33,7 +47,10 @@
     "namedBackupOwnerRequired": true,
     "evidenceRequired": true,
     "actualDurationRequired": true,
-    "failureFollowupRequired": true
+    "failureFollowupRequired": true,
+    "measuredRpoRequired": true,
+    "measuredRtoRequired": true,
+    "atomicShellExecutionRequired": true
   },
   "security": {
     "productionSecretsReuseAllowed": false,

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { validateRestoreDrillEvidence } from './check-restore-drill-evidence.mjs';
+import {
+  parseRestoreDrillEvidenceText,
+  validateRestoreDrillEvidence,
+} from './check-restore-drill-evidence.mjs';
 
 function validEvidence() {
   return {
@@ -103,4 +106,18 @@ test('rejects timestamps out of order, unknown fields, and sensitive values', ()
   );
   assert.ok(result.findings.includes('sensitive-restore-value:notes'));
   assert.ok(result.findings.includes('unknown-field:projectRef'));
+});
+
+test('rejects UTF-8 BOM before JSON parsing with a structured finding', () => {
+  const parsed = parseRestoreDrillEvidenceText(
+    `\uFEFF${JSON.stringify(validEvidence())}`,
+  );
+  assert.equal(parsed.document, null);
+  assert.equal(parsed.finding, 'utf8-bom-not-allowed');
+});
+
+test('rejects malformed JSON with a structured finding', () => {
+  const parsed = parseRestoreDrillEvidenceText('{');
+  assert.equal(parsed.document, null);
+  assert.equal(parsed.finding, 'evidence-json-invalid');
 });

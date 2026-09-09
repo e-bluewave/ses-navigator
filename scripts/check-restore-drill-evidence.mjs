@@ -71,6 +71,20 @@ const sensitivePatterns = [
   /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu,
 ];
 
+export function parseRestoreDrillEvidenceText(text) {
+  if (typeof text !== 'string') {
+    return { document: null, finding: 'evidence-json-invalid' };
+  }
+  if (text.charCodeAt(0) === 0xfeff) {
+    return { document: null, finding: 'utf8-bom-not-allowed' };
+  }
+  try {
+    return { document: JSON.parse(text), finding: null };
+  } catch {
+    return { document: null, finding: 'evidence-json-invalid' };
+  }
+}
+
 export function validateRestoreDrillEvidence(document) {
   const findings = [];
 
@@ -180,8 +194,15 @@ export async function runRestoreDrillEvidenceCheck({
   log = console.log,
 } = {}) {
   if (!path) throw new Error('Restore drill evidence path is required');
-  const document = JSON.parse(await readFile(path, 'utf8'));
-  const result = validateRestoreDrillEvidence(document);
+  const parsed = parseRestoreDrillEvidenceText(await readFile(path, 'utf8'));
+  if (parsed.finding) {
+    const result = failed(parsed.finding);
+    log(JSON.stringify(result, null, 2));
+    throw new Error(
+      `Restore drill evidence check failed (${result.findings.length})`,
+    );
+  }
+  const result = validateRestoreDrillEvidence(parsed.document);
   log(JSON.stringify(result, null, 2));
   if (!result.complete) {
     throw new Error(

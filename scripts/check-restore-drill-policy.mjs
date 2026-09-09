@@ -23,6 +23,9 @@ export function validateRestoreDrillPolicy(policy) {
   if (target.disposableOrDedicatedStagingTargetRequired !== true) {
     failures.push('dedicated or disposable Staging restore target is required');
   }
+  if (target.targetIdentityVerificationRequired !== true) {
+    failures.push('restore target identity verification is required');
+  }
 
   if (database.backupTrackedBy !== 'BA-006') {
     failures.push('database backup must be tracked by BA-006');
@@ -40,6 +43,25 @@ export function validateRestoreDrillPolicy(policy) {
   if (database.onErrorStopRequired !== true) {
     failures.push('database restore must stop on error');
   }
+  if (database.reservedManagedRolesReplayAllowed !== false) {
+    failures.push('Supabase managed reserved roles must not be replayed');
+  }
+  if (database.emptyCustomRoleSetMaySkipRoleReplay !== true) {
+    failures.push(
+      'empty custom role set must allow intentional role replay skip',
+    );
+  }
+  if (database.targetDefaultAclNormalizationRequired !== true) {
+    failures.push(
+      'target default ACL normalization is required before schema restore',
+    );
+  }
+  if (database.storageManagedSchemaSqlRestoreAllowed !== false) {
+    failures.push('Storage managed schema SQL restore must be prohibited');
+  }
+  if (database.migrationBaselineEvidenceRequired !== true) {
+    failures.push('migration baseline evidence is required');
+  }
 
   if (storage.backupTrackedBy !== 'BA-007') {
     failures.push('storage backup must be tracked by BA-007');
@@ -52,6 +74,18 @@ export function validateRestoreDrillPolicy(policy) {
   }
   if (storage.integrityVerificationRequired !== true) {
     failures.push('storage integrity verification is required');
+  }
+  if (storage.restoreViaApiOrS3Required !== true) {
+    failures.push('Storage restore must use Storage API or S3-compatible API');
+  }
+  if (storage.managedMetadataSqlRestoreAllowed !== false) {
+    failures.push('Storage managed metadata SQL restore must be prohibited');
+  }
+  if (storage.protectDeleteDisableAllowed !== false) {
+    failures.push('storage.protect_delete must not be disabled for restore');
+  }
+  if (storage.ghostMetadataCleanupViaStorageApiRequired !== true) {
+    failures.push('ghost Storage metadata cleanup must use Storage API');
   }
 
   if (validation.databaseAndStorageSameRecoveryPointRequired !== true) {
@@ -68,6 +102,20 @@ export function validateRestoreDrillPolicy(policy) {
   }
   if (validation.objectInventoryComparisonRequired !== true) {
     failures.push('Storage object inventory comparison is required');
+  }
+  if (validation.strictUtf8NoBomEvidenceRequired !== true) {
+    failures.push('restore evidence must use strict UTF-8 without BOM');
+  }
+  if (validation.processExitCodeAuthoritative !== true) {
+    failures.push('restore process exit code must be authoritative');
+  }
+  if (validation.applicationDependenciesReadyBeforeSmokeRequired !== true) {
+    failures.push(
+      'application dependencies must be ready before smoke validation',
+    );
+  }
+  if (validation.falsePassGuardRequired !== true) {
+    failures.push('false PASS guard is required');
   }
 
   if (
@@ -91,6 +139,15 @@ export function validateRestoreDrillPolicy(policy) {
   }
   if (drill.failureFollowupRequired !== true) {
     failures.push('failed drill follow-up is required');
+  }
+  if (drill.measuredRpoRequired !== true) {
+    failures.push('measured restore-point age is required');
+  }
+  if (drill.measuredRtoRequired !== true) {
+    failures.push('measured business-usable RTO is required');
+  }
+  if (drill.atomicShellExecutionRequired !== true) {
+    failures.push('restore shell samples must fail atomically');
   }
 
   if (security.productionSecretsReuseAllowed !== false) {
