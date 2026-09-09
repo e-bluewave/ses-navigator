@@ -4,7 +4,7 @@ import test from 'node:test';
 import { validateRestoreDrillPolicy } from './check-restore-drill-policy.mjs';
 
 const policy = {
-  version: 1,
+  version: 2,
   scope: 'database-storage-restore-drill',
   target: {
     separateEnvironmentRequired: true,
@@ -34,6 +34,18 @@ const policy = {
     managedMetadataSqlRestoreAllowed: false,
     protectDeleteDisableAllowed: false,
     ghostMetadataCleanupViaStorageApiRequired: true,
+  },
+  preflight: {
+    machineValidatedGateRequired: true,
+    secretFreeFactsRequired: true,
+    artifactEncodingInspectionRequired: true,
+    storageSqlContaminationCheckRequired: true,
+    roleClassificationRequired: true,
+    defaultAclConfirmationRequired: true,
+    migrationBaselineConfirmationRequired: true,
+    restoreCommandSafetyConfirmationRequired: true,
+    dependencyReadinessCheckRequired: true,
+    falsePassGuardConfirmationRequired: true,
   },
   validation: {
     databaseAndStorageSameRecoveryPointRequired: true,
@@ -136,6 +148,39 @@ test('rejects drills older than 90 days and unsafe secrets', () => {
   assert.ok(
     result.failures.includes('restore credentials must not be allowed in logs'),
   );
+});
+
+test('requires the machine-validated fail-closed preflight gate', () => {
+  const result = validateRestoreDrillPolicy({
+    ...policy,
+    preflight: {
+      machineValidatedGateRequired: false,
+      secretFreeFactsRequired: false,
+      artifactEncodingInspectionRequired: false,
+      storageSqlContaminationCheckRequired: false,
+      roleClassificationRequired: false,
+      defaultAclConfirmationRequired: false,
+      migrationBaselineConfirmationRequired: false,
+      restoreCommandSafetyConfirmationRequired: false,
+      dependencyReadinessCheckRequired: false,
+      falsePassGuardConfirmationRequired: false,
+    },
+  });
+
+  for (const message of [
+    'machine-validated restore preflight is required',
+    'restore preflight facts must be secret-free',
+    'restore preflight artifact encoding inspection is required',
+    'restore preflight Storage SQL contamination check is required',
+    'restore preflight role classification is required',
+    'restore preflight default ACL confirmation is required',
+    'restore preflight migration baseline confirmation is required',
+    'restore preflight command safety confirmation is required',
+    'restore preflight dependency readiness check is required',
+    'restore preflight false PASS guard confirmation is required',
+  ]) {
+    assert.ok(result.failures.includes(message));
+  }
 });
 
 test('requires BA-008 hardening controls learned from the restore drill', () => {

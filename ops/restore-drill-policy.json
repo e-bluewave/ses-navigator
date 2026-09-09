@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "scope": "database-storage-restore-drill",
   "target": {
     "separateEnvironmentRequired": true,
@@ -29,6 +29,18 @@
     "managedMetadataSqlRestoreAllowed": false,
     "protectDeleteDisableAllowed": false,
     "ghostMetadataCleanupViaStorageApiRequired": true
+  },
+  "preflight": {
+    "machineValidatedGateRequired": true,
+    "secretFreeFactsRequired": true,
+    "artifactEncodingInspectionRequired": true,
+    "storageSqlContaminationCheckRequired": true,
+    "roleClassificationRequired": true,
+    "defaultAclConfirmationRequired": true,
+    "migrationBaselineConfirmationRequired": true,
+    "restoreCommandSafetyConfirmationRequired": true,
+    "dependencyReadinessCheckRequired": true,
+    "falsePassGuardConfirmationRequired": true
   },
   "validation": {
     "databaseAndStorageSameRecoveryPointRequired": true,
