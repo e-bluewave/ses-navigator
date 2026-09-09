@@ -34,12 +34,14 @@ SES NavigatorのSupabase PostgreSQLについて、MVP本番開始前に必要な
 ```powershell
 supabase db dump --db-url "$env:SESN_DB_URL" -f roles.sql --role-only
 supabase db dump --db-url "$env:SESN_DB_URL" -f schema.sql
-supabase db dump --db-url "$env:SESN_DB_URL" -f data.sql --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
+supabase db dump --db-url "$env:SESN_DB_URL" -f data.sql --use-copy --data-only -x "storage.buckets" -x "storage.objects" -x "storage.buckets_vectors" -x "storage.vector_indexes"
 ```
 
 `SESN_DB_URL`の値自体は表示しない。PowerShell履歴やCIログにも展開値を残さない。
 
-Supabase CLIが管理schemaを除外する前提だけに依存せず、manifest/EvidenceでもStorage管理schemaをApplication復旧対象へ含めていないことを明示する。
+Supabase CLIは管理schemaを通常dumpから除外するが、復旧時にStorage metadataがSQL由来で再生成される余地を残さないため、data-only dumpでも`storage.buckets`、`storage.objects`、`storage.buckets_vectors`、`storage.vector_indexes`を明示除外する。CLIのデフォルト挙動だけに依存しない。
+
+manifest/EvidenceでもStorage管理schemaをApplication復旧対象へ含めていないことを明示する。
 
 ## 保守的な復旧ポイント
 
@@ -81,6 +83,7 @@ backup開始時にprivate manifestへ次を記録する。
 - migration baseline記録済み
 - Application schema baseline記録済み
 - Storage管理schemaをApplication復旧対象へ含めていないこと
+- `storage.buckets` / `storage.objects`を含む必須Storage data exclusionsが適用済みであること
 - 保存先の論理識別子（秘密情報や直接取得URLを含めない）
 - 保持期限
 - 実行結果
@@ -98,6 +101,7 @@ private manifestは最低限次を持つ。
 - migration baseline実値と取得方式
 - Application schema baseline
 - Supabase管理schema除外確認
+- 必須Storage data exclusion確認
 
 manifest自体にもcredential、DB URL、Project Ref、個人情報を保存しない。
 
@@ -139,6 +143,7 @@ BA-006の完了条件:
 - `startedAt`を保守的な復旧ポイントとしてprivate manifestに記録
 - migration/Application schema baselineを記録
 - Storage管理schema除外を確認
+- `storage.buckets` / `storage.objects`を含む必須Storage data exclusionsを確認
 - チェックサムと保持期限を非秘密情報として確認
 - 保存先暗号化とTLSを確認
 - バックアップにDB接続情報が露出していないことを確認

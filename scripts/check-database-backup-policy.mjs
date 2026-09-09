@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { isMainModule } from './cli-entry.mjs';
 
 const REQUIRED_EXCLUDES = new Set([
+  'storage.buckets',
+  'storage.objects',
   'storage.buckets_vectors',
   'storage.vector_indexes',
 ]);
