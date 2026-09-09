@@ -14,9 +14,10 @@ export function validateStorageBackupPolicy(policy) {
   const immutableSnapshot = destination?.immutableSnapshot ?? {};
   const transfer = policy?.transfer ?? {};
   const coordination = policy?.coordination ?? {};
+  const verification = policy?.verification ?? {};
   const security = policy?.security ?? {};
 
-  if (policy?.version !== 3) failures.push('policy version must be 3');
+  if (policy?.version !== 4) failures.push('policy version must be 4');
   if (policy?.scope !== 'supabase-storage-object-backup') {
     failures.push('scope must be supabase-storage-object-backup');
   }
@@ -107,6 +108,18 @@ export function validateStorageBackupPolicy(policy) {
   if (coordination.databaseRecoveryPointCoordinationRequired !== true) {
     failures.push('database recovery point coordination is required');
   }
+  if (coordination.databaseRecoveryPointTimestampRequired !== true) {
+    failures.push('database recovery point timestamp is required');
+  }
+  if (coordination.storageRecoveryPointTimestampRequired !== true) {
+    failures.push('storage recovery point timestamp is required');
+  }
+  if (coordination.recoveryPointSkewMeasurementRequired !== true) {
+    failures.push('DB and Storage recovery point skew measurement is required');
+  }
+  if (coordination.jointRecoveryPointEvidenceRequired !== true) {
+    failures.push('joint DB and Storage recovery point evidence is required');
+  }
   if (coordination.storageManagedSchemaExcludedFromDbDump !== true) {
     failures.push('Supabase managed Storage schema exclusion must be explicit');
   }
@@ -118,6 +131,9 @@ export function validateStorageBackupPolicy(policy) {
   }
   if (coordination.restoreDrillTrackedBy !== 'BA-008') {
     failures.push('restore drill must be tracked by BA-008');
+  }
+  if (verification.strictUtf8NoBomEvidenceRequired !== true) {
+    failures.push('storage backup evidence must use UTF-8 without BOM');
   }
   if (security.dedicatedBackupCredentialRequired !== true) {
     failures.push('dedicated backup credential is required');

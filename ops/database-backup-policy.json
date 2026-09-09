@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "scope": "database-logical-backup",
   "method": "supabase-cli-db-dump",
   "frequencyHours": 24,
@@ -13,6 +13,8 @@
     "schema": true,
     "data": true,
     "dataUseCopy": true,
+    "supabaseManagedSchemasExcluded": true,
+    "storageManagedSchemaExcluded": true,
     "excludedDataObjects": [
       "storage.buckets_vectors",
       "storage.vector_indexes"
@@ -36,6 +38,11 @@
   "verification": {
     "manifestRequired": true,
     "checksumRequired": true,
+    "backupSetStartTimestampRequired": true,
+    "migrationBaselineRequired": true,
+    "applicationSchemaBaselineRequired": true,
+    "recoveryPointUsesBackupSetStart": true,
+    "strictUtf8NoBomEvidenceRequired": true,
     "restoreDrillTrackedBy": "BA-008"
   }
 }

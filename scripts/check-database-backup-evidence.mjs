@@ -4,6 +4,7 @@ import { isMainModule } from './cli-entry.mjs';
 const requiredFields = [
   'evidenceId',
   'environment',
+  'startedAt',
   'completedAt',
   'postgresMajorVersion',
   'rolesDumpCreated',
@@ -16,6 +17,10 @@ const requiredFields = [
   'rolesChecksumVerified',
   'schemaChecksumVerified',
   'dataChecksumVerified',
+  'migrationBaselineRecorded',
+  'migrationBaselineMethod',
+  'applicationSchemaBaselineRecorded',
+  'storageManagedSchemaExcluded',
   'connectionMode',
   'offsiteDestinationConfirmed',
   'sameSupabaseProjectDestination',
@@ -35,6 +40,10 @@ const requiredFields = [
 const allowedFields = new Set([...requiredFields, 'notes']);
 const allowedEnvironments = new Set(['Staging', 'Production']);
 const allowedConnectionModes = new Set(['direct', 'session-pooler']);
+const allowedMigrationBaselineMethods = new Set([
+  'repository-migration-head',
+  'schema-semantic-baseline',
+]);
 const sensitivePatterns = [
   /postgres(?:ql)?:\/\//iu,
   /https?:\/\/[a-z0-9-]+\.supabase\.co/iu,
@@ -78,6 +87,9 @@ export function validateDatabaseBackupEvidence(document) {
     'rolesChecksumVerified',
     'schemaChecksumVerified',
     'dataChecksumVerified',
+    'migrationBaselineRecorded',
+    'applicationSchemaBaselineRecorded',
+    'storageManagedSchemaExcluded',
     'offsiteDestinationConfirmed',
     'tlsInTransit',
     'encryptedAtRest',
@@ -99,6 +111,9 @@ export function validateDatabaseBackupEvidence(document) {
 
   if (!allowedConnectionModes.has(document.connectionMode)) {
     findings.push('connection-mode-must-be-direct-or-session-pooler');
+  }
+  if (!allowedMigrationBaselineMethods.has(document.migrationBaselineMethod)) {
+    findings.push('migration-baseline-method-invalid');
   }
   if (document.secretExposureReview !== 'PASS') {
     findings.push('secret-exposure-review-must-pass');
@@ -123,11 +138,22 @@ export function validateDatabaseBackupEvidence(document) {
     }
   }
 
+  for (const field of ['startedAt', 'completedAt']) {
+    if (
+      typeof document[field] === 'string' &&
+      Number.isNaN(Date.parse(document[field]))
+    ) {
+      findings.push(`invalid-timestamp:${field}`);
+    }
+  }
   if (
+    typeof document.startedAt === 'string' &&
     typeof document.completedAt === 'string' &&
-    Number.isNaN(Date.parse(document.completedAt))
+    !Number.isNaN(Date.parse(document.startedAt)) &&
+    !Number.isNaN(Date.parse(document.completedAt)) &&
+    Date.parse(document.completedAt) < Date.parse(document.startedAt)
   ) {
-    findings.push('invalid-timestamp:completedAt');
+    findings.push('completed-at-must-not-precede-started-at');
   }
 
   for (const [field, value] of Object.entries(document)) {
@@ -150,13 +176,27 @@ export function validateDatabaseBackupEvidence(document) {
   };
 }
 
+export function validateDatabaseBackupEvidenceText(text) {
+  if (typeof text !== 'string') return failed('evidence-text-required');
+  if (text.charCodeAt(0) === 0xfeff) return failed('utf8-bom-not-allowed');
+
+  let document;
+  try {
+    document = JSON.parse(text);
+  } catch {
+    return failed('invalid-json');
+  }
+  return validateDatabaseBackupEvidence(document);
+}
+
 export async function runDatabaseBackupEvidenceCheck({
   path,
   log = console.log,
 } = {}) {
   if (!path) throw new Error('Database backup evidence path is required');
-  const document = JSON.parse(await readFile(path, 'utf8'));
-  const result = validateDatabaseBackupEvidence(document);
+  const result = validateDatabaseBackupEvidenceText(
+    await readFile(path, 'utf8'),
+  );
   log(JSON.stringify(result, null, 2));
   if (!result.complete) {
     throw new Error(
