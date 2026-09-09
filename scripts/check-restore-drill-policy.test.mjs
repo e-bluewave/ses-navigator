@@ -10,6 +10,7 @@ const policy = {
     separateEnvironmentRequired: true,
     productionDirectRestoreAllowed: false,
     disposableOrDedicatedStagingTargetRequired: true,
+    targetIdentityVerificationRequired: true,
   },
   database: {
     backupTrackedBy: 'BA-006',
@@ -18,12 +19,21 @@ const policy = {
     dataRequired: true,
     singleTransactionRequired: true,
     onErrorStopRequired: true,
+    reservedManagedRolesReplayAllowed: false,
+    emptyCustomRoleSetMaySkipRoleReplay: true,
+    targetDefaultAclNormalizationRequired: true,
+    storageManagedSchemaSqlRestoreAllowed: false,
+    migrationBaselineEvidenceRequired: true,
   },
   storage: {
     backupTrackedBy: 'BA-007',
     objectsRequired: true,
     bucketAndObjectKeyPreservationRequired: true,
     integrityVerificationRequired: true,
+    restoreViaApiOrS3Required: true,
+    managedMetadataSqlRestoreAllowed: false,
+    protectDeleteDisableAllowed: false,
+    ghostMetadataCleanupViaStorageApiRequired: true,
   },
   validation: {
     databaseAndStorageSameRecoveryPointRequired: true,
@@ -31,6 +41,10 @@ const policy = {
     authSmokeRequired: true,
     dataApiSecurityRegressionRequired: true,
     objectInventoryComparisonRequired: true,
+    strictUtf8NoBomEvidenceRequired: true,
+    processExitCodeAuthoritative: true,
+    applicationDependenciesReadyBeforeSmokeRequired: true,
+    falsePassGuardRequired: true,
   },
   drill: {
     maximumIntervalDays: 90,
@@ -39,6 +53,9 @@ const policy = {
     evidenceRequired: true,
     actualDurationRequired: true,
     failureFollowupRequired: true,
+    measuredRpoRequired: true,
+    measuredRtoRequired: true,
+    atomicShellExecutionRequired: true,
   },
   security: {
     productionSecretsReuseAllowed: false,
@@ -118,5 +135,104 @@ test('rejects drills older than 90 days and unsafe secrets', () => {
   );
   assert.ok(
     result.failures.includes('restore credentials must not be allowed in logs'),
+  );
+});
+
+test('requires BA-008 hardening controls learned from the restore drill', () => {
+  const result = validateRestoreDrillPolicy({
+    ...policy,
+    target: { ...policy.target, targetIdentityVerificationRequired: false },
+    database: {
+      ...policy.database,
+      reservedManagedRolesReplayAllowed: true,
+      targetDefaultAclNormalizationRequired: false,
+      storageManagedSchemaSqlRestoreAllowed: true,
+      migrationBaselineEvidenceRequired: false,
+    },
+    storage: {
+      ...policy.storage,
+      restoreViaApiOrS3Required: false,
+      managedMetadataSqlRestoreAllowed: true,
+      protectDeleteDisableAllowed: true,
+      ghostMetadataCleanupViaStorageApiRequired: false,
+    },
+    validation: {
+      ...policy.validation,
+      strictUtf8NoBomEvidenceRequired: false,
+      processExitCodeAuthoritative: false,
+      applicationDependenciesReadyBeforeSmokeRequired: false,
+      falsePassGuardRequired: false,
+    },
+    drill: {
+      ...policy.drill,
+      measuredRpoRequired: false,
+      measuredRtoRequired: false,
+      atomicShellExecutionRequired: false,
+    },
+  });
+
+  assert.ok(
+    result.failures.includes(
+      'restore target identity verification is required',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'Supabase managed reserved roles must not be replayed',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'target default ACL normalization is required before schema restore',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'Storage managed schema SQL restore must be prohibited',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('migration baseline evidence is required'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'Storage restore must use Storage API or S3-compatible API',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'Storage managed metadata SQL restore must be prohibited',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'storage.protect_delete must not be disabled for restore',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'ghost Storage metadata cleanup must use Storage API',
+    ),
+  );
+  assert.ok(
+    result.failures.includes(
+      'restore evidence must use strict UTF-8 without BOM',
+    ),
+  );
+  assert.ok(
+    result.failures.includes('restore process exit code must be authoritative'),
+  );
+  assert.ok(
+    result.failures.includes(
+      'application dependencies must be ready before smoke validation',
+    ),
+  );
+  assert.ok(result.failures.includes('false PASS guard is required'));
+  assert.ok(result.failures.includes('measured restore-point age is required'));
+  assert.ok(
+    result.failures.includes('measured business-usable RTO is required'),
+  );
+  assert.ok(
+    result.failures.includes('restore shell samples must fail atomically'),
   );
 });
