@@ -10,6 +10,7 @@ import {
 } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { isMainModule } from './cli-entry.mjs';
+import { prepareSpawnSyncInvocation } from './windows-cmd-spawn.mjs';
 import {
   decodeStrictUtf8,
   inspectRestoreSqlArtifacts,
@@ -373,13 +374,23 @@ async function metadataForArtifact(fileName, path, buffer) {
 }
 
 function runCommandSafe(command, args) {
-  const result = spawnSync(command, args, {
+  const invocation = prepareSpawnSyncInvocation({
+    command,
+    args,
+    envPrefix: 'SESN_DB_CAPTURE',
+  });
+  const result = spawnSync(invocation.command, invocation.args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
+    env: invocation.env,
   });
   return {
     status: typeof result.status === 'number' ? result.status : 1,
+    spawnErrorCode:
+      result.error && typeof result.error.code === 'string'
+        ? result.error.code
+        : null,
   };
 }
 
