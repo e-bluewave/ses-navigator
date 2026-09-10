@@ -9,7 +9,7 @@ It combines the previously separate restore and validation steps into one fail-c
 1. validate private run facts;
 2. validate all required runtime variables before any restore begins;
 3. require loopback-only Supabase and Storage URLs on the same origin;
-4. run DB target/preflight checks and the transactional DB restore;
+4. run DB target/preflight checks, transactional DB restore, exact app/audit table-set parity, and deletion-tombstone parity;
 5. run Storage API restore and full object integrity/inventory verification;
 6. ensure dependencies are ready without changing tracked files;
 7. build and start the local API on a dynamically selected loopback port;
@@ -30,11 +30,9 @@ The runner deliberately does not manufacture governance or backup facts. Before 
 - DB and Storage recovery-point timestamps;
 - backup linkage is valid;
 - DB/Storage recovery-point alignment is acceptable;
-- migration parity is verified;
-- deletion tombstones were reapplied/verified as required by RB-013;
 - a follow-up reference exists when Tier 1 or Tier 2 targets are expected to miss.
 
-These facts belong in a private run-facts JSON created from `LOCAL_RESTORE_DRILL_RUN_FACTS_TEMPLATE.json`.
+These facts belong in a private run-facts JSON created from `LOCAL_RESTORE_DRILL_RUN_FACTS_TEMPLATE.json`. Migration parity and deletion-tombstone parity are not operator assertions: they are measured automatically from the BA-006 schema/data artifacts against the restored DB.
 
 ## Runtime secrets
 

@@ -6,8 +6,6 @@
   "databaseBackupRunLinked": true,
   "storageBackupRunLinked": true,
   "restorePointAlignment": "PASS",
-  "migrationParity": "PASS",
-  "deletionTombstonesReapplied": "PASS",
   "followUpReferencePresent": true,
   "db": {
     "factsPath": "<private DB preflight facts path>",
