@@ -81,7 +81,15 @@ export function buildSupabaseDumpPlans({
     },
     {
       stage: 'schema',
-      args: ['db', 'dump', '--db-url', databaseUrl, '-f', schemaPath],
+      args: [
+        'db',
+        'dump',
+        '--db-url',
+        databaseUrl,
+        '-f',
+        schemaPath,
+        '--keep-comments',
+      ],
     },
     {
       stage: 'data',
