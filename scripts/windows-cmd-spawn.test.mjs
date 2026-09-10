@@ -39,7 +39,8 @@ test('Windows .cmd invocation avoids CALL and keeps percent-encoded arguments ou
   assert.deepEqual(result.args.slice(0, 3), ['/d', '/s', '/c']);
   const commandLine = result.args[3];
   assert.equal(commandLine.startsWith('call '), false);
-  assert.match(commandLine, /^"%SESN_DB_CAPTURE_COMMAND%"/u);
+  assert.match(commandLine, /^""%SESN_DB_CAPTURE_COMMAND%"/u);
+  assert.match(commandLine, /""$/u);
   assert.equal(commandLine.includes(secretUrl), false);
   assert.equal(commandLine.includes('C:\\Backup Files\\roles.sql'), false);
   assert.equal(result.env.SESN_DB_CAPTURE_COMMAND, 'supabase.cmd');
@@ -58,7 +59,7 @@ test('Windows command text contains only environment references for argv values'
 
   assert.equal(
     result.args[3],
-    '"%SESN_TEST_COMMAND%" "%SESN_TEST_0%" "%SESN_TEST_1%" "%SESN_TEST_2%" "%SESN_TEST_3%" "%SESN_TEST_4%"',
+    '""%SESN_TEST_COMMAND%" "%SESN_TEST_0%" "%SESN_TEST_1%" "%SESN_TEST_2%" "%SESN_TEST_3%" "%SESN_TEST_4%""',
   );
   assert.equal(result.args[3].includes('p%40ss'), false);
   assert.equal(result.args[3].includes('a&b'), false);
