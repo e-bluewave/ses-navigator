@@ -395,12 +395,22 @@ export async function runStorageBackupCapture({
   return { ...result, captureManifest, restoreManifest };
 }
 
-function createStorageReadClient({ baseUrl, serviceRoleKey, fetchImpl }) {
-  const storageBase = new URL('/storage/v1/', baseUrl);
-  const headers = {
+export function buildStorageAuthorizationHeaders(serviceRoleKey) {
+  if (!isNonBlankString(serviceRoleKey)) {
+    throw new Error('Storage service credential is required');
+  }
+  if (serviceRoleKey.startsWith('sb_secret_')) {
+    return { apikey: serviceRoleKey };
+  }
+  return {
     apikey: serviceRoleKey,
     Authorization: `Bearer ${serviceRoleKey}`,
   };
+}
+
+function createStorageReadClient({ baseUrl, serviceRoleKey, fetchImpl }) {
+  const storageBase = new URL('/storage/v1/', baseUrl);
+  const headers = buildStorageAuthorizationHeaders(serviceRoleKey);
 
   async function request(path, options = {}) {
     const response = await fetchImpl(new URL(path, storageBase), {
