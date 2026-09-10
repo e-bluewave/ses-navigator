@@ -10,18 +10,18 @@ import {
   validateLocalRestoreRuntimeEnvironment,
 } from './restore-drill-local-run.mjs';
 
-test('run facts require linked backups, recovery points and verified parity facts', () => {
+test('run facts require linked backups, recovery points and restore-point alignment', () => {
   const result = validateLocalRestoreRunFacts(baseFacts());
   assert.equal(result.complete, true);
 
   const failed = validateLocalRestoreRunFacts({
     ...baseFacts(),
     databaseBackupRunLinked: false,
-    migrationParity: 'FAIL',
+    restorePointAlignment: 'FAIL',
   });
   assert.equal(failed.complete, false);
   assert.ok(failed.findings.includes('databaseBackupRunLinked-must-be-true'));
-  assert.ok(failed.findings.includes('migrationParity-must-pass'));
+  assert.ok(failed.findings.includes('restorePointAlignment-must-pass'));
 });
 
 test('runtime preflight rejects remote or mismatched Supabase and Storage targets', () => {
@@ -93,6 +93,22 @@ test('assembled evidence maps verified DB Storage Auth App Data API and RLS resu
   assert.equal(assembled.evidence.rtoMinutesMeasured, 3);
   const validation = validateRestoreDrillEvidence(assembled.evidence);
   assert.equal(validation.complete, true, validation.findings.join(', '));
+});
+
+test('manual run facts cannot override failed DB semantic parity', () => {
+  assert.throws(
+    () =>
+      buildRestoreDrillEvidence({
+        facts: { ...baseFacts(), followUpReferencePresent: false },
+        startedAt: '2026-09-09T00:00:00.000Z',
+        businessUsableAt: '2026-09-09T00:03:00.000Z',
+        completedAt: '2026-09-09T00:04:00.000Z',
+        dbResult: { ...passedDbResult(), migrationParity: 'FAIL' },
+        storageResult: passedStorageResult(),
+        liveResult: passedLiveResult(),
+      }),
+    /semantic parity/u,
+  );
 });
 
 test('unexpected role replay mode is not converted to PASS', () => {
@@ -201,8 +217,6 @@ function baseFacts() {
     databaseBackupRunLinked: true,
     storageBackupRunLinked: true,
     restorePointAlignment: 'PASS',
-    migrationParity: 'PASS',
-    deletionTombstonesReapplied: 'PASS',
     db: {
       factsPath: 'db-facts.json',
       rolesPath: 'roles.sql',
@@ -227,6 +241,8 @@ function passedDbResult() {
     dataRestore: 'PASS',
     databaseRestoreTransactional: true,
     databaseOnErrorStop: true,
+    migrationParity: 'PASS',
+    deletionTombstonesReapplied: 'PASS',
   };
 }
 

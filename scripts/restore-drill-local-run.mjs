@@ -50,12 +50,8 @@ export function validateLocalRestoreRunFacts(document) {
   for (const field of ['databaseBackupRunLinked', 'storageBackupRunLinked']) {
     if (document[field] !== true) findings.push(`${field}-must-be-true`);
   }
-  for (const field of [
-    'restorePointAlignment',
-    'migrationParity',
-    'deletionTombstonesReapplied',
-  ]) {
-    if (document[field] !== 'PASS') findings.push(`${field}-must-pass`);
+  if (document.restorePointAlignment !== 'PASS') {
+    findings.push('restorePointAlignment-must-pass');
   }
 
   const db = document.db;
@@ -225,6 +221,12 @@ export function buildRestoreDrillEvidence({
   if (dbResult.customRoleReplay !== 'INTENTIONAL_SKIP_EMPTY_CUSTOM_SET') {
     throw new Error('Unexpected DB role replay result');
   }
+  if (
+    dbResult.migrationParity !== 'PASS' ||
+    dbResult.deletionTombstonesReapplied !== 'PASS'
+  ) {
+    throw new Error('DB semantic parity result must pass');
+  }
 
   const timeline = calculateRestoreTimeline({
     startedAt,
@@ -272,8 +274,8 @@ export function buildRestoreDrillEvidence({
     rlsTenantIsolation: liveResult.rlsTenantIsolation,
     storageInventoryVerification: storageResult.storageInventoryVerification,
     representativeFileRead: storageResult.representativeFileRead,
-    migrationParity: facts.migrationParity,
-    deletionTombstonesReapplied: facts.deletionTombstonesReapplied,
+    migrationParity: dbResult.migrationParity,
+    deletionTombstonesReapplied: dbResult.deletionTombstonesReapplied,
     rtoMinutesMeasured: timeline.rtoMinutesMeasured,
     recoveryPointAgeMinutesMeasured: timeline.recoveryPointAgeMinutesMeasured,
     followUpRequired: targetResult.followUpRequired,
