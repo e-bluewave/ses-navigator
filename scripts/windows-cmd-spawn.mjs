@@ -37,12 +37,14 @@ export function prepareSpawnSyncInvocation({
 
   // Do not use CALL here. CALL reparses the expanded command line, which can
   // corrupt percent-encoded URLs such as PostgreSQL connection strings.
-  // cmd.exe can execute a .cmd file directly as the /c command; because this
-  // is the terminal command in the child shell, there is no parent batch file
-  // that needs CALL to regain control.
-  const commandLine = [`"%${commandVariable}%"`, ...argumentReferences].join(
-    ' ',
-  );
+  // With cmd.exe /S /C, a quoted executable path followed by arguments must be
+  // wrapped in an additional outer quote pair so the first/last quote stripping
+  // performed by cmd.exe does not break paths containing spaces.
+  const innerCommandLine = [
+    `"%${commandVariable}%"`,
+    ...argumentReferences,
+  ].join(' ');
+  const commandLine = `"${innerCommandLine}"`;
 
   return {
     command: env.ComSpec || env.COMSPEC || 'cmd.exe',
