@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildAuthAdminHeaders,
+  buildProjectSmokePermissionSql,
   buildRuntimeEnvironmentFromStatus,
   buildValidationSetupSql,
   defaultSupabaseExecutable,
@@ -78,7 +79,18 @@ test('validation setup replaces each generated email exactly once', () => {
   );
 });
 
-test('wrapper prepares fixture inside measured restore and cleans it after restore returns', async () => {
+test('project smoke permission grant is deterministic and cleanup-compatible', () => {
+  const sql = buildProjectSmokePermissionSql();
+  assert.ok(sql.includes("p.code::text = 'project.read'"));
+  assert.ok(sql.includes('7a110000-0000-4000-8000-000000000001'));
+  assert.ok(sql.includes('7a130000-0000-4000-8000-000000000001'));
+  assert.ok(sql.includes('7a160000-0000-4000-8000-000000000001'));
+  assert.ok(sql.includes('PROJECT_SMOKE_PERMISSION_READY'));
+  assert.ok(!sql.includes(credentials.userAEmail));
+  assert.ok(!sql.includes(credentials.password));
+});
+
+test('wrapper prepares fixture and project smoke permission inside measured restore and cleans after restore returns', async () => {
   const events = [];
   const logs = [];
   const result = await runLocalRestoreDrillWithFixture({
@@ -114,6 +126,10 @@ test('wrapper prepares fixture inside measured restore and cleans it after resto
     }),
     runPsql: async ({ sql }) => {
       if (sql.includes('replace-user-')) throw new Error('placeholder leaked');
+      if (sql.includes('PROJECT_SMOKE_PERMISSION_READY')) {
+        events.push('project-read');
+        return 'PROJECT_SMOKE_PERMISSION_READY';
+      }
       if (sql.includes('CLEANUP_PASSED')) {
         events.push('cleanup');
         return 'CLEANUP_PASSED';
@@ -155,6 +171,7 @@ test('wrapper prepares fixture inside measured restore and cleans it after resto
     'create-a',
     'create-b',
     'setup',
+    'project-read',
     'live',
     'restore-finished',
     'cleanup',
@@ -164,6 +181,7 @@ test('wrapper prepares fixture inside measured restore and cleans it after resto
   assert.equal(result.validationFixtureLifecycle, 'PASS');
   const output = logs.join('\n');
   assert.ok(output.includes('LOCAL_RESTORE_DRILL_PASSED'));
+  assert.ok(output.includes('LOCAL_PROJECT_SMOKE_PERMISSION_READY'));
   assert.ok(output.includes('LOCAL_DATA_API_FIXTURE_CLEANUP_PASSED'));
   assert.ok(!output.includes(credentials.userAEmail));
   assert.ok(!output.includes(credentials.userBEmail));
@@ -295,6 +313,77 @@ test('setup SQL failure removes generated Auth users without fixture cleanup', a
   ]);
 });
 
+test('project smoke permission failure cleans the committed fixture and generated users', async () => {
+  const events = [];
+  let psqlCalls = 0;
+  await assert.rejects(
+    runLocalRestoreDrillWithFixture({
+      runFactsPath: 'private-facts.json',
+      outputPath: 'private-evidence.json',
+      env: {
+        SESN_SUPABASE_URL: 'http://127.0.0.1:54321',
+        SESN_SUPABASE_SECRET_KEY: 'local-service-role-jwt',
+      },
+      readFileImpl: async (path) => {
+        if (path === 'private-facts.json') {
+          return JSON.stringify({
+            repoRoot: '/repo',
+            db: {
+              containerName: 'supabase_db_sesn-restore-drill',
+              requiredNameToken: 'restore-drill',
+            },
+          });
+        }
+        if (String(path).endsWith('02_setup.sql')) return setupTemplate;
+        if (String(path).endsWith('05_cleanup.sql')) return cleanupSql;
+        throw new Error('unexpected read');
+      },
+      generateCredentials: () => credentials,
+      createAdminClient: () => ({
+        async createUser(email) {
+          events.push(
+            email === credentials.userAEmail ? 'create-a' : 'create-b',
+          );
+          return email === credentials.userAEmail ? 'user-a-id' : 'user-b-id';
+        },
+        async deleteUser(id) {
+          events.push(id === 'user-b-id' ? 'delete-b' : 'delete-a');
+        },
+      }),
+      runPsql: async () => {
+        psqlCalls += 1;
+        if (psqlCalls === 1) {
+          events.push('setup');
+          return 'READY_FOR_VALIDATION';
+        }
+        if (psqlCalls === 2) {
+          events.push('project-read-failed');
+          throw new Error('project.read grant failed');
+        }
+        events.push('cleanup');
+        return 'CLEANUP_PASSED';
+      },
+      runLiveValidation: async () => {
+        throw new Error('should not reach live validation');
+      },
+      runRestoreDrill: async ({ env, runLiveValidation }) =>
+        runLiveValidation({ repoRoot: '/repo', env }),
+      log: () => {},
+    }),
+    /project.read grant failed/u,
+  );
+
+  assert.deepEqual(events, [
+    'create-a',
+    'create-b',
+    'setup',
+    'project-read-failed',
+    'cleanup',
+    'delete-b',
+    'delete-a',
+  ]);
+});
+
 test('cleanup failure preserves fixture users for investigation and fails closed', async () => {
   const events = [];
   let psqlCalls = 0;
@@ -332,8 +421,12 @@ test('cleanup failure preserves fixture users for investigation and fails closed
           events.push('unexpected-delete');
         },
       }),
-      runPsql: async () => {
+      runPsql: async ({ sql }) => {
         psqlCalls += 1;
+        if (sql.includes('PROJECT_SMOKE_PERMISSION_READY')) {
+          events.push('project-read');
+          return 'PROJECT_SMOKE_PERMISSION_READY';
+        }
         if (psqlCalls === 1) {
           events.push('setup');
           return 'READY_FOR_VALIDATION';
@@ -351,5 +444,11 @@ test('cleanup failure preserves fixture users for investigation and fails closed
     /Validation fixture cleanup marker missing/u,
   );
 
-  assert.deepEqual(events, ['create-a', 'create-b', 'setup', 'cleanup-failed']);
+  assert.deepEqual(events, [
+    'create-a',
+    'create-b',
+    'setup',
+    'project-read',
+    'cleanup-failed',
+  ]);
 });
