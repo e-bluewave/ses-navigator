@@ -97,6 +97,8 @@
     "smoke:auth-project:check": "node --test scripts/auth-project-smoke.test.mjs",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
+    "security:restore-local-prepare": "node scripts/prepare-local-restore-run-facts.mjs",
+    "security:restore-local-prepare:check": "node --test scripts/prepare-local-restore-run-facts.test.mjs",
     "security:restore-local-db": "node scripts/restore-drill-local-db-restore.mjs",
     "security:restore-local-db:check": "node --test scripts/restore-drill-local-db-restore.test.mjs",
     "security:restore-local-storage": "node scripts/restore-drill-local-storage-restore.mjs",
