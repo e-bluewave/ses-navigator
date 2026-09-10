@@ -6,19 +6,34 @@ on:
       - fix/windows-cmd-outer-quoting
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   selftest:
+    if: github.actor != 'github-actions[bot]'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: fix/windows-cmd-outer-quoting
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prettier --write scripts/windows-cmd-spawn.mjs scripts/windows-cmd-spawn.test.mjs scripts/windows-cmd-runtime-self-test.mjs
       - run: pnpm exec prettier --check scripts/windows-cmd-spawn.mjs scripts/windows-cmd-spawn.test.mjs scripts/windows-cmd-runtime-self-test.mjs
       - run: node --test scripts/windows-cmd-spawn.test.mjs
       - run: node scripts/windows-cmd-runtime-self-test.mjs
+      - name: Commit verified formatting
+        shell: bash
+        run: |
+          git add scripts/windows-cmd-spawn.mjs scripts/windows-cmd-spawn.test.mjs scripts/windows-cmd-runtime-self-test.mjs
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Format Windows cmd outer quoting"
+          git push origin HEAD:fix/windows-cmd-outer-quoting
