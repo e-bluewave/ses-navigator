@@ -294,7 +294,10 @@ export async function runDatabaseBackupCapture({
   for (const plan of plans) {
     const result = runCommand(supabaseExecutable, plan.args);
     if (result.status !== 0) {
-      throw new Error(`Database backup dump failed at ${plan.stage} stage`);
+      const suffix = result.spawnErrorCode ? ` (${result.spawnErrorCode})` : '';
+      throw new Error(
+        `Database backup dump failed at ${plan.stage} stage${suffix}`,
+      );
     }
   }
 
@@ -394,8 +397,8 @@ function runCommandSafe(command, args) {
   };
 }
 
-function defaultSupabaseExecutable() {
-  return process.platform === 'win32' ? 'supabase.cmd' : 'supabase';
+export function defaultSupabaseExecutable(platform = process.platform) {
+  return platform === 'win32' ? 'supabase.exe' : 'supabase';
 }
 
 async function assertPathDoesNotExist(path) {
