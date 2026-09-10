@@ -75,6 +75,8 @@
     "security:rpo-rto:check": "node --test scripts/check-rpo-rto-policy.test.mjs",
     "security:rpo-rto-evidence": "node scripts/check-rpo-rto-evidence.mjs",
     "security:rpo-rto-evidence:check": "node --test scripts/check-rpo-rto-evidence.test.mjs",
+    "security:rpo-rto-from-restore": "node scripts/build-rpo-rto-evidence-from-restore.mjs",
+    "security:rpo-rto-from-restore:check": "node --test scripts/build-rpo-rto-evidence-from-restore.test.mjs",
     "security:retention": "node scripts/check-retention-policy.mjs",
     "security:retention:check": "node --test scripts/check-retention-policy.test.mjs",
     "security:secret-inventory": "node scripts/check-secret-inventory.mjs",
