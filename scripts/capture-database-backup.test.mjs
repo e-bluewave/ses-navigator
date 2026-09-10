@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   buildSupabaseDumpPlans,
+  defaultSupabaseExecutable,
   evaluateCapturedDatabaseBackup,
   parsePostgresMajorVersion,
   requiredStorageDataExclusions,
@@ -39,6 +40,12 @@ test('capture request requires runtime DB URL and output outside repository', ()
   assert.ok(
     insideRepo.findings.includes('backup-output-must-be-outside-repository'),
   );
+});
+
+test('Windows default uses native supabase.exe while other platforms use supabase', () => {
+  assert.equal(defaultSupabaseExecutable('win32'), 'supabase.exe');
+  assert.equal(defaultSupabaseExecutable('linux'), 'supabase');
+  assert.equal(defaultSupabaseExecutable('darwin'), 'supabase');
 });
 
 test('data dump plan always uses COPY and explicit Storage exclusions', () => {
