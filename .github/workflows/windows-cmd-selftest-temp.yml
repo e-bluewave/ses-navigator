@@ -1,0 +1,24 @@
+name: Windows CMD Selftest Temporary
+
+on:
+  push:
+    branches:
+      - fix/windows-cmd-outer-quoting
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prettier --check scripts/windows-cmd-spawn.mjs scripts/windows-cmd-spawn.test.mjs scripts/windows-cmd-runtime-self-test.mjs
+      - run: node --test scripts/windows-cmd-spawn.test.mjs
+      - run: node scripts/windows-cmd-runtime-self-test.mjs
