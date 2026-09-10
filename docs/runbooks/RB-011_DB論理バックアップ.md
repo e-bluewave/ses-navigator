@@ -70,6 +70,12 @@ backup開始時にprivate manifestへ次を記録する。
 - `migrationBaselineMethod`
 - `applicationSchemaBaselineRecorded: true`
 
+## 自動取得ランナー
+
+新しいbackup setの取得、復旧ポイント時刻、artifact checksum、migration/Application schema baselineの記録は `security:db-backup-capture` で自動化する。詳細は `docs/runbooks/DATABASE_BACKUP_CAPTURE_AUTOMATION.md` を参照する。
+
+このランナーはoffsite保存完了や保持・暗号化の運用事実を自動で捏造しない。取得後は本Runbookの保存先要件を満たす外部保存先へ転送し、最終BA-006 Evidenceを既存validatorで検証する。
+
 ## バックアップ後の検証
 
 各実行で次を記録する。
