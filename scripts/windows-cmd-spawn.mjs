@@ -15,42 +15,60 @@ export function prepareSpawnSyncInvocation({
       command,
       args: args.map((value) => String(value)),
       env,
-      viaWindowsCmd: false,
+      viaWindowsPowerShell: false,
     };
   }
 
   const childEnv = { ...env };
   const commandVariable = `${envPrefix}_COMMAND`;
+  const countVariable = `${envPrefix}_COUNT`;
   assertSafeVariableName(commandVariable);
+  assertSafeVariableName(countVariable);
   assertSafeEnvironmentValue(command);
   childEnv[commandVariable] = command;
+  childEnv[countVariable] = String(args.length);
 
-  const argumentReferences = [];
   for (const [index, rawValue] of args.entries()) {
     const value = String(rawValue);
     assertSafeEnvironmentValue(value);
     const variable = `${envPrefix}_${index}`;
     assertSafeVariableName(variable);
     childEnv[variable] = value;
-    argumentReferences.push(`"%${variable}%"`);
   }
 
-  // Do not use CALL here. CALL reparses the expanded command line, which can
-  // corrupt percent-encoded URLs such as PostgreSQL connection strings.
-  // With cmd.exe /S /C, a quoted executable path followed by arguments must be
-  // wrapped in an additional outer quote pair so the first/last quote stripping
-  // performed by cmd.exe does not break paths containing spaces.
-  const innerCommandLine = [
-    `"%${commandVariable}%"`,
-    ...argumentReferences,
-  ].join(' ');
-  const commandLine = `"${innerCommandLine}"`;
+  // cmd.exe reparses shell metacharacters such as '&' after environment
+  // expansion, even when the original value was supplied as one logical argv.
+  // PostgreSQL URLs commonly contain percent-encoding and query separators, so
+  // route .cmd execution through PowerShell's call operator instead. The actual
+  // command and argv stay in child environment variables and are never embedded
+  // in the PowerShell command text or process command line.
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    `$command = [Environment]::GetEnvironmentVariable('${commandVariable}')`,
+    `$count = [int][Environment]::GetEnvironmentVariable('${countVariable}')`,
+    '$arguments = @()',
+    'for ($i = 0; $i -lt $count; $i++) {',
+    `  $arguments += [Environment]::GetEnvironmentVariable(('${envPrefix}_{0}' -f $i))`,
+    '}',
+    '& $command @arguments',
+    '$code = $LASTEXITCODE',
+    'if ($null -eq $code) { $code = 0 }',
+    'exit [int]$code',
+  ].join('\r\n');
 
   return {
-    command: env.ComSpec || env.COMSPEC || 'cmd.exe',
-    args: ['/d', '/s', '/c', commandLine],
+    command: 'powershell.exe',
+    args: [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-EncodedCommand',
+      Buffer.from(script, 'utf16le').toString('base64'),
+    ],
     env: childEnv,
-    viaWindowsCmd: true,
+    viaWindowsPowerShell: true,
   };
 }
 
