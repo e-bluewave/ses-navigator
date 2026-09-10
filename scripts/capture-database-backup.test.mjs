@@ -48,7 +48,7 @@ test('Windows default uses native supabase.exe while other platforms use supabas
   assert.equal(defaultSupabaseExecutable('darwin'), 'supabase');
 });
 
-test('data dump plan always uses COPY and explicit Storage exclusions', () => {
+test('schema preserves pg_dump version header while data uses COPY and Storage exclusions', () => {
   const plans = buildSupabaseDumpPlans({
     databaseUrl: 'postgresql://runtime-secret',
     rolesPath: '/backup/roles.sql',
@@ -56,6 +56,8 @@ test('data dump plan always uses COPY and explicit Storage exclusions', () => {
     dataPath: '/backup/data.sql',
   });
   assert.equal(plans.length, 3);
+  const schemaPlan = plans.find((plan) => plan.stage === 'schema');
+  assert.ok(schemaPlan.args.includes('--keep-comments'));
   const dataPlan = plans.find((plan) => plan.stage === 'data');
   assert.ok(dataPlan.args.includes('--use-copy'));
   assert.ok(dataPlan.args.includes('--data-only'));
