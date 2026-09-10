@@ -13,10 +13,10 @@ test('non-Windows invocation preserves executable and argv', () => {
   assert.equal(result.command, 'supabase');
   assert.deepEqual(result.args, ['db', 'dump']);
   assert.equal(result.env, env);
-  assert.equal(result.viaWindowsCmd, false);
+  assert.equal(result.viaWindowsPowerShell, false);
 });
 
-test('Windows .cmd invocation avoids CALL and keeps percent-encoded arguments out of command text', () => {
+test('Windows .cmd invocation uses PowerShell bridge without embedding sensitive argv', () => {
   const secretUrl =
     'postgresql://user:p%40ss%26word@example.invalid:5432/postgres?x=a&y=b';
   const result = prepareSpawnSyncInvocation({
@@ -30,42 +30,50 @@ test('Windows .cmd invocation avoids CALL and keeps percent-encoded arguments ou
       'C:\\Backup Files\\roles.sql',
     ],
     platform: 'win32',
-    env: { ComSpec: 'C:\\Windows\\System32\\cmd.exe' },
+    env: {},
     envPrefix: 'SESN_DB_CAPTURE',
   });
 
-  assert.equal(result.command, 'C:\\Windows\\System32\\cmd.exe');
-  assert.equal(result.viaWindowsCmd, true);
-  assert.deepEqual(result.args.slice(0, 3), ['/d', '/s', '/c']);
-  const commandLine = result.args[3];
-  assert.equal(commandLine.startsWith('call '), false);
-  assert.match(commandLine, /^""%SESN_DB_CAPTURE_COMMAND%"/u);
-  assert.match(commandLine, /""$/u);
-  assert.equal(commandLine.includes(secretUrl), false);
-  assert.equal(commandLine.includes('C:\\Backup Files\\roles.sql'), false);
+  assert.equal(result.command, 'powershell.exe');
+  assert.equal(result.viaWindowsPowerShell, true);
+  assert.equal(result.args.includes('-EncodedCommand'), true);
+  assert.equal(result.args.join(' ').includes(secretUrl), false);
+  assert.equal(result.args.join(' ').includes('C:\\Backup Files\\roles.sql'), false);
   assert.equal(result.env.SESN_DB_CAPTURE_COMMAND, 'supabase.cmd');
+  assert.equal(result.env.SESN_DB_CAPTURE_COUNT, '6');
   assert.equal(result.env.SESN_DB_CAPTURE_3, secretUrl);
   assert.equal(result.env.SESN_DB_CAPTURE_5, 'C:\\Backup Files\\roles.sql');
+
+  const encoded = result.args.at(-1);
+  const script = Buffer.from(encoded, 'base64').toString('utf16le');
+  assert.match(script, /& \$command @arguments/u);
+  assert.match(script, /SESN_DB_CAPTURE_COMMAND/u);
+  assert.equal(script.includes(secretUrl), false);
+  assert.equal(script.includes('C:\\Backup Files\\roles.sql'), false);
 });
 
-test('Windows command text contains only environment references for argv values', () => {
+test('PowerShell bridge keeps shell-sensitive values only in child environment', () => {
+  const values = ['one', 'p%40ss', 'a&b', 'x|y', '<z>', 'quoted value'];
   const result = prepareSpawnSyncInvocation({
     command: 'tool.cmd',
-    args: ['one', 'p%40ss', 'a&b', 'x|y', '<z>'],
+    args: values,
     platform: 'win32',
-    env: { COMSPEC: 'cmd.exe' },
+    env: {},
     envPrefix: 'SESN_TEST',
   });
 
-  assert.equal(
-    result.args[3],
-    '""%SESN_TEST_COMMAND%" "%SESN_TEST_0%" "%SESN_TEST_1%" "%SESN_TEST_2%" "%SESN_TEST_3%" "%SESN_TEST_4%""',
-  );
-  assert.equal(result.args[3].includes('p%40ss'), false);
-  assert.equal(result.args[3].includes('a&b'), false);
+  const encoded = result.args.at(-1);
+  const script = Buffer.from(encoded, 'base64').toString('utf16le');
+  for (const value of values) {
+    assert.equal(result.args.join(' ').includes(value), false);
+    assert.equal(script.includes(value), false);
+  }
+  assert.equal(result.env.SESN_TEST_COUNT, String(values.length));
+  assert.equal(result.env.SESN_TEST_1, 'p%40ss');
+  assert.equal(result.env.SESN_TEST_2, 'a&b');
 });
 
-test('Windows native executable does not require cmd.exe', () => {
+test('Windows native executable does not require PowerShell bridge', () => {
   const result = prepareSpawnSyncInvocation({
     command: 'supabase.exe',
     args: ['--version'],
@@ -73,7 +81,7 @@ test('Windows native executable does not require cmd.exe', () => {
     env: {},
   });
   assert.equal(result.command, 'supabase.exe');
-  assert.equal(result.viaWindowsCmd, false);
+  assert.equal(result.viaWindowsPowerShell, false);
 });
 
 test('rejects newline-bearing Windows command arguments', () => {
