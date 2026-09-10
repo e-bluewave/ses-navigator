@@ -74,6 +74,7 @@ jobs:
       - run: pnpm security:restore-preflight:check
       - run: pnpm security:restore-target-probe:check
       - run: pnpm security:restore-local-preflight:check
+      - run: pnpm security:restore-local-prepare:check
       - run: pnpm security:restore-local-db:check
       - run: pnpm security:restore-local-storage:check
       - run: pnpm security:restore-local-run:check

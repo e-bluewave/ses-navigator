@@ -1,0 +1,20 @@
+{
+  "repoRoot": "<local repository path>",
+  "databaseBackupEvidencePath": "<private BA-006 evidence path>",
+  "storageBackupEvidencePath": "<private BA-007 evidence path>",
+  "followUpReferencePresent": true,
+  "db": {
+    "factsPath": "<private DB preflight facts path>",
+    "rolesPath": "<private BA-006 roles.sql path>",
+    "schemaPath": "<private BA-006 schema.sql path>",
+    "dataPath": "<private BA-006 data.sql path>",
+    "containerName": "<disposable local DB container name>",
+    "requiredNameToken": "restore"
+  },
+  "storage": {
+    "manifestPath": "<private BA-007 restore manifest path>",
+    "sourceRoot": "<private materialized BA-007 snapshot root>",
+    "cleanupExisting": true
+  },
+  "notes": "Secret-free operational note only. Do not include credentials, URLs, backup run IDs, or restored data."
+}
