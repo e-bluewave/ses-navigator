@@ -106,7 +106,9 @@
     "security:restore-local-run": "node scripts/restore-drill-local-run.mjs",
     "security:restore-local-run:check": "node --test scripts/restore-drill-local-run.test.mjs",
     "security:db-backup-capture": "node scripts/capture-database-backup.mjs",
-    "security:db-backup-capture:check": "node --test scripts/capture-database-backup.test.mjs"
+    "security:db-backup-capture:check": "node --test scripts/capture-database-backup.test.mjs",
+    "security:storage-backup-capture": "node scripts/capture-storage-backup.mjs",
+    "security:storage-backup-capture:check": "node --test scripts/capture-storage-backup.test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
