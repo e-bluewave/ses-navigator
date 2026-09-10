@@ -1,5 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { prepareSpawnSyncInvocation } from './windows-cmd-spawn.mjs';
@@ -29,6 +35,12 @@ const expected = [
   'C:\\Backup Files\\roles.sql',
 ];
 
+let failureStage = 'setup';
+let processExitCode = null;
+let spawnErrorCode = null;
+let outputCreated = false;
+let safeStderr = '';
+
 try {
   const batch = [
     '@echo off',
@@ -48,17 +60,35 @@ try {
     env: baseEnv,
     envPrefix: 'SESN_WINDOWS_CMD_SELFTEST',
   });
+
+  failureStage = 'spawn';
   const result = spawnSync(invocation.command, invocation.args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
     env: invocation.env,
   });
+  processExitCode = typeof result.status === 'number' ? result.status : 1;
+  spawnErrorCode =
+    result.error && typeof result.error.code === 'string'
+      ? result.error.code
+      : null;
+  outputCreated = existsSync(outputPath);
+  safeStderr = String(result.stderr ?? '')
+    .replaceAll(root, '<TEMP>')
+    .replaceAll(expected[1], '<SYNTHETIC_URL>')
+    .slice(0, 500)
+    .trim();
 
+  if (!outputCreated) {
+    throw new Error('self-test-output-not-created');
+  }
+
+  failureStage = 'parse';
   const actual = JSON.parse(readFileSync(outputPath, 'utf8'));
   const exactArgumentParity =
     JSON.stringify(actual) === JSON.stringify(expected);
-  const complete = result.status === 0 && exactArgumentParity;
+  const complete = processExitCode === 0 && exactArgumentParity;
 
   console.log(
     JSON.stringify(
@@ -67,7 +97,9 @@ try {
           ? 'WINDOWS_CMD_RUNTIME_PASSED'
           : 'WINDOWS_CMD_RUNTIME_FAILED',
         complete,
-        processExitCode: typeof result.status === 'number' ? result.status : 1,
+        processExitCode,
+        spawnErrorCode,
+        outputCreated,
         exactArgumentParity,
         percentEncodedArgumentPreserved: actual[1] === expected[1],
         spacedPathArgumentPreserved: actual[2] === expected[2],
@@ -79,12 +111,19 @@ try {
   );
 
   if (!complete) process.exitCode = 1;
-} catch {
+} catch (error) {
   console.log(
     JSON.stringify(
       {
         status: 'WINDOWS_CMD_RUNTIME_FAILED',
         complete: false,
+        failureStage,
+        failureCode:
+          error instanceof Error ? error.message : 'unknown-self-test-failure',
+        processExitCode,
+        spawnErrorCode,
+        outputCreated,
+        stderrSummary: safeStderr || null,
         secretFreeOutput: true,
       },
       null,
