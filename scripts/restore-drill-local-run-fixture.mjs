@@ -13,6 +13,7 @@ const cleanupRelativePath = 'supabase/tests/data_api/05_cleanup.sql';
 const userAPlaceholder = 'replace-user-a@example.invalid';
 const userBPlaceholder = 'replace-user-b@example.invalid';
 const setupReadyMarker = 'READY_FOR_VALIDATION';
+const projectSmokePermissionReadyMarker = 'PROJECT_SMOKE_PERMISSION_READY';
 const cleanupPassedMarker = 'CLEANUP_PASSED';
 
 export function buildAuthAdminHeaders(secretKey) {
@@ -47,6 +48,63 @@ export function buildValidationSetupSql(template, { userAEmail, userBEmail }) {
   return template
     .replace(userAPlaceholder, userAEmail)
     .replace(userBPlaceholder, userBEmail);
+}
+
+export function buildProjectSmokePermissionSql() {
+  return `
+begin;
+
+do $project_smoke$
+declare
+  v_tenant_id constant uuid := '7a110000-0000-4000-8000-000000000001';
+  v_role_id constant uuid := '7a130000-0000-4000-8000-000000000001';
+  v_user_role_id constant uuid := '7a160000-0000-4000-8000-000000000001';
+  v_permission_id uuid;
+  v_granted_by uuid;
+  v_count bigint;
+begin
+  select ur.user_id
+  into strict v_granted_by
+  from app.user_roles ur
+  where ur.id = v_user_role_id
+    and ur.tenant_id = v_tenant_id
+    and ur.role_id = v_role_id;
+
+  select p.id
+  into strict v_permission_id
+  from app.permissions p
+  where p.code::text = 'project.read';
+
+  select count(*)
+  into v_count
+  from app.role_permissions rp
+  where rp.tenant_id = v_tenant_id
+    and rp.role_id = v_role_id
+    and rp.permission_id = v_permission_id;
+
+  if v_count <> 0 then
+    raise exception 'project.read validation permission already exists';
+  end if;
+
+  insert into app.role_permissions (
+    tenant_id,
+    role_id,
+    permission_id,
+    granted_by
+  )
+  values (
+    v_tenant_id,
+    v_role_id,
+    v_permission_id,
+    v_granted_by
+  );
+end
+$project_smoke$;
+
+commit;
+
+select '${projectSmokePermissionReadyMarker}';
+`;
 }
 
 export function generateValidationCredentials(randomBytesImpl = randomBytes) {
@@ -221,6 +279,7 @@ export async function runLocalRestoreDrillWithFixture({
 
   const credentials = generateCredentials();
   const setupSql = buildValidationSetupSql(setupTemplate, credentials);
+  const projectSmokePermissionSql = buildProjectSmokePermissionSql();
   const runEnv = {
     ...runtimeEnv,
     SESN_TEST_EMAIL: credentials.userAEmail,
@@ -272,6 +331,20 @@ export async function runLocalRestoreDrillWithFixture({
     log(
       JSON.stringify({
         status: 'LOCAL_DATA_API_FIXTURE_READY',
+        secretFreeOutput: true,
+      }),
+    );
+
+    const permissionOutput = await runPsql({
+      containerName,
+      sql: projectSmokePermissionSql,
+    });
+    if (!permissionOutput.includes(projectSmokePermissionReadyMarker)) {
+      throw new Error('Project smoke permission readiness marker missing');
+    }
+    log(
+      JSON.stringify({
+        status: 'LOCAL_PROJECT_SMOKE_PERMISSION_READY',
         secretFreeOutput: true,
       }),
     );
