@@ -1,0 +1,8 @@
+{
+  "businessOwnerApproved": true,
+  "technicalOwnerApproved": true,
+  "targetsAcknowledged": true,
+  "annualReviewScheduled": true,
+  "exceptionUsed": false,
+  "notes": "Secret-free governance note only. Do not include names, email addresses, credentials, URLs, project identifiers, or backup run IDs."
+}
