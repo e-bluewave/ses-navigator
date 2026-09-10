@@ -81,6 +81,12 @@ BA-008で復旧ポイントを後追い探索しないため、BA-007実行時�
 
 このRunbookではskewの許容上限を固定しない。差を隠さず実測し、BA-009/RB-014のRPO目標と業務tierに照らして判断する。
 
+## 自動取得ランナー
+
+Source Storage APIからの全bucket/object列挙、object取得、size/SHA-256、二回目readによるcontent stability、inventory再照合、対応BA-006とのrecovery-point skew計算、BA-008用restore manifest生成は `security:storage-backup-capture` で自動化する。詳細は `docs/runbooks/STORAGE_BACKUP_CAPTURE_AUTOMATION.md` を参照する。
+
+このランナーはoffsite保存完了、generation protection、retention lock、暗号化等の運用事実を自動でPASS扱いにしない。capture成功後に本Runbookの外部保存先要件を満たし、最終BA-007 Evidenceを既存validatorで検証する。
+
 ## 実行手順
 
 1. 実行対象をStagingまたはProductionとして明示する。
