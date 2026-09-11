@@ -71,23 +71,26 @@ export function evaluateLocalDockerTargetProbe({
 }) {
   const findings = [];
 
-  if (!allowedEnvironments.has(environment)) {
+  const environmentAllowed = allowedEnvironments.has(environment);
+  const containerNamePresent =
+    typeof containerName === 'string' && containerName.trim() !== '';
+  const requiredNameTokenValid =
+    typeof requiredNameToken === 'string' &&
+    requiredNameToken.trim().length >= 4;
+
+  if (!environmentAllowed) {
     findings.push('environment-must-be-disposable-or-staging');
   }
-  if (typeof containerName !== 'string' || containerName.trim() === '') {
+  if (!containerNamePresent) {
     findings.push('docker-container-name-required');
   }
-  if (
-    typeof requiredNameToken !== 'string' ||
-    requiredNameToken.trim().length < 4
-  ) {
+  if (!requiredNameTokenValid) {
     findings.push('restore-target-name-token-minimum-length-4-required');
   }
 
   const tokenMatched =
-    typeof containerName === 'string' &&
-    typeof requiredNameToken === 'string' &&
-    requiredNameToken.trim().length >= 4 &&
+    containerNamePresent &&
+    requiredNameTokenValid &&
     containerName.toLowerCase().includes(requiredNameToken.toLowerCase());
 
   if (!tokenMatched) {
@@ -104,7 +107,9 @@ export function evaluateLocalDockerTargetProbe({
     findings.push('restore-target-must-use-supabase-postgres-image');
   }
 
-  if (!databaseProbe || typeof databaseProbe !== 'object') {
+  const databaseProbePresent =
+    databaseProbe !== null && typeof databaseProbe === 'object';
+  if (!databaseProbePresent) {
     findings.push('database-probe-result-required');
   }
 
@@ -133,6 +138,20 @@ export function evaluateLocalDockerTargetProbe({
     findings.push('postgres-major-version-required');
   }
 
+  // Target identity answers only whether this is the intended isolated restore
+  // environment. ACL normalization is a separate security-posture requirement.
+  // A previously restored Disposable database can therefore remain positively
+  // identified while the full probe still fails closed until ACLs are normalized.
+  const targetIdentityVerified =
+    environmentAllowed &&
+    containerNamePresent &&
+    requiredNameTokenValid &&
+    tokenMatched &&
+    containerRunning === true &&
+    supabasePostgresImage &&
+    databaseProbePresent &&
+    postgresMajorVersion !== null;
+
   const complete = findings.length === 0;
   return {
     status: complete
@@ -145,8 +164,8 @@ export function evaluateLocalDockerTargetProbe({
       mode: 'local-docker-supabase',
       environment,
       productionTarget: false,
-      separateRestoreEnvironment: complete,
-      targetIdentityVerified: complete,
+      separateRestoreEnvironment: targetIdentityVerified,
+      targetIdentityVerified,
       targetDefaultAclNormalized:
         Number.isInteger(riskyDefaultAclEntryCount) &&
         riskyDefaultAclEntryCount === 0,
