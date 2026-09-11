@@ -3,6 +3,32 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('lists and updates My Tasks with filters and optimistic locking', async () => {
+    const request = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(() => Promise.resolve(new Response(JSON.stringify({ items: [] }))));
+    const api = createProjectsApi({
+      getAccessToken: () => 'token',
+      fetch: request,
+    });
+
+    await api.listMyTasks({
+      scope: 'today',
+      timeZone: 'Asia/Tokyo',
+      limit: 20,
+    });
+    await api.updateMyTask('task-1', 3, { status: 'completed' });
+
+    expect(request.mock.calls[0]![0]).toBe(
+      '/api/v1/my-tasks?scope=today&timeZone=Asia%2FTokyo&limit=20',
+    );
+    expect(request.mock.calls[1]![0]).toBe('/api/v1/my-tasks/task-1');
+    const updateRequest = request.mock.calls[1]![1];
+    expect(updateRequest?.method).toBe('PATCH');
+    expect(new Headers(updateRequest?.headers).get('if-match')).toBe('"3"');
+    expect(updateRequest?.body).toBe(JSON.stringify({ status: 'completed' }));
+  });
+
   it('calls project-engineer matching endpoints', async () => {
     const request = vi.fn<
       (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>

@@ -81,6 +81,9 @@ import type { InterviewSummaryRepository } from './modules/interview-summaries/i
 import { registerInterviewSummaryRoutes } from './modules/interview-summaries/interview-summary-routes.js';
 import { OpenAIInterviewSummarizer } from './modules/interview-summaries/interview-summary-service.js';
 import type { InterviewSummarizer } from './modules/interview-summaries/interview-summary-service.js';
+import { SupabaseTaskRepository } from './modules/tasks/task-repository.js';
+import type { TaskRepository } from './modules/tasks/task-repository.js';
+import { registerTaskRoutes } from './modules/tasks/task-routes.js';
 
 export interface AppDependencies {
   authentication?: AuthenticationService;
@@ -111,6 +114,7 @@ export interface AppDependencies {
   proposalMessageComposer?: ProposalMessageComposer;
   interviewSummaries?: InterviewSummaryRepository;
   interviewSummarizer?: InterviewSummarizer;
+  tasks?: TaskRepository;
 }
 
 export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -229,6 +233,7 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
     dependencies.interviewSummaries ?? new SupabaseInterviewSummaryRepository(),
     dependencies.interviewSummarizer ?? new OpenAIInterviewSummarizer(),
   );
+  registerTaskRoutes(app, dependencies.tasks ?? new SupabaseTaskRepository());
 
   return app;
 }

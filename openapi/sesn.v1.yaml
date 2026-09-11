@@ -7,6 +7,42 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /my-tasks:
+    get:
+      operationId: listMyTasks
+      parameters:
+        - { name: scope, in: query, schema: { type: string, enum: [all, incomplete, completed, overdue, today, upcoming], default: incomplete } }
+        - { name: timeZone, in: query, schema: { type: string, maxLength: 100, default: Asia/Tokyo } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        '200':
+          description: Tasks directly assigned to the authenticated user
+          content: { application/json: { schema: { $ref: '#/components/schemas/MyTaskList' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /my-tasks/{id}:
+    patch:
+      operationId: updateMyTask
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: If-Match, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MyTaskUpdateInput' }
+      responses:
+        '200':
+          description: Assigned task updated with optimistic locking
+          headers:
+            ETag: { schema: { type: string } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/MyTaskUpdateResult' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
   /ai-operations:
     get:
       operationId: getAiOperationsDashboard
@@ -2688,6 +2724,91 @@ components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:
+    TaskStatus:
+      type: string
+      enum: [open, in_progress, blocked, completed, cancelled]
+    TaskPriority:
+      type: string
+      enum: [low, normal, high, urgent]
+    TaskDueCategory:
+      type: string
+      enum: [completed, overdue, today, upcoming, none]
+    TaskAssignment:
+      type: object
+      additionalProperties: false
+      required: [assignmentType, assignedAt]
+      properties:
+        assignmentType: { type: string, enum: [owner, collaborator, watcher] }
+        assignedAt: { type: string, format: date-time }
+    TaskLink:
+      type: object
+      additionalProperties: false
+      required: [resourceType, resourceId, linkType]
+      properties:
+        resourceType: { type: string }
+        resourceId: { type: string, format: uuid }
+        linkType: { type: string, enum: [related, blocks, blocked_by, generated_from] }
+    MyTaskUpdateResult:
+      type: object
+      additionalProperties: false
+      required: [id, title, description, status, priority, dueAt, completedAt, createdAt, updatedAt, rowVersion]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+        priority: { $ref: '#/components/schemas/TaskPriority' }
+        dueAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    MyTask:
+      type: object
+      additionalProperties: false
+      required: [id, title, description, status, priority, dueAt, completedAt, isCompleted, isOverdue, isDueToday, isUpcoming, dueCategory, assignment, links, createdAt, updatedAt, rowVersion]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/TaskStatus' }
+        priority: { $ref: '#/components/schemas/TaskPriority' }
+        dueAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        isCompleted: { type: boolean }
+        isOverdue: { type: boolean }
+        isDueToday: { type: boolean }
+        isUpcoming: { type: boolean }
+        dueCategory: { $ref: '#/components/schemas/TaskDueCategory' }
+        assignment: { $ref: '#/components/schemas/TaskAssignment' }
+        links:
+          type: array
+          items: { $ref: '#/components/schemas/TaskLink' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    MyTaskList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MyTask' }
+    MyTaskUpdateInput:
+      type: object
+      additionalProperties: false
+      anyOf:
+        - required: [status]
+        - required: [dueAt]
+        - required: [clearDueAt]
+          properties:
+            clearDueAt: { const: true }
+      properties:
+        status: { $ref: '#/components/schemas/TaskStatus' }
+        dueAt: { type: string, format: date-time }
+        clearDueAt: { type: boolean }
+        reason: { type: [string, 'null'], maxLength: 1000 }
     AiUsageDay:
       type: object
       required: [usageDate, executionCount, succeededCount, failedCount, totalTokens, estimatedCostUsd]

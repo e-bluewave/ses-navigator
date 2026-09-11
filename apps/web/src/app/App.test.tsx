@@ -31,6 +31,7 @@ import type {
   AccountingPeriod,
   AccountingExportBatch,
   Expense,
+  MyTask,
 } from '../api/generated.js';
 import type { AuthService, AuthSession } from '../auth/auth-client.js';
 import { App } from './App.js';
@@ -46,6 +47,35 @@ const project: Project = {
   plannedEndOn: null,
   updatedAt: '2026-08-08T12:00:00Z',
   rowVersion: 2,
+};
+
+const myTask: MyTask = {
+  id: '10101010-1010-4010-8010-101010101010',
+  title: '面談結果を確認する',
+  description: '顧客へ結果を確認する',
+  status: 'open',
+  priority: 'high',
+  dueAt: '2026-09-11T03:00:00Z',
+  completedAt: null,
+  isCompleted: false,
+  isOverdue: false,
+  isDueToday: true,
+  isUpcoming: false,
+  dueCategory: 'today',
+  assignment: {
+    assignmentType: 'owner',
+    assignedAt: '2026-09-10T01:00:00Z',
+  },
+  links: [
+    {
+      resourceType: 'interview',
+      resourceId: '77777777-7777-4777-8777-777777777777',
+      linkType: 'generated_from',
+    },
+  ],
+  createdAt: '2026-09-10T01:00:00Z',
+  updatedAt: '2026-09-10T01:00:00Z',
+  rowVersion: 1,
 };
 
 const projectExtraction: ProjectExtraction = {
@@ -696,6 +726,8 @@ function auth(current: AuthSession | null = session): AuthService {
 
 function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
   return {
+    listMyTasks: vi.fn(() => Promise.resolve({ items: [] })),
+    updateMyTask: vi.fn(() => Promise.reject(new Error('not configured'))),
     createProposalMessageDraft: vi.fn(() =>
       Promise.reject(new Error('not configured')),
     ),
@@ -1116,6 +1148,55 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { name: '提案' }),
     ).toBeInTheDocument();
+  });
+
+  it('lists, filters, and completes My Tasks', async () => {
+    window.history.replaceState({}, '', '/my-tasks');
+    const listMyTasks = vi.fn<ProjectsApi['listMyTasks']>(() =>
+      Promise.resolve({ items: [myTask] }),
+    );
+    const updateMyTask = vi.fn(() =>
+      Promise.resolve({
+        id: myTask.id,
+        title: myTask.title,
+        description: myTask.description,
+        status: 'completed' as const,
+        priority: myTask.priority,
+        dueAt: myTask.dueAt,
+        completedAt: '2026-09-11T04:00:00Z',
+        createdAt: myTask.createdAt,
+        updatedAt: '2026-09-11T04:00:00Z',
+        rowVersion: 2,
+      }),
+    );
+    render(<App auth={auth()} api={api({ listMyTasks, updateMyTask })} />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'マイタスク' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(myTask.title)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '面談' })).toHaveLength(2);
+    const initialQuery = listMyTasks.mock.calls[0]![0];
+    expect(initialQuery?.scope).toBe('incomplete');
+    expect(initialQuery?.limit).toBe(100);
+    expect(typeof initialQuery?.timeZone).toBe('string');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: `「${myTask.title}」を完了` }),
+    );
+    await waitFor(() =>
+      expect(updateMyTask).toHaveBeenCalledWith(myTask.id, 1, {
+        status: 'completed',
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '期限切れ' }));
+    await waitFor(() => {
+      const latestQuery = listMyTasks.mock.calls.at(-1)?.[0];
+      expect(latestQuery?.scope).toBe('overdue');
+      expect(latestQuery?.limit).toBe(100);
+      expect(typeof latestQuery?.timeZone).toBe('string');
+    });
   });
 
   it('shows AI quality, cost, usage, and redacted failures', async () => {

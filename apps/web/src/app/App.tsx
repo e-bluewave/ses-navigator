@@ -89,6 +89,7 @@ import { MfaPage } from '../auth/MfaPage.js';
 import { PasswordUpdatePage } from '../auth/PasswordUpdatePage.js';
 import type { AuthService } from '../auth/auth-client.js';
 import { HomeDashboardView } from './HomeDashboardView.js';
+import { MyTasksView } from './MyTasksView.js';
 import { AiOperationsView } from './AiOperationsView.js';
 
 const projectStatusLabels: Record<ProjectStatus, string> = {
@@ -211,6 +212,7 @@ const invoiceTypeLabels: Record<InvoiceType, string> = {
 
 type Route =
   | { page: 'home' }
+  | { page: 'my-tasks' }
   | { page: 'ai-operations' }
   | { page: 'sales-kpi' }
   | { page: 'profitability' }
@@ -265,6 +267,7 @@ function currentRoute(): Route {
     window.location.pathname === '/dashboard'
   )
     return { page: 'home' };
+  if (window.location.pathname === '/my-tasks') return { page: 'my-tasks' };
   if (window.location.pathname === '/sales-kpi') return { page: 'sales-kpi' };
   if (window.location.pathname === '/ai-operations')
     return { page: 'ai-operations' };
@@ -5887,7 +5890,10 @@ function InterviewSummaryPanel({
           ) : null}
           {summary.generatedTaskIds.length ? (
             <p role="status">
-              作成済みタスク: {summary.generatedTaskIds.join(', ')}
+              作成済みタスク: {summary.generatedTaskIds.length}件。{' '}
+              <a className="project-link" href="/my-tasks">
+                マイタスクで確認
+              </a>
             </p>
           ) : null}
         </section>
@@ -7607,6 +7613,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         </button>
         <button
           className="secondary-button"
+          onClick={() => navigate('/my-tasks')}
+        >
+          マイタスク
+        </button>
+        <button
+          className="secondary-button"
           onClick={() => navigate('/sales-kpi')}
         >
           営業KPI
@@ -7714,6 +7726,8 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           onNavigate={navigate}
           onUnauthorized={signOut}
         />
+      ) : route.page === 'my-tasks' ? (
+        <MyTasksView api={api} onNavigate={navigate} onUnauthorized={signOut} />
       ) : route.page === 'sales-kpi' ? (
         <SalesKpiView api={api} onUnauthorized={signOut} />
       ) : route.page === 'ai-operations' ? (
