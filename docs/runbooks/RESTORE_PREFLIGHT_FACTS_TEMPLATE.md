@@ -129,7 +129,7 @@ PowerShellでは1ブロックで実行し、途中失敗後に後続PASS処理�
 - facts JSON / roles.sql / schema.sql / data.sqlのstrict UTF-8とBOM禁止
 - Production target禁止、別restore環境、target identity確認
 - Disposable Local SupabaseではDocker container実体、Supabase PostgreSQL image、安全token一致をmachine probe
-- Disposable Local Supabaseでは`pg_default_acl`を直接読み、`PUBLIC` / `anon` / `authenticated` / `service_role`への危険なdefault ACLが0件であることをmachine probe
+- Disposable Local Supabaseでは`pg_default_acl`をtuple集合として直接読み、PostgreSQL 17 / Supabase local baselineに対するunexpected ACLとmissing ACLがともに0件であることをmachine probe
 - Production Secret再利用禁止
 - BA-006 / BA-007 linkageとrestore point alignment
 - default ACL正規化済み

@@ -4,23 +4,203 @@ import { isMainModule } from './cli-entry.mjs';
 
 const allowedEnvironments = new Set(['Disposable', 'Staging']);
 const supabasePostgresImagePattern = /(?:^|\/)supabase\/postgres(?::|$)/iu;
+const expectedPostgresMajorVersion = 17;
+const baselineGrantees = ['anon', 'authenticated', 'service_role'];
+const pg17TablePrivileges = [
+  'DELETE',
+  'INSERT',
+  'MAINTAIN',
+  'REFERENCES',
+  'SELECT',
+  'TRIGGER',
+  'TRUNCATE',
+  'UPDATE',
+];
+const sequencePrivileges = ['SELECT', 'UPDATE', 'USAGE'];
+const functionPrivileges = ['EXECUTE'];
+
+export const defaultAclBaselineId = 'supabase-cli-2.111.0-local-postgres-17';
+
+function expandBaseline({ ownerRole, schema, objectType, privileges }) {
+  return baselineGrantees.flatMap((grantee) =>
+    privileges.map((privilege) => ({
+      ownerRole,
+      schema,
+      objectType,
+      grantee,
+      privilege,
+      grantable: false,
+    })),
+  );
+}
+
+const fullPlatformSchemaBaseline = ({ ownerRole, schema }) => [
+  ...expandBaseline({
+    ownerRole,
+    schema,
+    objectType: 'tables',
+    privileges: pg17TablePrivileges,
+  }),
+  ...expandBaseline({
+    ownerRole,
+    schema,
+    objectType: 'sequences',
+    privileges: sequencePrivileges,
+  }),
+  ...expandBaseline({
+    ownerRole,
+    schema,
+    objectType: 'functions',
+    privileges: functionPrivileges,
+  }),
+];
+
+// Supabase CLI 2.111.0 local stacks on PostgreSQL 17 retain these platform
+// defaults after the public Data API opt-in revokes have been applied.
+export const pg17SupabaseLocalDefaultAclBaseline = Object.freeze(
+  [
+    ...expandBaseline({
+      ownerRole: 'postgres',
+      schema: 'public',
+      objectType: 'tables',
+      privileges: ['MAINTAIN', 'REFERENCES', 'TRIGGER', 'TRUNCATE'],
+    }),
+    ...expandBaseline({
+      ownerRole: 'postgres',
+      schema: 'public',
+      objectType: 'sequences',
+      privileges: ['UPDATE'],
+    }),
+    ...fullPlatformSchemaBaseline({
+      ownerRole: 'postgres',
+      schema: 'storage',
+    }),
+    ...['graphql', 'graphql_public', 'public', 'supabase_functions'].flatMap(
+      (schema) =>
+        fullPlatformSchemaBaseline({
+          ownerRole: 'supabase_admin',
+          schema,
+        }),
+    ),
+  ].map((entry) => Object.freeze(entry)),
+);
+
+if (pg17SupabaseLocalDefaultAclBaseline.length !== 195) {
+  throw new Error(
+    'PG17 Supabase local default ACL baseline must have 195 tuples',
+  );
+}
 
 export const defaultAclProbeSql = String.raw`
-WITH risky_default_acl AS (
-  SELECT count(*)::integer AS risky_count
+WITH monitored_default_acl AS (
+  SELECT
+    pg_get_userbyid(d.defaclrole) AS owner_role,
+    COALESCE(n.nspname, '<global>') AS schema_name,
+    CASE d.defaclobjtype
+      WHEN 'r' THEN 'tables'
+      WHEN 'S' THEN 'sequences'
+      WHEN 'f' THEN 'functions'
+      WHEN 'T' THEN 'types'
+      WHEN 'n' THEN 'schemas'
+      ELSE d.defaclobjtype::text
+    END AS object_type,
+    CASE
+      WHEN acl.grantee = 0 THEN 'PUBLIC'
+      ELSE grantee.rolname
+    END AS grantee,
+    acl.privilege_type AS privilege,
+    acl.is_grantable AS grantable
   FROM pg_default_acl AS d
   CROSS JOIN LATERAL aclexplode(d.defaclacl) AS acl
   LEFT JOIN pg_roles AS grantee
     ON grantee.oid = acl.grantee
+  LEFT JOIN pg_namespace AS n
+    ON n.oid = d.defaclnamespace
   WHERE acl.grantee = 0
      OR grantee.rolname IN ('anon', 'authenticated', 'service_role')
+), aggregated AS (
+  SELECT COALESCE(
+    json_agg(
+      json_build_object(
+        'ownerRole', owner_role,
+        'schema', schema_name,
+        'objectType', object_type,
+        'grantee', grantee,
+        'privilege', privilege,
+        'grantable', grantable
+      )
+      ORDER BY owner_role, schema_name, object_type, grantee, privilege, grantable
+    ),
+    '[]'::json
+  ) AS default_acl_entries
+  FROM monitored_default_acl
 )
 SELECT json_build_object(
-  'riskyDefaultAclEntryCount', risky_count,
+  'defaultAclEntries', default_acl_entries,
   'postgresMajorVersion', current_setting('server_version_num')::integer / 10000
 )::text
-FROM risky_default_acl;
+FROM aggregated;
 `;
+
+const defaultAclTupleFields = [
+  'ownerRole',
+  'schema',
+  'objectType',
+  'grantee',
+  'privilege',
+];
+
+export function defaultAclTupleKey(entry) {
+  return JSON.stringify([
+    entry.ownerRole,
+    entry.schema,
+    entry.objectType,
+    entry.grantee,
+    entry.privilege,
+    entry.grantable,
+  ]);
+}
+
+function isDefaultAclTuple(entry) {
+  return (
+    entry !== null &&
+    typeof entry === 'object' &&
+    !Array.isArray(entry) &&
+    defaultAclTupleFields.every(
+      (field) => typeof entry[field] === 'string' && entry[field] !== '',
+    ) &&
+    typeof entry.grantable === 'boolean'
+  );
+}
+
+export function compareDefaultAclEntries(
+  actualEntries,
+  expectedEntries = pg17SupabaseLocalDefaultAclBaseline,
+) {
+  const actualByKey = new Map(
+    actualEntries.map((entry) => [defaultAclTupleKey(entry), entry]),
+  );
+  const expectedByKey = new Map(
+    expectedEntries.map((entry) => [defaultAclTupleKey(entry), entry]),
+  );
+  const unexpectedEntries = [...actualByKey]
+    .filter(([key]) => !expectedByKey.has(key))
+    .map(([, entry]) => entry);
+  const missingEntries = [...expectedByKey]
+    .filter(([key]) => !actualByKey.has(key))
+    .map(([, entry]) => entry);
+
+  return {
+    actualDefaultAclEntryCount: actualByKey.size,
+    expectedDefaultAclEntryCount: expectedByKey.size,
+    unexpectedDefaultAclEntryCount: unexpectedEntries.length,
+    missingDefaultAclEntryCount: missingEntries.length,
+    defaultAclBaselineMatched:
+      unexpectedEntries.length === 0 && missingEntries.length === 0,
+    unexpectedEntries,
+    missingEntries,
+  };
+}
 
 export function parseDatabaseProbeOutput(stdout) {
   const text = String(stdout ?? '').trim();
@@ -40,13 +220,25 @@ export function parseDatabaseProbeOutput(stdout) {
 
   try {
     const value = JSON.parse(jsonLine);
-    if (
-      !Number.isInteger(value?.riskyDefaultAclEntryCount) ||
-      value.riskyDefaultAclEntryCount < 0
-    ) {
+    if (!Array.isArray(value?.defaultAclEntries)) {
       return {
         value: null,
-        findings: ['database-probe-risky-default-acl-count-invalid'],
+        findings: ['database-probe-default-acl-entries-invalid'],
+      };
+    }
+    if (!value.defaultAclEntries.every(isDefaultAclTuple)) {
+      return {
+        value: null,
+        findings: ['database-probe-default-acl-tuple-invalid'],
+      };
+    }
+    const uniqueTupleCount = new Set(
+      value.defaultAclEntries.map(defaultAclTupleKey),
+    ).size;
+    if (uniqueTupleCount !== value.defaultAclEntries.length) {
+      return {
+        value: null,
+        findings: ['database-probe-default-acl-tuples-must-be-unique'],
       };
     }
     if (!Number.isInteger(value?.postgresMajorVersion)) {
@@ -113,20 +305,21 @@ export function evaluateLocalDockerTargetProbe({
     findings.push('database-probe-result-required');
   }
 
-  const riskyDefaultAclEntryCount = Number.isInteger(
-    databaseProbe?.riskyDefaultAclEntryCount,
-  )
-    ? databaseProbe.riskyDefaultAclEntryCount
+  const defaultAclEntries = Array.isArray(databaseProbe?.defaultAclEntries)
+    ? databaseProbe.defaultAclEntries
     : null;
-
-  if (riskyDefaultAclEntryCount === null) {
-    findings.push('risky-default-acl-entry-count-required');
+  if (defaultAclEntries === null) {
+    findings.push('default-acl-entries-required');
   }
-  if (
-    Number.isInteger(riskyDefaultAclEntryCount) &&
-    riskyDefaultAclEntryCount !== 0
-  ) {
-    findings.push('target-default-acl-not-normalized');
+
+  const defaultAclComparison = defaultAclEntries
+    ? compareDefaultAclEntries(defaultAclEntries)
+    : null;
+  if (defaultAclComparison?.unexpectedDefaultAclEntryCount > 0) {
+    findings.push('target-default-acl-unexpected-entries');
+  }
+  if (defaultAclComparison?.missingDefaultAclEntryCount > 0) {
+    findings.push('target-default-acl-baseline-missing-entries');
   }
 
   const postgresMajorVersion = Number.isInteger(
@@ -136,7 +329,15 @@ export function evaluateLocalDockerTargetProbe({
     : null;
   if (postgresMajorVersion === null) {
     findings.push('postgres-major-version-required');
+  } else if (postgresMajorVersion !== expectedPostgresMajorVersion) {
+    findings.push('postgres-major-version-17-required');
   }
+
+  const defaultAclBaselineMatched =
+    postgresMajorVersion === expectedPostgresMajorVersion &&
+    defaultAclComparison?.defaultAclBaselineMatched === true;
+  const riskyDefaultAclEntryCount =
+    defaultAclComparison?.unexpectedDefaultAclEntryCount ?? null;
 
   // Target identity answers only whether this is the intended isolated restore
   // environment. ACL normalization is a separate security-posture requirement.
@@ -166,14 +367,23 @@ export function evaluateLocalDockerTargetProbe({
       productionTarget: false,
       separateRestoreEnvironment: targetIdentityVerified,
       targetIdentityVerified,
-      targetDefaultAclNormalized:
-        Number.isInteger(riskyDefaultAclEntryCount) &&
-        riskyDefaultAclEntryCount === 0,
+      targetDefaultAclNormalized: defaultAclBaselineMatched,
       databaseReachable: databaseProbe !== null,
       localDockerContainer: containerRunning === true,
       supabasePostgresImage,
       requiredNameTokenMatched: tokenMatched,
       riskyDefaultAclEntryCount,
+      actualDefaultAclEntryCount:
+        defaultAclComparison?.actualDefaultAclEntryCount ?? null,
+      expectedDefaultAclEntryCount:
+        defaultAclComparison?.expectedDefaultAclEntryCount ??
+        pg17SupabaseLocalDefaultAclBaseline.length,
+      unexpectedDefaultAclEntryCount:
+        defaultAclComparison?.unexpectedDefaultAclEntryCount ?? null,
+      missingDefaultAclEntryCount:
+        defaultAclComparison?.missingDefaultAclEntryCount ?? null,
+      defaultAclBaselineMatched,
+      defaultAclBaselineId,
       postgresMajorVersion,
       secretFreeProbe: true,
     },
