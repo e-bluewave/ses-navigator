@@ -57,6 +57,29 @@ test('accepts a running disposable Supabase restore target with normalized ACL',
   assert.equal(result.probe.secretFreeProbe, true);
 });
 
+test('keeps disposable target identity verified when only restored default ACL is non-normalized', () => {
+  const result = evaluateLocalDockerTargetProbe({
+    environment: 'Disposable',
+    containerName: 'supabase_db_sesn-ba008-restore-drill',
+    requiredNameToken: 'restore-drill',
+    containerRunning: true,
+    imageName: 'public.ecr.aws/supabase/postgres:17.6.1',
+    databaseProbe: {
+      riskyDefaultAclEntryCount: 84,
+      postgresMajorVersion: 17,
+    },
+  });
+
+  assert.equal(result.status, 'RESTORE_TARGET_PROBE_FAILED');
+  assert.equal(result.complete, false);
+  assert.deepEqual(result.findings, ['target-default-acl-not-normalized']);
+  assert.equal(result.probe.productionTarget, false);
+  assert.equal(result.probe.separateRestoreEnvironment, true);
+  assert.equal(result.probe.targetIdentityVerified, true);
+  assert.equal(result.probe.targetDefaultAclNormalized, false);
+  assert.equal(result.probe.databaseReachable, true);
+});
+
 test('fails closed on target-name, image and default ACL hazards', () => {
   const result = evaluateLocalDockerTargetProbe({
     environment: 'Disposable',
