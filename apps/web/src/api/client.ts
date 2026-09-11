@@ -110,9 +110,19 @@ import type {
   AiOperationsQuery,
   AiBudgetPolicy,
   AiBudgetPolicyInput,
+  MyTaskList,
+  MyTaskUpdateInput,
+  MyTaskUpdateResult,
+  ListMyTasksQuery,
 } from './generated.js';
 
 export interface ProjectsApi {
+  listMyTasks(query?: ListMyTasksQuery): Promise<MyTaskList>;
+  updateMyTask(
+    id: string,
+    rowVersion: number,
+    input: MyTaskUpdateInput,
+  ): Promise<MyTaskUpdateResult>;
   getAiOperationsDashboard(
     query: AiOperationsQuery,
   ): Promise<AiOperationsDashboard>;
@@ -458,7 +468,7 @@ export function createProjectsApi(options: {
 
   async function send<T>(
     path: string,
-    method: 'POST' | 'PUT' | 'DELETE',
+    method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
     body: unknown,
     rowVersion?: number,
     additionalHeaders: Record<string, string> = {},
@@ -491,6 +501,22 @@ export function createProjectsApi(options: {
   }
 
   return {
+    listMyTasks(query = {}) {
+      const params = new URLSearchParams();
+      if (query.scope) params.set('scope', query.scope);
+      if (query.timeZone) params.set('timeZone', query.timeZone);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return get<MyTaskList>(`/my-tasks${suffix}`);
+    },
+    updateMyTask(id, rowVersion, input) {
+      return send<MyTaskUpdateResult>(
+        `/my-tasks/${encodeURIComponent(id)}`,
+        'PATCH',
+        input,
+        rowVersion,
+      );
+    },
     getAiOperationsDashboard(query) {
       const params = new URLSearchParams({
         fromDate: query.fromDate,

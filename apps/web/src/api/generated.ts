@@ -58,6 +58,56 @@ export type InvoiceStatus =
 export type InvoiceType = 'sales' | 'purchase';
 export type AccountingCloseStatus = 'open' | 'closed';
 export type AccountingCloseType = 'sales' | 'invoice' | 'payment';
+export type TaskStatus =
+  'open' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
+export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type TaskDueCategory =
+  'completed' | 'overdue' | 'today' | 'upcoming' | 'none';
+
+export interface TaskAssignment {
+  assignmentType: 'owner' | 'collaborator' | 'watcher';
+  assignedAt: string;
+}
+export interface TaskLink {
+  resourceType: string;
+  resourceId: string;
+  linkType: 'related' | 'blocks' | 'blocked_by' | 'generated_from';
+}
+export interface MyTaskUpdateResult {
+  id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  rowVersion: number;
+}
+export interface MyTask extends MyTaskUpdateResult {
+  isCompleted: boolean;
+  isOverdue: boolean;
+  isDueToday: boolean;
+  isUpcoming: boolean;
+  dueCategory: TaskDueCategory;
+  assignment: TaskAssignment;
+  links: TaskLink[];
+}
+export interface MyTaskList {
+  items: MyTask[];
+}
+export interface ListMyTasksQuery {
+  scope?: 'all' | 'incomplete' | 'completed' | 'overdue' | 'today' | 'upcoming';
+  timeZone?: string;
+  limit?: number;
+}
+export interface MyTaskUpdateInput {
+  status?: TaskStatus;
+  dueAt?: string;
+  clearDueAt?: boolean;
+  reason?: string | null;
+}
 
 export interface AuthContext {
   requiresMfa: boolean;

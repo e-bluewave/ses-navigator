@@ -130,6 +130,100 @@ button {
   display: grid;
   gap: 1rem;
 }
+.my-tasks {
+  display: grid;
+  gap: 1rem;
+}
+.task-scope-tabs {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid #b9c9cc;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+.task-scope-tabs button {
+  flex: 0 0 auto;
+  padding: 0.55rem 0.8rem;
+  border: 0;
+  border-right: 1px solid #dbe4e5;
+  background: transparent;
+  color: #35454e;
+  cursor: pointer;
+  font-weight: 750;
+}
+.task-scope-tabs button:last-child {
+  border-right: 0;
+}
+.task-scope-tabs .task-scope-active {
+  background: #176a5f;
+  color: #fff;
+}
+.task-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(7rem, 1fr));
+  margin: 0;
+  border-block: 1px solid #d1dfe1;
+}
+.task-counts div {
+  padding: 0.85rem 1rem;
+}
+.task-counts dd {
+  font-size: 1.2rem;
+}
+.task-count-alert dd {
+  color: #a62d38;
+}
+.task-table td {
+  vertical-align: top;
+}
+.task-title-cell {
+  min-width: 14rem;
+  white-space: normal;
+}
+.task-title-cell span {
+  display: block;
+  max-width: 28rem;
+  margin-top: 0.35rem;
+  color: #617079;
+  line-height: 1.5;
+}
+.task-table input,
+.task-table select {
+  display: block;
+  min-width: 9rem;
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #b9c9cc;
+  border-radius: 0.5rem;
+  background: #fff;
+  font: inherit;
+}
+.task-due {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+.task-due-overdue {
+  color: #a62d38;
+}
+.task-due-today {
+  color: #795700;
+}
+.task-overdue {
+  background: #fff8f8;
+}
+.task-actions,
+.task-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.task-actions button {
+  padding: 0.5rem 0.65rem;
+  white-space: nowrap;
+}
 .dashboard-actions {
   display: flex;
   flex-wrap: wrap;
@@ -475,5 +569,8 @@ dd {
   }
   .project-filters {
     grid-template-columns: 1fr;
+  }
+  .task-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

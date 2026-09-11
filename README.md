@@ -40,11 +40,12 @@ SES営業における案件・技術者・BP情報を一元管理し、AIを活�
 ## 現在の開発状況
 
 - 要件定義・主要設計書の初版完了
-- DB設計・DDL／Migration 001〜122完了
-- SupabaseリモートDB適用、Migration一致、DB Lint確認済み
+- DB設計・DDL／Migration 001〜160を欠番なく作成
+- Migration 001〜159の実環境適用・一致とDB Lintを確認済み
 - `row_version`適用分類とフロントエンド・API初期構成を確定
-- 案件参照スライスのWeb・API、Supabase Authログイン・セッション管理を実装済み
-- Authから案件参照までの実環境結合スモークテストを実行可能
+- 会社・技術者・案件・提案・面談・契約・参画・実績・請求の主要Web/APIを実装済み
+- Supabase Auth、MFA、RLS/Data API境界と実環境スモークテストを実装済み
+- AI抽出・マッチング・提案文・面談要約と、本人割当タスクを扱うマイタスク画面を実装済み
 
 詳細は PROJECT_STATUS.md を参照してください。
 

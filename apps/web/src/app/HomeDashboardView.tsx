@@ -81,6 +81,7 @@ export function HomeDashboardView({
 
       {loading ? <p role="status">ダッシュボードを集計しています…</p> : null}
       <div className="dashboard-actions" aria-label="クイック操作">
+        <button onClick={() => onNavigate('/my-tasks')}>マイタスク</button>
         <button onClick={() => onNavigate('/proposals')}>提案を確認</button>
         <button onClick={() => onNavigate('/interviews')}>面談を確認</button>
         <button onClick={() => onNavigate('/contracts')}>契約を確認</button>
