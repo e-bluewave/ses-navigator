@@ -33,7 +33,7 @@ BA-006のDB論理バックアップとBA-007のStorage外部バックアップ�
 7. 開始日時、担当者、対象backup run IDを運用台帳へ記録する。
 8. roles.sqlを確認し、Supabase管理reserved roleとApplication custom roleを分類する。custom roleが0件なら、reserved roleは復旧先native状態を維持し、roles replayを意図的skipとして記録する。
 9. schema/data SQLがstrict UTF-8であることを確認する。コンテナへコピーする場合はlocal/containerのSHA-256一致も確認する。
-10. 復旧先のdefault ACLを確認し、schema restore前に不要なdefault grantを正規化する。新規objectへ意図しないACLを継承させない。
+10. 復旧先のdefault ACLをowner、schema、object type、grantee、privilege、grantableのtuple集合で確認する。schema restore前にSupabase platform baselineからの追加・欠落がないことを確認し、新規objectへ意図しないACLを継承させない。platform baseline自体を一括REVOKEしない。
 11. BA-006 dumpへ`storage`管理schemaが混入していないことを確認する。混入している場合はそのままrestoreしない。
 12. migration基準を記録する。migration ledgerがbackupに存在する場合はそのheadを使い、存在しない場合はbackup schemaと復旧DBのsemantic parityを使うことを事前に決める。
 
@@ -210,7 +210,7 @@ GitHub上のRunbook・policy・CIだけでは完了扱いにしない。次を�
 2026-09のBA-008で確認した次の事象を再発防止ルールとして本Runbookへ反映する。
 
 - Supabase管理reserved roleは復旧先native状態を維持し、custom roleが0件ならrole replayを意図的skipする。
-- schema restore前にdefault ACLを正規化する。
+- schema restore前にdefault ACLをSupabase platform baselineと集合比較し、追加・欠落を解消する。platform baseline自体を一括REVOKEしない。
 - SQL/JSON encodingをstrict UTF-8で確認し、Evidence JSONはBOMなしとする。
 - Storage metadataをSQLで復旧せず、Storage API/S3互換APIで再生成する。
 - ghost Storage metadataをSQL直操作せずStorage APIでcleanupする。
