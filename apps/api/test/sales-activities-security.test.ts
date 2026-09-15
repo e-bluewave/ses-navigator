@@ -103,7 +103,9 @@ describe('Sales activity database boundary', () => {
   it('uses request hashing and idempotency to prevent duplicate activity/task creation', async () => {
     const sql = await readFile(createMigrationUrl, 'utf8');
 
-    expect(sql).toContain('public.digest');
+    expect(sql).toContain('pg_catalog.sha256(');
+    expect(sql).toContain('pg_catalog.convert_to(');
+    expect(sql).not.toContain('public.digest');
     expect(sql).toContain("'sales_activity.create'");
     expect(sql).toContain('insert into app.idempotency_records(');
     expect(sql).toContain(
