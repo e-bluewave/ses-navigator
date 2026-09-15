@@ -1,0 +1,74 @@
+name: Temporary wire sales activity panel
+
+on:
+  push:
+    branches:
+      - codex/issue-155-sales-activities
+    paths:
+      - .github/workflows/tmp-wire-sales-activities.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/issue-155-sales-activities
+      - name: Apply fail-closed App.tsx wiring
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('apps/web/src/app/App.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, got {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              "import { ApiClientError, createProjectsApi } from '../api/client.js';\nimport type { ProjectsApi } from '../api/client.js';",
+              "import { ApiClientError, createProjectsApi } from '../api/client.js';\nimport type { ProjectsApi } from '../api/client.js';\nimport { createSalesActivityApi } from '../api/sales-activity-client.js';\nimport type { SalesActivityApi } from '../api/sales-activity-types.js';",
+              'sales activity API imports',
+          )
+          replace_once(
+              "import { AiOperationsView } from './AiOperationsView.js';",
+              "import { AiOperationsView } from './AiOperationsView.js';\nimport { CompanySalesActivitiesPanel } from './CompanySalesActivitiesPanel.js';",
+              'sales activity panel import',
+          )
+          replace_once(
+              "  const api = useMemo(\n    () =>\n      providedApi ??\n      createProjectsApi({ getAccessToken: () => session?.accessToken ?? null }),\n    [providedApi, session?.accessToken],\n  );\n  const [route, setRoute] = useState<Route>(currentRoute);",
+              "  const api = useMemo(\n    () =>\n      providedApi ??\n      createProjectsApi({ getAccessToken: () => session?.accessToken ?? null }),\n    [providedApi, session?.accessToken],\n  );\n  const salesActivityApi = useMemo(\n    () =>\n      createSalesActivityApi({\n        getAccessToken: () => session?.accessToken ?? null,\n      }),\n    [session?.accessToken],\n  );\n  const [route, setRoute] = useState<Route>(currentRoute);",
+              'authenticated sales activity client',
+          )
+          replace_once(
+              "        <CompanyDetail\n          api={api}\n          id={route.id}\n          onBack={() => navigate('/companies')}\n          onUnauthorized={signOut}",
+              "        <CompanyDetail\n          api={api}\n          salesActivityApi={salesActivityApi}\n          id={route.id}\n          onBack={() => navigate('/companies')}\n          onUnauthorized={signOut}",
+              'company route prop',
+          )
+          replace_once(
+              "function CompanyDetail({\n  api,\n  id,\n  onBack,\n  onUnauthorized,\n  onEdit,\n  onDeleted,\n}: {\n  api: ProjectsApi;\n  id: string;",
+              "function CompanyDetail({\n  api,\n  salesActivityApi,\n  id,\n  onBack,\n  onUnauthorized,\n  onEdit,\n  onDeleted,\n}: {\n  api: ProjectsApi;\n  salesActivityApi: SalesActivityApi;\n  id: string;",
+              'company detail prop type',
+          )
+          replace_once(
+              "            <div>\n              <dt>Webサイト</dt>\n              <dd>\n                {company.websiteUrl ? (\n                  <a href={company.websiteUrl} target=\"_blank\" rel=\"noreferrer\">\n                    {company.websiteUrl}\n                  </a>\n                ) : (\n                  '未登録'\n                )}\n              </dd>\n            </div>\n          </dl>\n          {showDelete ? (",
+              "            <div>\n              <dt>Webサイト</dt>\n              <dd>\n                {company.websiteUrl ? (\n                  <a href={company.websiteUrl} target=\"_blank\" rel=\"noreferrer\">\n                    {company.websiteUrl}\n                  </a>\n                ) : (\n                  '未登録'\n                )}\n              </dd>\n            </div>\n          </dl>\n          <CompanySalesActivitiesPanel\n            api={salesActivityApi}\n            companyId={id}\n            onUnauthorized={onUnauthorized}\n          />\n          {showDelete ? (",
+              'company detail panel insertion',
+          )
+
+          path.write_text(text, encoding='utf-8')
+      - name: Commit wiring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/app/App.tsx
+          git diff --cached --check
+          git commit -m "Wire sales activities into company detail"
+          git push origin HEAD:codex/issue-155-sales-activities
