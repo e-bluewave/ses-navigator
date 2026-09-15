@@ -3,21 +3,11 @@ import { ApiError } from '../../shared/errors.js';
 import { dataApiSchemaHeaders } from '../../shared/supabase-schema.js';
 
 export type SalesActivityType =
-  | 'call'
-  | 'email'
-  | 'meeting'
-  | 'visit'
-  | 'proposal'
-  | 'follow_up'
-  | 'other';
+  'call' | 'email' | 'meeting' | 'visit' | 'proposal' | 'follow_up' | 'other';
 export type SalesActivityDirection = 'inbound' | 'outbound' | 'internal';
 export type FollowUpPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type FollowUpStatus =
-  | 'open'
-  | 'in_progress'
-  | 'blocked'
-  | 'completed'
-  | 'cancelled';
+  'open' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
 
 export interface SalesActivityRelatedContact {
   id: string;
@@ -102,9 +92,11 @@ export interface SalesActivityCreateResult {
     SalesActivity,
     'contact' | 'project' | 'engineer' | 'followUpTask'
   >;
-  followUpTask: (SalesActivityFollowUpTask & {
-    description: string | null;
-  }) | null;
+  followUpTask:
+    | (SalesActivityFollowUpTask & {
+        description: string | null;
+      })
+    | null;
 }
 
 export interface SalesActivityRepository {
@@ -189,9 +181,7 @@ type SalesActivityCreateRow = {
   follow_up_task: FollowUpTaskRow | null;
 };
 
-export class SupabaseSalesActivityRepository
-  implements SalesActivityRepository
-{
+export class SupabaseSalesActivityRepository implements SalesActivityRepository {
   canRead(token: string) {
     return this.hasPermission(token, 'company.read');
   }
