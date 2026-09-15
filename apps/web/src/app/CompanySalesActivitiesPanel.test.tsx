@@ -47,7 +47,10 @@ const activity: SalesActivity = {
 function api(overrides: Partial<SalesActivityApi> = {}): SalesActivityApi {
   return {
     listCompanySalesActivities: vi.fn(() =>
-      Promise.resolve({ items: [activity], page: { limit: 25, nextCursor: null } }),
+      Promise.resolve({
+        items: [activity],
+        page: { limit: 25, nextCursor: null },
+      }),
     ),
     createCompanySalesActivity: vi.fn(() =>
       Promise.resolve({
@@ -88,10 +91,9 @@ describe('CompanySalesActivitiesPanel', () => {
     expect(await screen.findByText('案件状況確認')).toBeInTheDocument();
     expect(screen.getByText('先方へ進捗確認を実施した')).toBeInTheDocument();
     expect(screen.getByText(/次回対応: 顧客へ状況確認/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'マイタスクで確認' })).toHaveAttribute(
-      'href',
-      '/my-tasks',
-    );
+    expect(
+      screen.getByRole('link', { name: 'マイタスクで確認' }),
+    ).toHaveAttribute('href', '/my-tasks');
   });
 
   it('creates an activity and optional follow-up task then refreshes the timeline', async () => {
@@ -114,7 +116,10 @@ describe('CompanySalesActivitiesPanel', () => {
       }),
     );
     const list = vi.fn(() =>
-      Promise.resolve({ items: [activity], page: { limit: 25, nextCursor: null } }),
+      Promise.resolve({
+        items: [activity],
+        page: { limit: 25, nextCursor: null },
+      }),
     );
     render(
       <CompanySalesActivitiesPanel

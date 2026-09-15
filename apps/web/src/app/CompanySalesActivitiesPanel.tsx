@@ -395,7 +395,10 @@ export function CompanySalesActivitiesPanel({
                 {item.result ? <p>結果: {item.result}</p> : null}
                 <p>
                   {item.contact
-                    ? `担当者: ${[item.contact.familyName, item.contact.givenName]
+                    ? `担当者: ${[
+                        item.contact.familyName,
+                        item.contact.givenName,
+                      ]
                         .filter(Boolean)
                         .join(' ')}`
                     : null}

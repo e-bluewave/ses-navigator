@@ -1,20 +1,10 @@
 export type SalesActivityType =
-  | 'call'
-  | 'email'
-  | 'meeting'
-  | 'visit'
-  | 'proposal'
-  | 'follow_up'
-  | 'other';
+  'call' | 'email' | 'meeting' | 'visit' | 'proposal' | 'follow_up' | 'other';
 
 export type SalesActivityDirection = 'inbound' | 'outbound' | 'internal';
 export type SalesActivityPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type SalesActivityTaskStatus =
-  | 'open'
-  | 'in_progress'
-  | 'blocked'
-  | 'completed'
-  | 'cancelled';
+  'open' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
 
 export interface SalesActivityContact {
   id: string;
