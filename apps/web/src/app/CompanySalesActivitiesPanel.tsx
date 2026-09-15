@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import { ApiClientError } from '../api/client.js';
-import type { ProjectsApi } from '../api/client.js';
 import type {
   SalesActivity,
+  SalesActivityApi,
   SalesActivityDirection,
   SalesActivityInput,
   SalesActivityPriority,
@@ -51,7 +51,7 @@ export function CompanySalesActivitiesPanel({
   companyId,
   onUnauthorized,
 }: {
-  api: ProjectsApi;
+  api: SalesActivityApi;
   companyId: string;
   onUnauthorized: () => Promise<void>;
 }) {
@@ -85,8 +85,7 @@ export function CompanySalesActivitiesPanel({
     async (reason: unknown, fallback: string) => {
       if (reason instanceof ApiClientError && reason.status === 401)
         await onUnauthorized();
-      else
-        setError(reason instanceof Error ? reason.message : fallback);
+      else setError(reason instanceof Error ? reason.message : fallback);
     },
     [onUnauthorized],
   );
