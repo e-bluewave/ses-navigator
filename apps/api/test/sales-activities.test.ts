@@ -120,13 +120,14 @@ describe('Sales Activities API', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json() as {
-      items: SalesActivity[];
-      page: { limit: number; nextCursor: string | null };
-    };
-    expect(body.items).toEqual([activity]);
-    expect(body.page.limit).toBe(20);
-    expect(body.page.nextCursor).toEqual(expect.any(String));
+    const body: unknown = JSON.parse(response.body);
+    expect(body).toEqual({
+      items: [activity],
+      page: {
+        limit: 20,
+        nextCursor: expect.any(String),
+      },
+    });
     expect(list).toHaveBeenCalledWith('valid', companyId, { limit: 20 });
   });
 
