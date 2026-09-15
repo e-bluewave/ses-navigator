@@ -105,3 +105,14 @@ export interface SalesActivityCreateResult {
   >;
   followUpTask: SalesActivityFollowUpTask | null;
 }
+
+export interface SalesActivityApi {
+  listCompanySalesActivities(
+    companyId: string,
+    query?: ListSalesActivitiesQuery,
+  ): Promise<SalesActivityList>;
+  createCompanySalesActivity(
+    companyId: string,
+    input: SalesActivityInput,
+  ): Promise<SalesActivityCreateResult>;
+}
