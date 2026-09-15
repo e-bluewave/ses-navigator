@@ -51,10 +51,14 @@ export function registerSalesActivityRoutes(
           'forbidden',
           'company.read permission is required',
         );
-      const result = await repository.list(request.user.accessToken, companyId, {
-        limit,
-        ...(cursor ? { cursor } : {}),
-      });
+      const result = await repository.list(
+        request.user.accessToken,
+        companyId,
+        {
+          limit,
+          ...(cursor ? { cursor } : {}),
+        },
+      );
       return {
         items: result.items,
         page: {
@@ -119,11 +123,7 @@ function parseCreateInput(value: unknown): SalesActivityCreateInput {
   )
     throw invalid('activityType is invalid');
 
-  const direction = nullableEnum(
-    body.direction,
-    directions,
-    'direction',
-  ) as SalesActivityDirection | null;
+  const direction = nullableEnum(body.direction, directions, 'direction');
   const occurredAt = requiredDateTime(body.occurredAt, 'occurredAt');
   const subject = requiredText(body.subject, 300, 'subject');
   const summary = requiredText(body.summary, 10000, 'summary');
