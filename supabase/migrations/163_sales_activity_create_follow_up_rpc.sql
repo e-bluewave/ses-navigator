@@ -118,22 +118,30 @@ begin
     normalized_follow_up_priority := null;
   end if;
 
-  request_hash := encode(public.digest(convert_to(jsonb_build_object(
-    'company_id', p_company_id,
-    'activity_type', p_activity_type,
-    'occurred_at', p_occurred_at,
-    'subject', normalized_subject,
-    'summary', normalized_summary,
-    'direction', normalized_direction,
-    'result', normalized_result,
-    'company_contact_id', p_company_contact_id,
-    'project_id', p_project_id,
-    'engineer_id', p_engineer_id,
-    'follow_up_title', normalized_follow_up_title,
-    'follow_up_description', normalized_follow_up_description,
-    'follow_up_due_at', p_follow_up_due_at,
-    'follow_up_priority', normalized_follow_up_priority
-  )::text, 'UTF8'), 'sha256'), 'hex');
+  request_hash := pg_catalog.encode(
+    pg_catalog.sha256(
+      pg_catalog.convert_to(
+        jsonb_build_object(
+          'company_id', p_company_id,
+          'activity_type', p_activity_type,
+          'occurred_at', p_occurred_at,
+          'subject', normalized_subject,
+          'summary', normalized_summary,
+          'direction', normalized_direction,
+          'result', normalized_result,
+          'company_contact_id', p_company_contact_id,
+          'project_id', p_project_id,
+          'engineer_id', p_engineer_id,
+          'follow_up_title', normalized_follow_up_title,
+          'follow_up_description', normalized_follow_up_description,
+          'follow_up_due_at', p_follow_up_due_at,
+          'follow_up_priority', normalized_follow_up_priority
+        )::text,
+        'UTF8'
+      )
+    ),
+    'hex'
+  );
 
   insert into app.idempotency_records(
     tenant_id, actor_type, actor_id, operation_name, idempotency_key,
