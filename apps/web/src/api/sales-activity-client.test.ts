@@ -47,7 +47,7 @@ const input: SalesActivityInput = {
 
 describe('sales activity web client', () => {
   it('lists a company timeline with auth and cursor parameters', async () => {
-    const request = vi.fn(() =>
+    const request = vi.fn<typeof fetch>(() =>
       Promise.resolve(
         new Response(JSON.stringify(listResponse), {
           status: 200,
@@ -69,15 +69,18 @@ describe('sales activity web client', () => {
     ).resolves.toEqual(listResponse);
 
     expect(request).toHaveBeenCalledOnce();
-    const [url, init] = request.mock.calls[0]!;
+    const call = request.mock.calls[0];
+    expect(call).toBeDefined();
+    if (!call) throw new Error('fetch was not called');
+    const [url, init] = call;
     expect(url).toBe(
       `https://api.example.test/api/v1/companies/${companyId}/sales-activities?limit=25&cursor=cursor-value`,
     );
-    expect(init.headers).toEqual({ authorization: 'Bearer access-token' });
+    expect(init?.headers).toEqual({ authorization: 'Bearer access-token' });
   });
 
   it('creates with a stable client request id header for server idempotency', async () => {
-    const request = vi.fn(() =>
+    const request = vi.fn<typeof fetch>(() =>
       Promise.resolve(
         new Response(JSON.stringify(createResponse), {
           status: 201,
@@ -96,19 +99,22 @@ describe('sales activity web client', () => {
       api.createCompanySalesActivity(companyId, input),
     ).resolves.toEqual(createResponse);
 
-    const [url, init] = request.mock.calls[0]!;
+    const call = request.mock.calls[0];
+    expect(call).toBeDefined();
+    if (!call) throw new Error('fetch was not called');
+    const [url, init] = call;
     expect(url).toBe(`/api/v1/companies/${companyId}/sales-activities`);
-    expect(init.method).toBe('POST');
-    expect(init.headers).toEqual({
+    expect(init?.method).toBe('POST');
+    expect(init?.headers).toEqual({
       'content-type': 'application/json',
       'x-request-id': 'sales-request-1',
       authorization: 'Bearer access-token',
     });
-    expect(init.body).toBe(JSON.stringify(input));
+    expect(init?.body).toBe(JSON.stringify(input));
   });
 
   it('maps API errors to ApiClientError without exposing response details', async () => {
-    const request = vi.fn(() =>
+    const request = vi.fn<typeof fetch>(() =>
       Promise.resolve(
         new Response(
           JSON.stringify({
