@@ -120,9 +120,9 @@ describe('Sales Activities API', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain(`\"id\":\"${activityId}\"`);
-    expect(response.body).toContain('\"limit\":20');
-    expect(response.body).toMatch(/\"nextCursor\":\"[^\"]+\"/);
+    expect(response.body).toContain(`"id":"${activityId}"`);
+    expect(response.body).toContain('"limit":20');
+    expect(response.body).toMatch(/"nextCursor":"[^"]+"/);
     expect(list).toHaveBeenCalledWith('valid', companyId, { limit: 20 });
   });
 
