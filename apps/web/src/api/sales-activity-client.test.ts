@@ -58,7 +58,7 @@ describe('sales activity web client', () => {
     const api = createSalesActivityApi({
       getAccessToken: () => 'access-token',
       baseUrl: 'https://api.example.test/api/v1',
-      fetch: request as typeof fetch,
+      fetch: request,
     });
 
     await expect(
@@ -88,7 +88,7 @@ describe('sales activity web client', () => {
     const api = createSalesActivityApi({
       getAccessToken: () => 'access-token',
       baseUrl: '/api/v1',
-      fetch: request as typeof fetch,
+      fetch: request,
       createIdempotencyKey: () => 'sales-request-1',
     });
 
@@ -124,7 +124,7 @@ describe('sales activity web client', () => {
     );
     const api = createSalesActivityApi({
       getAccessToken: () => 'access-token',
-      fetch: request as typeof fetch,
+      fetch: request,
     });
 
     const error = await api
