@@ -1,0 +1,44 @@
+name: Temporary minimize sales activity OpenAPI diff
+
+on:
+  push:
+    branches:
+      - codex/issue-155-sales-activities
+    paths:
+      - .github/workflows/tmp-minimize-sales-activity-openapi.yml
+
+permissions:
+  contents: write
+
+jobs:
+  minimize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/issue-155-sales-activities
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Restore Main OpenAPI baseline
+        run: git show origin/Main:openapi/sesn.v1.yaml > openapi/sesn.v1.yaml
+      - name: Insert only sales activity definitions
+        run: python .github/scripts/tmp_minimize_sales_activity_openapi.py
+      - run: pnpm client:generate
+      - run: pnpm exec prettier --write apps/web/src/api/generated.ts
+      - name: Verify focused diff
+        run: |
+          git diff --check
+          git diff --numstat origin/Main -- openapi/sesn.v1.yaml
+      - name: Commit minimal OpenAPI diff
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add openapi/sesn.v1.yaml apps/web/src/api/generated.ts
+          git diff --cached --check
+          git commit -m "Minimize sales activity OpenAPI diff"
+          git push origin HEAD:codex/issue-155-sales-activities
