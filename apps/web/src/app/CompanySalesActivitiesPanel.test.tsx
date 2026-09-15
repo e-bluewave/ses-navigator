@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   SalesActivity,
@@ -43,6 +49,10 @@ const activity: SalesActivity = {
   updatedAt: '2026-09-15T05:31:00.000Z',
   rowVersion: 1,
 };
+
+afterEach(() => {
+  cleanup();
+});
 
 function api(overrides: Partial<SalesActivityApi> = {}): SalesActivityApi {
   return {
