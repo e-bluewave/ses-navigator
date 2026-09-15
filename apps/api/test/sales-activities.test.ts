@@ -120,10 +120,7 @@ describe('Sales Activities API', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json() as {
-      items: SalesActivity[];
-      page: { limit: number; nextCursor: string | null };
-    };
+    const body = response.json();
     expect(body.items).toEqual([activity]);
     expect(body.page.limit).toBe(20);
     expect(body.page.nextCursor).toEqual(expect.any(String));
@@ -131,9 +128,7 @@ describe('Sales Activities API', () => {
   });
 
   it('decodes the sales activity cursor before repository access', async () => {
-    const list = vi.fn(() =>
-      Promise.resolve({ items: [], nextCursor: null }),
-    );
+    const list = vi.fn(() => Promise.resolve({ items: [], nextCursor: null }));
     const cursor = Buffer.from(
       JSON.stringify({ occurredAt: activity.occurredAt, id: activityId }),
     ).toString('base64url');
