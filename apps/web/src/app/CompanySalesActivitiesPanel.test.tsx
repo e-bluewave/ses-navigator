@@ -97,7 +97,7 @@ describe('CompanySalesActivitiesPanel', () => {
   });
 
   it('creates an activity and optional follow-up task then refreshes the timeline', async () => {
-    const create = vi.fn(() =>
+    const create = vi.fn<SalesActivityApi['createCompanySalesActivity']>(() =>
       Promise.resolve({
         activity: {
           id: activity.id,
@@ -154,17 +154,12 @@ describe('CompanySalesActivitiesPanel', () => {
     fireEvent.submit(screen.getByLabelText('営業活動件名').closest('form')!);
 
     await waitFor(() => expect(create).toHaveBeenCalledOnce());
-    expect(create).toHaveBeenCalledWith(
-      companyId,
-      expect.objectContaining({
-        subject: '提案後フォロー',
-        summary: '電話で状況を確認した',
-        followUp: expect.objectContaining({
-          title: '来週再連絡',
-          priority: 'high',
-        }),
-      }),
-    );
+    const [submittedCompanyId, submitted] = create.mock.calls[0]!;
+    expect(submittedCompanyId).toBe(companyId);
+    expect(submitted.subject).toBe('提案後フォロー');
+    expect(submitted.summary).toBe('電話で状況を確認した');
+    expect(submitted.followUp?.title).toBe('来週再連絡');
+    expect(submitted.followUp?.priority).toBe('high');
     expect(
       await screen.findByText('営業活動と次回対応タスクを登録しました。'),
     ).toBeInTheDocument();
