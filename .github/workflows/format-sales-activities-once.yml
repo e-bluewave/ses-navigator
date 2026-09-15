@@ -1,0 +1,55 @@
+name: Format sales activity files once
+
+on:
+  push:
+    branches:
+      - codex/issue-155-sales-activities
+    paths:
+      - .github/workflows/format-sales-activities-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/issue-155-sales-activities
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Format only sales activity web files
+        run: >-
+          pnpm exec prettier --write
+          apps/web/src/api/sales-activity-types.ts
+          apps/web/src/api/sales-activity-client.ts
+          apps/web/src/api/sales-activity-client.test.ts
+          apps/web/src/app/CompanySalesActivitiesPanel.tsx
+          apps/web/src/app/CompanySalesActivitiesPanel.test.tsx
+      - name: Commit formatting only when needed
+        shell: bash
+        run: |
+          if git diff --quiet -- \
+            apps/web/src/api/sales-activity-types.ts \
+            apps/web/src/api/sales-activity-client.ts \
+            apps/web/src/api/sales-activity-client.test.ts \
+            apps/web/src/app/CompanySalesActivitiesPanel.tsx \
+            apps/web/src/app/CompanySalesActivitiesPanel.test.tsx; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            apps/web/src/api/sales-activity-types.ts \
+            apps/web/src/api/sales-activity-client.ts \
+            apps/web/src/api/sales-activity-client.test.ts \
+            apps/web/src/app/CompanySalesActivitiesPanel.tsx \
+            apps/web/src/app/CompanySalesActivitiesPanel.test.tsx
+          git commit -m "Format sales activity web files"
+          git push origin HEAD:codex/issue-155-sales-activities
