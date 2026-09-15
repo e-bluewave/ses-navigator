@@ -22,8 +22,12 @@ describe('Sales activity database boundary', () => {
     expect(sql).toContain(
       'tenant_id uuid not null references app.tenants(id) on delete cascade',
     );
-    expect(sql).toContain('alter table app.sales_activities enable row level security');
-    expect(sql).toContain('alter table app.sales_activities force row level security');
+    expect(sql).toContain(
+      'alter table app.sales_activities enable row level security',
+    );
+    expect(sql).toContain(
+      'alter table app.sales_activities force row level security',
+    );
     expect(sql).toContain(
       "app.can_access_sales_activity(id, 'company.read', 'view')",
     );
@@ -38,8 +42,12 @@ describe('Sales activity database boundary', () => {
   it('adds sales_activity to generic linked-resource authorization', async () => {
     const sql = await readFile(coreMigrationUrl, 'utf8');
 
-    expect(sql).toContain('create or replace function app.can_access_sales_activity');
-    expect(sql).toContain("when 'sales_activity' then app.can_access_sales_activity(");
+    expect(sql).toContain(
+      'create or replace function app.can_access_sales_activity',
+    );
+    expect(sql).toContain(
+      "when 'sales_activity' then app.can_access_sales_activity(",
+    );
     expect(sql).toContain(
       'grant execute on function app.can_access_resource(text, uuid, text, text)',
     );
@@ -64,9 +72,7 @@ describe('Sales activity database boundary', () => {
     expect(sql).toContain(
       "app.can_access_engineer(item.engineer_id, 'engineer.read', 'view')",
     );
-    expect(sql).toContain(
-      "app.can_access_task(task.id, 'task.read', 'view')",
-    );
+    expect(sql).toContain("app.can_access_task(task.id, 'task.read', 'view')");
   });
 
   it('creates activity and follow-up atomically with tenant and record access checks', async () => {
@@ -100,9 +106,13 @@ describe('Sales activity database boundary', () => {
     expect(sql).toContain('public.digest');
     expect(sql).toContain("'sales_activity.create'");
     expect(sql).toContain('insert into app.idempotency_records(');
-    expect(sql).toContain('on conflict (tenant_id, actor_type, actor_id, operation_name, idempotency_key)');
+    expect(sql).toContain(
+      'on conflict (tenant_id, actor_type, actor_id, operation_name, idempotency_key)',
+    );
     expect(sql).toContain('for update;');
-    expect(sql).toContain('idempotency.request_hash is distinct from request_hash');
+    expect(sql).toContain(
+      'idempotency.request_hash is distinct from request_hash',
+    );
     expect(sql).toContain('if idempotency.completed_at is not null then');
     expect(sql).toContain('return idempotency.response_body;');
     expect(sql).toContain('response_status = 201');
@@ -112,13 +122,9 @@ describe('Sales activity database boundary', () => {
     const readSql = await readFile(readMigrationUrl, 'utf8');
     const createSql = await readFile(createMigrationUrl, 'utf8');
 
-    expect(readSql).toContain(
-      'from public, anon, authenticated;',
-    );
+    expect(readSql).toContain('from public, anon, authenticated;');
     expect(readSql).toContain('to authenticated;');
-    expect(createSql).toContain(
-      'from public, anon, authenticated;',
-    );
+    expect(createSql).toContain('from public, anon, authenticated;');
     expect(createSql).toContain('to authenticated;');
   });
 });
