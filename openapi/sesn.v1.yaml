@@ -11,13 +11,34 @@ paths:
     get:
       operationId: listMyTasks
       parameters:
-        - { name: scope, in: query, schema: { type: string, enum: [all, incomplete, completed, overdue, today, upcoming], default: incomplete } }
-        - { name: timeZone, in: query, schema: { type: string, maxLength: 100, default: Asia/Tokyo } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+        - {
+            name: scope,
+            in: query,
+            schema:
+              {
+                type: string,
+                enum: [all, incomplete, completed, overdue, today, upcoming],
+                default: incomplete,
+              },
+          }
+        - {
+            name: timeZone,
+            in: query,
+            schema: { type: string, maxLength: 100, default: Asia/Tokyo },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 100 },
+          }
       responses:
         '200':
           description: Tasks directly assigned to the authenticated user
-          content: { application/json: { schema: { $ref: '#/components/schemas/MyTaskList' } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/MyTaskList' } },
+            }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -25,8 +46,18 @@ paths:
     patch:
       operationId: updateMyTask
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: If-Match, in: header, required: true, schema: { type: string } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
       requestBody:
         required: true
         content:
@@ -37,7 +68,11 @@ paths:
           description: Assigned task updated with optimistic locking
           headers:
             ETag: { schema: { type: string } }
-          content: { application/json: { schema: { $ref: '#/components/schemas/MyTaskUpdateResult' } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/MyTaskUpdateResult' } },
+            }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -47,12 +82,29 @@ paths:
     get:
       operationId: getAiOperationsDashboard
       parameters:
-        - { name: fromDate, in: query, required: true, schema: { type: string, format: date } }
-        - { name: toDate, in: query, required: true, schema: { type: string, format: date } }
+        - {
+            name: fromDate,
+            in: query,
+            required: true,
+            schema: { type: string, format: date },
+          }
+        - {
+            name: toDate,
+            in: query,
+            required: true,
+            schema: { type: string, format: date },
+          }
       responses:
         '200':
           description: Tenant-scoped AI quality, cost, and usage dashboard
-          content: { application/json: { schema: { $ref: '#/components/schemas/AiOperationsDashboard' } } }
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: '#/components/schemas/AiOperationsDashboard' },
+                },
+            }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -62,13 +114,22 @@ paths:
       responses:
         '200':
           description: Tenant AI budget policy and current UTC usage
-          content: { application/json: { schema: { $ref: '#/components/schemas/AiBudgetPolicy' } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/AiBudgetPolicy' } },
+            }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
     put:
       operationId: saveAiBudgetPolicy
       parameters:
-        - { name: If-Match, in: header, required: true, schema: { type: string } }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
       requestBody:
         required: true
         content:
@@ -77,7 +138,11 @@ paths:
       responses:
         '200':
           description: Saved tenant AI budget policy
-          content: { application/json: { schema: { $ref: '#/components/schemas/AiBudgetPolicy' } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/AiBudgetPolicy' } },
+            }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -87,13 +152,31 @@ paths:
     get:
       operationId: getSalesKpiDashboard
       parameters:
-        - { name: fromDate, in: query, required: true, schema: { type: string, format: date } }
-        - { name: toDate, in: query, required: true, schema: { type: string, format: date } }
-        - { name: contractExpiryDays, in: query, schema: { type: integer, minimum: 1, maximum: 365, default: 60 } }
+        - {
+            name: fromDate,
+            in: query,
+            required: true,
+            schema: { type: string, format: date },
+          }
+        - {
+            name: toDate,
+            in: query,
+            required: true,
+            schema: { type: string, format: date },
+          }
+        - {
+            name: contractExpiryDays,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 365, default: 60 },
+          }
       responses:
         '200':
           description: Access-scoped sales KPI dashboard
-          content: { application/json: { schema: { $ref: '#/components/schemas/SalesKpiDashboard' } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: '#/components/schemas/SalesKpiDashboard' } },
+            }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1202,7 +1285,12 @@ paths:
       operationId: createInterviewSummary
       description: Generates a structured interview summary for human review. It never creates tasks or changes proposal status directly.
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       requestBody:
         required: false
         content:
@@ -1224,7 +1312,12 @@ paths:
     get:
       operationId: getLatestInterviewSummary
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       responses:
         '200':
           description: Latest accessible interview summary or null
@@ -1243,9 +1336,24 @@ paths:
       operationId: reviewInterviewSummary
       description: Approves or rejects a summary. Only explicitly selected action items become tasks; proposal status remains unchanged.
       parameters:
-        - { name: interviewId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: executionId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: If-Match, in: header, required: true, schema: { type: string } }
+        - {
+            name: interviewId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: executionId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
       requestBody:
         required: true
         content:
@@ -1437,12 +1545,18 @@ paths:
       operationId: createProposalMessageDraft
       description: Creates an editable AI-assisted proposal email draft. It never sends the message.
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       requestBody:
         required: false
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ProposalMessageDraftCreateInput' }
+            schema:
+              { $ref: '#/components/schemas/ProposalMessageDraftCreateInput' }
       responses:
         '201':
           description: Generated draft awaiting human review
@@ -1457,7 +1571,12 @@ paths:
     get:
       operationId: getLatestProposalMessageDraft
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       responses:
         '200':
           description: Latest generated draft, or null when none exists
@@ -1473,14 +1592,30 @@ paths:
     put:
       operationId: updateProposalMessageDraft
       parameters:
-        - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: If-Match, in: header, required: true, schema: { type: string } }
+        - {
+            name: proposalId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: messageId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ProposalMessageDraftEditInput' }
+            schema:
+              { $ref: '#/components/schemas/ProposalMessageDraftEditInput' }
       responses:
         '200':
           description: New immutable edited version saved
@@ -1498,14 +1633,30 @@ paths:
       operationId: reviewProposalMessageDraft
       description: Approves the current immutable version or rejects the draft. Sending remains separate.
       parameters:
-        - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: If-Match, in: header, required: true, schema: { type: string } }
+        - {
+            name: proposalId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: messageId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: If-Match,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ProposalMessageDraftReviewInput' }
+            schema:
+              { $ref: '#/components/schemas/ProposalMessageDraftReviewInput' }
       responses:
         '200':
           description: Human review recorded
@@ -1657,6 +1808,60 @@ paths:
               schema: { $ref: '#/components/schemas/CompanyAuditList' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /companies/{companyId}/sales-activities:
+    get:
+      operationId: listCompanySalesActivities
+      parameters:
+        - {
+            name: companyId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 200, default: 50 },
+          }
+        - { name: cursor, in: query, schema: { type: string, maxLength: 500 } }
+      responses:
+        '200':
+          description: Authorized company sales activity timeline
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SalesActivityList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createCompanySalesActivity
+      parameters:
+        - {
+            name: companyId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: x-request-id,
+            in: header,
+            schema: { type: string, minLength: 1, maxLength: 200 },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SalesActivityInput' }
+      responses:
+        '201':
+          description: Sales activity and optional follow-up task created atomically
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SalesActivityCreateResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /contacts:
     post:
       operationId: createCompanyContact
@@ -2287,8 +2492,18 @@ paths:
     post:
       operationId: createResumeExtraction
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: versionId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       requestBody:
         required: true
         content:
@@ -2306,8 +2521,18 @@ paths:
     get:
       operationId: getLatestResumeExtraction
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: versionId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       responses:
         '200':
           description: Latest resume extraction, or null when not requested
@@ -2322,9 +2547,24 @@ paths:
     post:
       operationId: reviewResumeExtraction
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: extractionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: versionId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: extractionId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       requestBody:
         required: true
         content:
@@ -2637,7 +2877,12 @@ paths:
     post:
       operationId: createProjectExtraction
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       requestBody:
         required: true
         content:
@@ -2655,7 +2900,12 @@ paths:
     get:
       operationId: getLatestProjectExtraction
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       responses:
         '200':
           description: Latest project extraction, or null when not requested
@@ -2670,13 +2920,24 @@ paths:
     post:
       operationId: reviewProjectExtraction
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: extractionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            name: extractionId,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ProjectExtractionReviewInput' }
+            schema:
+              { $ref: '#/components/schemas/ProjectExtractionReviewInput' }
       responses:
         '200':
           description: Project extraction reviewed
@@ -2690,7 +2951,12 @@ paths:
     post:
       operationId: createProjectEngineerMatch
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       requestBody:
         required: false
         content:
@@ -2709,7 +2975,12 @@ paths:
     get:
       operationId: getLatestProjectEngineerMatch
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       responses:
         '200':
           description: Latest saved match run, or null when not requested
@@ -2747,11 +3018,24 @@ components:
       properties:
         resourceType: { type: string }
         resourceId: { type: string, format: uuid }
-        linkType: { type: string, enum: [related, blocks, blocked_by, generated_from] }
+        linkType:
+          { type: string, enum: [related, blocks, blocked_by, generated_from] }
     MyTaskUpdateResult:
       type: object
       additionalProperties: false
-      required: [id, title, description, status, priority, dueAt, completedAt, createdAt, updatedAt, rowVersion]
+      required:
+        [
+          id,
+          title,
+          description,
+          status,
+          priority,
+          dueAt,
+          completedAt,
+          createdAt,
+          updatedAt,
+          rowVersion,
+        ]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
@@ -2766,7 +3050,26 @@ components:
     MyTask:
       type: object
       additionalProperties: false
-      required: [id, title, description, status, priority, dueAt, completedAt, isCompleted, isOverdue, isDueToday, isUpcoming, dueCategory, assignment, links, createdAt, updatedAt, rowVersion]
+      required:
+        [
+          id,
+          title,
+          description,
+          status,
+          priority,
+          dueAt,
+          completedAt,
+          isCompleted,
+          isOverdue,
+          isDueToday,
+          isUpcoming,
+          dueCategory,
+          assignment,
+          links,
+          createdAt,
+          updatedAt,
+          rowVersion,
+        ]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
@@ -2811,7 +3114,15 @@ components:
         reason: { type: [string, 'null'], maxLength: 1000 }
     AiUsageDay:
       type: object
-      required: [usageDate, executionCount, succeededCount, failedCount, totalTokens, estimatedCostUsd]
+      required:
+        [
+          usageDate,
+          executionCount,
+          succeededCount,
+          failedCount,
+          totalTokens,
+          estimatedCostUsd,
+        ]
       properties:
         usageDate: { type: string, format: date }
         executionCount: { type: integer }
@@ -2821,7 +3132,15 @@ components:
         estimatedCostUsd: { type: number }
     AiTypeUsage:
       type: object
-      required: [executionType, executionCount, succeededCount, failedCount, successRate, totalTokens]
+      required:
+        [
+          executionType,
+          executionCount,
+          succeededCount,
+          failedCount,
+          successRate,
+          totalTokens,
+        ]
       properties:
         executionType: { type: string }
         executionCount: { type: integer }
@@ -2831,7 +3150,18 @@ components:
         totalTokens: { type: integer }
     AiModelUsage:
       type: object
-      required: [provider, modelName, currency, executionCount, failedCount, inputTokens, outputTokens, estimatedCost, costRecordedCount]
+      required:
+        [
+          provider,
+          modelName,
+          currency,
+          executionCount,
+          failedCount,
+          inputTokens,
+          outputTokens,
+          estimatedCost,
+          costRecordedCount,
+        ]
       properties:
         provider: { type: string }
         modelName: { type: string }
@@ -2851,7 +3181,16 @@ components:
         recordedCount: { type: integer }
     AiRecentFailure:
       type: object
-      required: [id, executionType, provider, modelName, errorCode, requestedAt, completedAt]
+      required:
+        [
+          id,
+          executionType,
+          provider,
+          modelName,
+          errorCode,
+          requestedAt,
+          completedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         executionType: { type: string }
@@ -2862,7 +3201,41 @@ components:
         completedAt: { type: [string, 'null'], format: date-time }
     AiOperationsDashboard:
       type: object
-      required: [fromDate, toDate, executionCount, succeededCount, failedCount, activeCount, reviewRequiredCount, successRate, inputTokens, outputTokens, totalTokens, tokenRecordedCount, costRecordedCount, costCoverageRate, averageLatencyMs, p95LatencyMs, pendingReviewCount, reviewedCount, approvedCount, partiallyApprovedCount, rejectedCount, changesRequestedCount, approvalRate, feedbackCount, averageRating, issueFeedbackCount, unsafeFeedbackCount, daily, typeUsage, modelUsage, costByCurrency, recentFailures]
+      required:
+        [
+          fromDate,
+          toDate,
+          executionCount,
+          succeededCount,
+          failedCount,
+          activeCount,
+          reviewRequiredCount,
+          successRate,
+          inputTokens,
+          outputTokens,
+          totalTokens,
+          tokenRecordedCount,
+          costRecordedCount,
+          costCoverageRate,
+          averageLatencyMs,
+          p95LatencyMs,
+          pendingReviewCount,
+          reviewedCount,
+          approvedCount,
+          partiallyApprovedCount,
+          rejectedCount,
+          changesRequestedCount,
+          approvalRate,
+          feedbackCount,
+          averageRating,
+          issueFeedbackCount,
+          unsafeFeedbackCount,
+          daily,
+          typeUsage,
+          modelUsage,
+          costByCurrency,
+          recentFailures,
+        ]
       properties:
         fromDate: { type: string, format: date }
         toDate: { type: string, format: date }
@@ -2891,14 +3264,37 @@ components:
         averageRating: { type: [number, 'null'] }
         issueFeedbackCount: { type: integer }
         unsafeFeedbackCount: { type: integer }
-        daily: { type: array, items: { $ref: '#/components/schemas/AiUsageDay' } }
-        typeUsage: { type: array, items: { $ref: '#/components/schemas/AiTypeUsage' } }
-        modelUsage: { type: array, items: { $ref: '#/components/schemas/AiModelUsage' } }
-        costByCurrency: { type: array, items: { $ref: '#/components/schemas/AiCostByCurrency' } }
-        recentFailures: { type: array, items: { $ref: '#/components/schemas/AiRecentFailure' } }
+        daily:
+          { type: array, items: { $ref: '#/components/schemas/AiUsageDay' } }
+        typeUsage:
+          { type: array, items: { $ref: '#/components/schemas/AiTypeUsage' } }
+        modelUsage:
+          { type: array, items: { $ref: '#/components/schemas/AiModelUsage' } }
+        costByCurrency:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/AiCostByCurrency' },
+          }
+        recentFailures:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/AiRecentFailure' },
+          }
     AiBudgetPolicyInput:
       type: object
-      required: [enabled, currency, dailyWarningAmount, dailyStopAmount, monthlyWarningAmount, monthlyStopAmount, dailyWarningExecutions, dailyStopExecutions, monthlyWarningExecutions, monthlyStopExecutions]
+      required:
+        [
+          enabled,
+          currency,
+          dailyWarningAmount,
+          dailyStopAmount,
+          monthlyWarningAmount,
+          monthlyStopAmount,
+          dailyWarningExecutions,
+          dailyStopExecutions,
+          monthlyWarningExecutions,
+          monthlyStopExecutions,
+        ]
       properties:
         enabled: { type: boolean }
         currency: { type: string, pattern: '^[A-Z]{3}$' }
@@ -2914,7 +3310,22 @@ components:
       allOf:
         - { $ref: '#/components/schemas/AiBudgetPolicyInput' }
         - type: object
-          required: [canManage, configured, dailyExecutionCount, monthlyExecutionCount, dailyEstimatedCost, monthlyEstimatedCost, dailyCostRecordedCount, monthlyCostRecordedCount, warningReached, stopReached, stopReasons, rowVersion, updatedAt]
+          required:
+            [
+              canManage,
+              configured,
+              dailyExecutionCount,
+              monthlyExecutionCount,
+              dailyEstimatedCost,
+              monthlyEstimatedCost,
+              dailyCostRecordedCount,
+              monthlyCostRecordedCount,
+              warningReached,
+              stopReached,
+              stopReasons,
+              rowVersion,
+              updatedAt,
+            ]
           properties:
             canManage: { type: boolean }
             configured: { type: boolean }
@@ -2963,7 +3374,15 @@ components:
         expenseCount: { type: integer }
     SalesKpiMonth:
       type: object
-      required: [periodMonth, proposalCount, interviewProposalCount, interviewRate, wonCount, winRate]
+      required:
+        [
+          periodMonth,
+          proposalCount,
+          interviewProposalCount,
+          interviewRate,
+          wonCount,
+          winRate,
+        ]
       properties:
         periodMonth: { type: string, format: date }
         proposalCount: { type: integer }
@@ -2983,7 +3402,25 @@ components:
         status: { type: string }
     SalesKpiDashboard:
       type: object
-      required: [fromDate, toDate, contractExpiryDays, proposalCount, interviewProposalCount, interviewRate, wonCount, winRate, averageProposalDays, averageInterviewCount, activeProposalCount, pendingApprovalCount, scheduledInterviewCount, expiringContractCount, monthly, expiringContracts]
+      required:
+        [
+          fromDate,
+          toDate,
+          contractExpiryDays,
+          proposalCount,
+          interviewProposalCount,
+          interviewRate,
+          wonCount,
+          winRate,
+          averageProposalDays,
+          averageInterviewCount,
+          activeProposalCount,
+          pendingApprovalCount,
+          scheduledInterviewCount,
+          expiringContractCount,
+          monthly,
+          expiringContracts,
+        ]
       properties:
         fromDate: { type: string, format: date }
         toDate: { type: string, format: date }
@@ -2999,8 +3436,13 @@ components:
         pendingApprovalCount: { type: integer }
         scheduledInterviewCount: { type: integer }
         expiringContractCount: { type: integer }
-        monthly: { type: array, items: { $ref: '#/components/schemas/SalesKpiMonth' } }
-        expiringContracts: { type: array, items: { $ref: '#/components/schemas/ExpiringContract' } }
+        monthly:
+          { type: array, items: { $ref: '#/components/schemas/SalesKpiMonth' } }
+        expiringContracts:
+          {
+            type: array,
+            items: { $ref: '#/components/schemas/ExpiringContract' },
+          }
     ProfitabilityDashboard:
       type: object
       required:
@@ -3699,7 +4141,16 @@ components:
     ResumeExtractionResult:
       type: object
       additionalProperties: false
-      required: [profile, careerHistories, skills, qualifications, preferences, uncertainties, confidenceScore]
+      required:
+        [
+          profile,
+          careerHistories,
+          skills,
+          qualifications,
+          preferences,
+          uncertainties,
+          confidenceScore,
+        ]
       properties:
         profile:
           type: object
@@ -3714,7 +4165,19 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [projectName, clientName, roleName, industry, overview, responsibilities, achievements, startedOn, endedOn, evidence]
+            required:
+              [
+                projectName,
+                clientName,
+                roleName,
+                industry,
+                overview,
+                responsibilities,
+                achievements,
+                startedOn,
+                endedOn,
+                evidence,
+              ]
             properties:
               projectName: { type: string }
               clientName: { type: [string, 'null'] }
@@ -3731,7 +4194,8 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [name, experienceMonths, proficiencyLevel, lastUsedOn, evidence]
+            required:
+              [name, experienceMonths, proficiencyLevel, lastUsedOn, evidence]
             properties:
               name: { type: string }
               experienceMonths: { type: [integer, 'null'], minimum: 0 }
@@ -3753,7 +4217,14 @@ components:
         preferences:
           type: object
           additionalProperties: false
-          required: [desiredRoles, desiredLocations, desiredContractTypes, minimumRate, availableFrom]
+          required:
+            [
+              desiredRoles,
+              desiredLocations,
+              desiredContractTypes,
+              minimumRate,
+              availableFrom,
+            ]
           properties:
             desiredRoles: { type: array, items: { type: string } }
             desiredLocations: { type: array, items: { type: string } }
@@ -3765,12 +4236,30 @@ components:
     ResumeExtraction:
       type: object
       additionalProperties: false
-      required: [id, resumeVersionId, aiExecutionId, status, provider, modelName, promptVersion, result, errorMessage, reviewNotes, reviewedAt, createdAt]
+      required:
+        [
+          id,
+          resumeVersionId,
+          aiExecutionId,
+          status,
+          provider,
+          modelName,
+          promptVersion,
+          result,
+          errorMessage,
+          reviewNotes,
+          reviewedAt,
+          createdAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         resumeVersionId: { type: string, format: uuid }
         aiExecutionId: { type: string, format: uuid }
-        status: { type: string, enum: [pending, processing, completed, approved, rejected, failed] }
+        status:
+          {
+            type: string,
+            enum: [pending, processing, completed, approved, rejected, failed],
+          }
         provider: { type: string }
         modelName: { type: string }
         promptVersion: { type: string }
@@ -3985,6 +4474,197 @@ components:
           properties:
             limit: { type: integer }
             nextCursor: { type: ['string', 'null'] }
+    SalesActivityType:
+      type: string
+      enum: [call, email, meeting, visit, proposal, follow_up, other]
+    SalesActivityDirection:
+      type: string
+      enum: [inbound, outbound, internal]
+    SalesActivityPriority:
+      type: string
+      enum: [low, normal, high, urgent]
+    SalesActivityTaskStatus:
+      type: string
+      enum: [open, in_progress, blocked, completed, cancelled]
+    SalesActivityContact:
+      type: object
+      additionalProperties: false
+      required: [id, familyName, givenName, departmentName, positionTitle]
+      properties:
+        id: { type: string, format: uuid }
+        familyName: { type: string }
+        givenName: { type: [string, 'null'] }
+        departmentName: { type: [string, 'null'] }
+        positionTitle: { type: [string, 'null'] }
+    SalesActivityProject:
+      type: object
+      additionalProperties: false
+      required: [id, managementNo, projectName]
+      properties:
+        id: { type: string, format: uuid }
+        managementNo: { type: string }
+        projectName: { type: string }
+    SalesActivityEngineer:
+      type: object
+      additionalProperties: false
+      required: [id, managementNo, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        managementNo: { type: string }
+        displayName: { type: string }
+    SalesActivityFollowUpTask:
+      type: object
+      additionalProperties: false
+      required: [id, title, status, priority, dueAt, completedAt, rowVersion]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/SalesActivityTaskStatus' }
+        priority: { $ref: '#/components/schemas/SalesActivityPriority' }
+        dueAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    SalesActivity:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          companyId,
+          activityType,
+          direction,
+          occurredAt,
+          subject,
+          summary,
+          result,
+          contact,
+          project,
+          engineer,
+          followUpTask,
+          createdAt,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        activityType: { $ref: '#/components/schemas/SalesActivityType' }
+        direction:
+          oneOf:
+            - { $ref: '#/components/schemas/SalesActivityDirection' }
+            - { type: 'null' }
+        occurredAt: { type: string, format: date-time }
+        subject: { type: string, minLength: 1, maxLength: 300 }
+        summary: { type: string, minLength: 1, maxLength: 10000 }
+        result: { type: [string, 'null'], maxLength: 10000 }
+        contact:
+          oneOf:
+            - { $ref: '#/components/schemas/SalesActivityContact' }
+            - { type: 'null' }
+        project:
+          oneOf:
+            - { $ref: '#/components/schemas/SalesActivityProject' }
+            - { type: 'null' }
+        engineer:
+          oneOf:
+            - { $ref: '#/components/schemas/SalesActivityEngineer' }
+            - { type: 'null' }
+        followUpTask:
+          oneOf:
+            - { $ref: '#/components/schemas/SalesActivityFollowUpTask' }
+            - { type: 'null' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    SalesActivityListPage:
+      type: object
+      additionalProperties: false
+      required: [limit, nextCursor]
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 200 }
+        nextCursor: { type: [string, 'null'] }
+    SalesActivityList:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SalesActivity' }
+        page: { $ref: '#/components/schemas/SalesActivityListPage' }
+    SalesActivityFollowUpInput:
+      type: object
+      additionalProperties: false
+      required: [title, dueAt, priority]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        description: { type: [string, 'null'], maxLength: 10000 }
+        dueAt: { type: string, format: date-time }
+        priority: { $ref: '#/components/schemas/SalesActivityPriority' }
+    SalesActivityInput:
+      type: object
+      additionalProperties: false
+      required: [activityType, occurredAt, subject, summary]
+      properties:
+        activityType: { $ref: '#/components/schemas/SalesActivityType' }
+        direction:
+          oneOf:
+            - { $ref: '#/components/schemas/SalesActivityDirection' }
+            - { type: 'null' }
+        occurredAt: { type: string, format: date-time }
+        subject: { type: string, minLength: 1, maxLength: 300 }
+        summary: { type: string, minLength: 1, maxLength: 10000 }
+        result: { type: [string, 'null'], maxLength: 10000 }
+        companyContactId: { type: [string, 'null'], format: uuid }
+        projectId: { type: [string, 'null'], format: uuid }
+        engineerId: { type: [string, 'null'], format: uuid }
+        followUp:
+          oneOf:
+            - { $ref: '#/components/schemas/SalesActivityFollowUpInput' }
+            - { type: 'null' }
+    SalesActivityCreatedActivity:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          companyId,
+          activityType,
+          direction,
+          occurredAt,
+          subject,
+          summary,
+          result,
+          createdAt,
+          updatedAt,
+          rowVersion,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        activityType: { $ref: '#/components/schemas/SalesActivityType' }
+        direction:
+          oneOf:
+            - { $ref: '#/components/schemas/SalesActivityDirection' }
+            - { type: 'null' }
+        occurredAt: { type: string, format: date-time }
+        subject: { type: string }
+        summary: { type: string }
+        result: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        rowVersion: { type: integer, minimum: 1 }
+    SalesActivityCreateResult:
+      type: object
+      additionalProperties: false
+      required: [activity, followUpTask]
+      properties:
+        activity: { $ref: '#/components/schemas/SalesActivityCreatedActivity' }
+        followUpTask:
+          oneOf:
+            - { $ref: '#/components/schemas/SalesActivityFollowUpTask' }
+            - { type: 'null' }
     Company:
       type: object
       required:
@@ -4168,7 +4848,24 @@ components:
     ProjectExtractionResult:
       type: object
       additionalProperties: false
-      required: [projectName, summary, responsibilities, openings, startOn, endOn, requiredSkills, preferredSkills, commercial, workConditions, interviewCount, interviewScheduleText, companyCandidates, uncertainties, confidenceScore]
+      required:
+        [
+          projectName,
+          summary,
+          responsibilities,
+          openings,
+          startOn,
+          endOn,
+          requiredSkills,
+          preferredSkills,
+          commercial,
+          workConditions,
+          interviewCount,
+          interviewScheduleText,
+          companyCandidates,
+          uncertainties,
+          confidenceScore,
+        ]
       properties:
         projectName: { type: [string, 'null'] }
         summary: { type: [string, 'null'] }
@@ -4185,7 +4882,19 @@ components:
         commercial:
           type: object
           additionalProperties: false
-          required: [rateMin, rateMax, currencyCode, taxTreatment, settlementLowerHours, settlementUpperHours, paymentTermsDays, contractType, commercialFlow, restrictions]
+          required:
+            [
+              rateMin,
+              rateMax,
+              currencyCode,
+              taxTreatment,
+              settlementLowerHours,
+              settlementUpperHours,
+              paymentTermsDays,
+              contractType,
+              commercialFlow,
+              restrictions,
+            ]
           properties:
             rateMin: { type: [number, 'null'], minimum: 0 }
             rateMax: { type: [number, 'null'], minimum: 0 }
@@ -4200,7 +4909,16 @@ components:
         workConditions:
           type: object
           additionalProperties: false
-          required: [workplace, prefecture, nearestStation, remoteType, remoteDaysPerWeek, workStartTime, workEndTime]
+          required:
+            [
+              workplace,
+              prefecture,
+              nearestStation,
+              remoteType,
+              remoteDaysPerWeek,
+              workStartTime,
+              workEndTime,
+            ]
           properties:
             workplace: { type: [string, 'null'] }
             prefecture: { type: [string, 'null'] }
@@ -4208,7 +4926,8 @@ components:
             remoteType:
               type: [string, 'null']
               enum: [onsite, hybrid, remote, negotiable, null]
-            remoteDaysPerWeek: { type: [integer, 'null'], minimum: 0, maximum: 7 }
+            remoteDaysPerWeek:
+              { type: [integer, 'null'], minimum: 0, maximum: 7 }
             workStartTime: { type: [string, 'null'] }
             workEndTime: { type: [string, 'null'] }
         interviewCount: { type: [integer, 'null'], minimum: 0 }
@@ -4229,12 +4948,40 @@ components:
     ProjectExtraction:
       type: object
       additionalProperties: false
-      required: [id, projectId, aiExecutionId, status, provider, modelName, promptVersion, result, errorMessage, reviewNotes, reviewedAt, appliedAt, createdAt]
+      required:
+        [
+          id,
+          projectId,
+          aiExecutionId,
+          status,
+          provider,
+          modelName,
+          promptVersion,
+          result,
+          errorMessage,
+          reviewNotes,
+          reviewedAt,
+          appliedAt,
+          createdAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         projectId: { type: string, format: uuid }
         aiExecutionId: { type: string, format: uuid }
-        status: { type: string, enum: [pending, processing, completed, failed, reviewed, applied, rejected] }
+        status:
+          {
+            type: string,
+            enum:
+              [
+                pending,
+                processing,
+                completed,
+                failed,
+                reviewed,
+                applied,
+                rejected,
+              ],
+          }
         provider: { type: string }
         modelName: { type: string }
         promptVersion: { type: string }
@@ -4266,7 +5013,8 @@ components:
     ProjectEngineerMatchSkill:
       type: object
       additionalProperties: false
-      required: [name, requirementType, requiredMonths, experienceMonths, reason]
+      required:
+        [name, requirementType, requiredMonths, experienceMonths, reason]
       properties:
         name: { type: string }
         requirementType: { type: [string, 'null'] }
@@ -4283,7 +5031,15 @@ components:
     ProjectEngineerMatchExplanation:
       type: object
       additionalProperties: false
-      required: [matches, mismatches, missingInformation, warnings, recommendation, questions]
+      required:
+        [
+          matches,
+          mismatches,
+          missingInformation,
+          warnings,
+          recommendation,
+          questions,
+        ]
       properties:
         matches:
           type: array
@@ -4300,7 +5056,20 @@ components:
     ProjectEngineerMatchFacts:
       type: object
       additionalProperties: false
-      required: [engineerManagementNo, engineerName, status, availabilityStatus, availableFrom, nearestStation, desiredRateMin, desiredRateMax, currencyCode, remotePreference, preferredLocations]
+      required:
+        [
+          engineerManagementNo,
+          engineerName,
+          status,
+          availabilityStatus,
+          availableFrom,
+          nearestStation,
+          desiredRateMin,
+          desiredRateMax,
+          currencyCode,
+          remotePreference,
+          preferredLocations,
+        ]
       properties:
         engineerManagementNo: { type: string }
         engineerName: { type: string }
@@ -4325,7 +5094,26 @@ components:
     ProjectEngineerMatchCandidate:
       type: object
       additionalProperties: false
-      required: [id, engineerId, resumeVersionId, rank, overallScore, requiredSkillScore, preferredSkillScore, availabilityScore, rateScore, locationScore, requiredConditionsMet, confidenceScore, matchedSkills, missingSkills, warnings, facts, explanation]
+      required:
+        [
+          id,
+          engineerId,
+          resumeVersionId,
+          rank,
+          overallScore,
+          requiredSkillScore,
+          preferredSkillScore,
+          availabilityScore,
+          rateScore,
+          locationScore,
+          requiredConditionsMet,
+          confidenceScore,
+          matchedSkills,
+          missingSkills,
+          warnings,
+          facts,
+          explanation,
+        ]
       properties:
         id: { type: string, format: uuid }
         engineerId: { type: string, format: uuid }
@@ -4354,13 +5142,29 @@ components:
     ProjectEngineerMatch:
       type: object
       additionalProperties: false
-      required: [id, projectId, projectRequirementVersionId, aiExecutionId, status, calculationVersion, criteria, candidateCount, overallSummary, errorMessage, createdAt, completedAt, candidates]
+      required:
+        [
+          id,
+          projectId,
+          projectRequirementVersionId,
+          aiExecutionId,
+          status,
+          calculationVersion,
+          criteria,
+          candidateCount,
+          overallSummary,
+          errorMessage,
+          createdAt,
+          completedAt,
+          candidates,
+        ]
       properties:
         id: { type: string, format: uuid }
         projectId: { type: string, format: uuid }
         projectRequirementVersionId: { type: [string, 'null'], format: uuid }
         aiExecutionId: { type: string, format: uuid }
-        status: { type: string, enum: [explaining, completed, explanation_failed] }
+        status:
+          { type: string, enum: [explaining, completed, explanation_failed] }
         calculationVersion: { type: string }
         criteria: { type: object, additionalProperties: true }
         candidateCount: { type: integer, minimum: 0, maximum: 5 }
@@ -5459,7 +6263,8 @@ components:
       additionalProperties: false
       properties:
         messageTemplateId: { type: [string, 'null'], format: uuid }
-        tone: { type: string, enum: [formal, standard, concise], default: standard }
+        tone:
+          { type: string, enum: [formal, standard, concise], default: standard }
         additionalInstructions: { type: [string, 'null'], maxLength: 2000 }
     ProposalMessageDraftEditInput:
       type: object
@@ -5489,14 +6294,28 @@ components:
       properties:
         category:
           type: string
-          enum: [prohibited_expression, unverified_claim, privacy, template_requirement]
+          enum:
+            [
+              prohibited_expression,
+              unverified_claim,
+              privacy,
+              template_requirement,
+            ]
         severity: { type: string, enum: [info, warning, error] }
         text: { type: string }
         explanation: { type: string }
     ProposalMessageGeneration:
       type: object
       additionalProperties: false
-      required: [subject, bodyText, engineerIntroduction, confirmationItems, evidence, policyChecks]
+      required:
+        [
+          subject,
+          bodyText,
+          engineerIntroduction,
+          confirmationItems,
+          evidence,
+          policyChecks,
+        ]
       properties:
         subject: { type: string }
         bodyText: { type: string }
@@ -5519,14 +6338,48 @@ components:
     ProposalMessageDraft:
       type: object
       additionalProperties: false
-      required: [id, proposalId, projectId, engineerId, channel, status, subject, bodyText, messageTemplateId, currentVersionId, currentVersionNo, currentGenerationSource, approvedVersionId, approvedAt, aiExecutionId, aiStatus, aiErrorCode, aiErrorMessage, promptVersion, modelProvider, modelName, reviewStatus, reviewComment, generation, recipients, createdAt, updatedAt, rowVersion]
+      required:
+        [
+          id,
+          proposalId,
+          projectId,
+          engineerId,
+          channel,
+          status,
+          subject,
+          bodyText,
+          messageTemplateId,
+          currentVersionId,
+          currentVersionNo,
+          currentGenerationSource,
+          approvedVersionId,
+          approvedAt,
+          aiExecutionId,
+          aiStatus,
+          aiErrorCode,
+          aiErrorMessage,
+          promptVersion,
+          modelProvider,
+          modelName,
+          reviewStatus,
+          reviewComment,
+          generation,
+          recipients,
+          createdAt,
+          updatedAt,
+          rowVersion,
+        ]
       properties:
         id: { type: string, format: uuid }
         proposalId: { type: string, format: uuid }
         projectId: { type: string, format: uuid }
         engineerId: { type: string, format: uuid }
         channel: { type: string, enum: [email] }
-        status: { type: string, enum: [draft, approved, cancelled, queued, sent, failed] }
+        status:
+          {
+            type: string,
+            enum: [draft, approved, cancelled, queued, sent, failed],
+          }
         subject: { type: string }
         bodyText: { type: string }
         messageTemplateId: { type: [string, 'null'], format: uuid }
