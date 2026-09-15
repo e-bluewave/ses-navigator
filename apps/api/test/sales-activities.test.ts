@@ -120,7 +120,10 @@ describe('Sales Activities API', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json();
+    const body = response.json() as {
+      items: SalesActivity[];
+      page: { limit: number; nextCursor: string | null };
+    };
     expect(body.items).toEqual([activity]);
     expect(body.page.limit).toBe(20);
     expect(body.page.nextCursor).toEqual(expect.any(String));
