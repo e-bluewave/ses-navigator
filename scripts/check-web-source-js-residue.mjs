@@ -10,10 +10,7 @@ const residues = [];
 for (const entry of await readdir(webSrcRoot, { recursive: true })) {
   if (entry.endsWith('.js')) {
     residues.push(
-      path
-        .join('apps', 'web', 'src', entry)
-        .split(path.sep)
-        .join('/'),
+      path.join('apps', 'web', 'src', entry).split(path.sep).join('/'),
     );
   }
 }
