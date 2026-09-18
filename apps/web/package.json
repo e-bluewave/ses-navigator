@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -b && vite build",
+    "source-js:check": "node ../../scripts/check-web-source-js-residue.mjs",
+    "prebuild": "pnpm source-js:check",
+    "build": "tsc --noEmit && vite build",
+    "predev": "pnpm source-js:check",
     "dev": "vite",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
