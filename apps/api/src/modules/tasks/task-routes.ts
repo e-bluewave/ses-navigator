@@ -98,45 +98,55 @@ function parseUpdate(value: unknown): MyTaskUpdateInput {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw invalid('body is invalid');
   const body = value as Record<string, unknown>;
-  if (
-    body.status !== undefined &&
-    (typeof body.status !== 'string' ||
-      !statuses.has(body.status as TaskStatus))
-  )
-    throw invalid('status is invalid');
-  if (
-    body.dueAt !== undefined &&
-    (typeof body.dueAt !== 'string' || !validDateTime(body.dueAt))
-  )
-    throw invalid('dueAt is invalid');
-  if (body.clearDueAt !== undefined && typeof body.clearDueAt !== 'boolean')
-    throw invalid('clearDueAt is invalid');
-  if (body.dueAt !== undefined && body.clearDueAt === true)
+
+  let status: TaskStatus | undefined;
+  if (body.status !== undefined) {
+    if (
+      typeof body.status !== 'string' ||
+      !statuses.has(body.status as TaskStatus)
+    )
+      throw invalid('status is invalid');
+    status = body.status as TaskStatus;
+  }
+
+  let dueAt: string | undefined;
+  if (body.dueAt !== undefined) {
+    if (typeof body.dueAt !== 'string' || !validDateTime(body.dueAt))
+      throw invalid('dueAt is invalid');
+    dueAt = body.dueAt;
+  }
+
+  let clearDueAt: boolean | undefined;
+  if (body.clearDueAt !== undefined) {
+    if (typeof body.clearDueAt !== 'boolean')
+      throw invalid('clearDueAt is invalid');
+    clearDueAt = body.clearDueAt;
+  }
+
+  if (dueAt !== undefined && clearDueAt === true)
     throw invalid('dueAt and clearDueAt cannot be used together');
-  if (
-    body.reason !== undefined &&
-    body.reason !== null &&
-    (typeof body.reason !== 'string' || body.reason.length > 1000)
-  )
-    throw invalid('reason is invalid');
-  if (
-    body.status === undefined &&
-    body.dueAt === undefined &&
-    body.clearDueAt !== true
-  )
+
+  let reason: string | null | undefined;
+  if (body.reason !== undefined) {
+    if (
+      body.reason !== null &&
+      (typeof body.reason !== 'string' || body.reason.length > 1000)
+    )
+      throw invalid('reason is invalid');
+    reason =
+      typeof body.reason === 'string' && body.reason.trim()
+        ? body.reason.trim()
+        : null;
+  }
+
+  if (status === undefined && dueAt === undefined && clearDueAt !== true)
     throw invalid('status or due date change is required');
+
   return {
-    ...(body.status === undefined ? {} : { status: body.status as TaskStatus }),
-    ...(body.dueAt === undefined ? {} : { dueAt: body.dueAt }),
-    ...(body.clearDueAt === undefined ? {} : { clearDueAt: body.clearDueAt }),
-    ...(body.reason === undefined
-      ? {}
-      : {
-          reason:
-            typeof body.reason === 'string' && body.reason.trim()
-              ? body.reason.trim()
-              : null,
-        }),
+    ...(status === undefined ? {} : { status }),
+    ...(dueAt === undefined ? {} : { dueAt }),
+    ...(clearDueAt === undefined ? {} : { clearDueAt }),
+    ...(reason === undefined ? {} : { reason }),
   };
 }
 
