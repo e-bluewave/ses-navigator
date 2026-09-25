@@ -68,7 +68,11 @@ export function DuplicateCandidatesView({
 
   const fetchPage = useCallback(
     async (cursor: string | null, append: boolean) => {
-      append ? setLoadingMore(true) : setLoading(true);
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
       setError('');
       try {
         const result = await api.listDuplicateCandidates({
@@ -90,7 +94,11 @@ export function DuplicateCandidatesView({
             : '重複候補を読み込めませんでした。',
         );
       } finally {
-        append ? setLoadingMore(false) : setLoading(false);
+        if (append) {
+          setLoadingMore(false);
+        } else {
+          setLoading(false);
+        }
       }
     },
     [api, decision, entityType, onUnauthorized],
