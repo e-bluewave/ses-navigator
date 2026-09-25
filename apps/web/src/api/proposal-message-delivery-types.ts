@@ -27,7 +27,12 @@ export interface ProposalMessageDeliveryRecipient {
   type: 'to' | 'cc' | 'bcc';
   name: string | null;
   address: string;
-  deliveryStatus: 'pending' | 'sent' | 'delivered' | 'bounced' | 'failed';
+  deliveryStatus:
+    | 'pending'
+    | 'sent'
+    | 'delivered'
+    | 'bounced'
+    | 'failed';
   attempts: ProposalMessageDeliveryAttempt[];
 }
 

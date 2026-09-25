@@ -149,6 +149,12 @@ async function deliver(
       );
   }
 
+  if (!latest)
+    throw new ApiError(
+      502,
+      'message_delivery_result_failed',
+      'Delivery result could not be recorded',
+    );
   return latest;
 }
 

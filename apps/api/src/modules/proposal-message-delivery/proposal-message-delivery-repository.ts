@@ -78,7 +78,9 @@ export interface ProposalMessageDeliveryRepository {
     idempotencyKey: string,
     requestId: string,
   ): Promise<ProposalMessageDeliveryPreparation | null>;
-  recordResult(input: DeliveryResultInput): Promise<ProposalMessageDelivery | null>;
+  recordResult(
+    input: DeliveryResultInput,
+  ): Promise<ProposalMessageDelivery | null>;
   get(
     token: string,
     proposalId: string,
@@ -138,15 +140,18 @@ export class SupabaseProposalMessageDeliveryRepository
   }
 
   async recordResult(input: DeliveryResultInput) {
-    const row = await this.serviceRpc('record_proposal_message_delivery_result', {
-      p_attempt_id: input.attemptId,
-      p_status: input.status,
-      p_provider: input.provider,
-      p_provider_message_id: input.providerMessageId,
-      p_response_code: input.responseCode,
-      p_response_payload: input.responsePayload,
-      p_error_message: input.errorMessage,
-    });
+    const row = await this.serviceRpc(
+      'record_proposal_message_delivery_result',
+      {
+        p_attempt_id: input.attemptId,
+        p_status: input.status,
+        p_provider: input.provider,
+        p_provider_message_id: input.providerMessageId,
+        p_response_code: input.responseCode,
+        p_response_payload: input.responsePayload,
+        p_error_message: input.errorMessage,
+      },
+    );
     return row ? mapDelivery(row as DeliveryRow) : null;
   }
 
@@ -202,16 +207,19 @@ export class SupabaseProposalMessageDeliveryRepository
   }
 
   private async request(token: string, path: string, init: RequestInit) {
-    const response = await fetch(`${requiredEnv('SUPABASE_URL')}/rest/v1${path}`, {
-      ...init,
-      headers: {
-        apikey: requiredEnv('SUPABASE_ANON_KEY'),
-        authorization: `Bearer ${token}`,
-        ...dataApiSchemaHeaders(path),
-        'content-type': 'application/json',
-        accept: 'application/json',
+    const response = await fetch(
+      `${requiredEnv('SUPABASE_URL')}/rest/v1${path}`,
+      {
+        ...init,
+        headers: {
+          apikey: requiredEnv('SUPABASE_ANON_KEY'),
+          authorization: `Bearer ${token}`,
+          ...dataApiSchemaHeaders(path),
+          'content-type': 'application/json',
+          accept: 'application/json',
+        },
       },
-    });
+    );
     await assertSupabaseResponse(
       response,
       'Proposal message delivery data service request failed',

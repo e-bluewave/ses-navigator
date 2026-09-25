@@ -158,7 +158,10 @@ describe('proposal message delivery API', () => {
       available: true,
       deliver: vi.fn(() => Promise.reject(new Error('secret provider detail'))),
     };
-    const response = await app(repository({ recordResult }), failingProvider).inject({
+    const response = await app(
+      repository({ recordResult }),
+      failingProvider,
+    ).inject({
       method: 'POST',
       url: `/api/v1/proposals/${proposalId}/messages/${messageId}/send`,
       headers: {

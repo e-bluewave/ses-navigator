@@ -6862,7 +6862,8 @@ function ProposalMessageDraftPanel({
   onSent: () => void;
 }) {
   const [draft, setDraft] = useState<ProposalMessageDraft | null>(null);
-  const [delivery, setDelivery] = useState<ProposalMessageDelivery | null>(null);
+  const [delivery, setDelivery] =
+    useState<ProposalMessageDelivery | null>(null);
   const [tone, setTone] = useState<'formal' | 'standard' | 'concise'>(
     'standard',
   );
