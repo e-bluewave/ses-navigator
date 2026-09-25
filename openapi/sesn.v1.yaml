@@ -1518,6 +1518,61 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /proposals/{proposalId}/messages/{messageId}/send:
+    post:
+      operationId: sendProposalMessage
+      description: Sends the immutable approved proposal message version through the configured server-side provider.
+      parameters:
+        - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 1, maxLength: 200, pattern: '^[A-Za-z0-9._:-]+$' } }
+      responses:
+        '200':
+          description: Delivery attempt completed and current safe delivery state returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProposalMessageDelivery' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { description: Delivery provider is not configured }
+  /proposals/{proposalId}/messages/{messageId}/retry:
+    post:
+      operationId: retryProposalMessage
+      description: Retries only recipients whose latest delivery state is failed. Bounced or already successful recipients are not resent.
+      parameters:
+        - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 1, maxLength: 200, pattern: '^[A-Za-z0-9._:-]+$' } }
+      responses:
+        '200':
+          description: Retry attempts completed and current safe delivery state returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProposalMessageDelivery' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { description: Delivery provider is not configured }
+  /proposals/{proposalId}/messages/{messageId}/delivery:
+    get:
+      operationId: getProposalMessageDelivery
+      description: Returns recipient and attempt status without provider response payloads.
+      parameters:
+        - { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: messageId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Safe proposal message delivery history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProposalMessageDelivery' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /companies:
     post:
       operationId: createCompany
@@ -5820,6 +5875,46 @@ components:
         type: { type: string, enum: [to, cc, bcc] }
         name: { type: [string, 'null'] }
         address: { type: string }
+    ProposalMessageDeliveryAttempt:
+      type: object
+      additionalProperties: false
+      required: [id, attemptNo, status, provider, providerMessageId, attemptedAt, responseCode, errorMessage]
+      properties:
+        id: { type: string, format: uuid }
+        attemptNo: { type: integer, minimum: 1 }
+        status: { type: string, enum: [queued, accepted, delivered, bounced, failed] }
+        provider: { type: [string, 'null'] }
+        providerMessageId: { type: [string, 'null'] }
+        attemptedAt: { type: string, format: date-time }
+        responseCode: { type: [string, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+    ProposalMessageDeliveryRecipient:
+      type: object
+      additionalProperties: false
+      required: [id, type, name, address, deliveryStatus, attempts]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [to, cc, bcc] }
+        name: { type: [string, 'null'] }
+        address: { type: string }
+        deliveryStatus: { type: string, enum: [pending, sent, delivered, bounced, failed] }
+        attempts:
+          type: array
+          items: { $ref: '#/components/schemas/ProposalMessageDeliveryAttempt' }
+    ProposalMessageDelivery:
+      type: object
+      additionalProperties: false
+      required: [messageId, proposalId, status, sentAt, approvedVersionId, rowVersion, recipients]
+      properties:
+        messageId: { type: string, format: uuid }
+        proposalId: { type: string, format: uuid }
+        status: { type: string, enum: [approved, queued, sent, failed] }
+        sentAt: { type: [string, 'null'], format: date-time }
+        approvedVersionId: { type: string, format: uuid }
+        rowVersion: { type: integer, minimum: 1 }
+        recipients:
+          type: array
+          items: { $ref: '#/components/schemas/ProposalMessageDeliveryRecipient' }
     ProposalMessageDraft:
       type: object
       additionalProperties: false
