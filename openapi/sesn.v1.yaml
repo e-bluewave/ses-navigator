@@ -1693,6 +1693,43 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /duplicate-candidates:
+    get:
+      operationId: listDuplicateCandidates
+      parameters:
+        - { name: entityType, in: query, schema: { type: string, enum: [all, company, engineer, project], default: all } }
+        - { name: decision, in: query, schema: { type: string, enum: [all, pending, duplicate, not_duplicate, hold, merged], default: pending } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: cursor, in: query, schema: { type: string, maxLength: 500 } }
+      responses:
+        '200':
+          description: Authorized duplicate candidate review queue
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuplicateCandidateList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /duplicate-candidates/{entityType}/{candidateId}:
+    patch:
+      operationId: reviewDuplicateCandidate
+      parameters:
+        - { name: entityType, in: path, required: true, schema: { $ref: '#/components/schemas/DuplicateEntityType' } }
+        - { name: candidateId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DuplicateCandidateReviewInput' }
+      responses:
+        '200':
+          description: Human duplicate review decision saved without merging records
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DuplicateCandidateReviewResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /contacts:
     post:
       operationId: createCompanyContact
@@ -4182,6 +4219,76 @@ components:
           oneOf:
             - { $ref: '#/components/schemas/SalesActivityFollowUpTask' }
             - { type: 'null' }
+    DuplicateEntityType:
+      type: string
+      enum: [company, engineer, project]
+    DuplicateDecision:
+      type: string
+      enum: [pending, duplicate, not_duplicate, hold, merged]
+    DuplicateReviewDecision:
+      type: string
+      enum: [duplicate, not_duplicate, hold]
+    DuplicateRecordSummary:
+      type: object
+      additionalProperties: false
+      required: [id, managementNo, name, status, secondary]
+      properties:
+        id: { type: string, format: uuid }
+        managementNo: { type: string }
+        name: { type: string }
+        status: { type: string }
+        secondary: { type: [string, 'null'] }
+    DuplicateCandidate:
+      type: object
+      additionalProperties: false
+      required: [entityType, id, score, matchReasons, decision, reviewNote, reviewedAt, reviewedBy, createdAt, leftRecord, rightRecord]
+      properties:
+        entityType: { $ref: '#/components/schemas/DuplicateEntityType' }
+        id: { type: string, format: uuid }
+        score: { type: number, minimum: 0, maximum: 1 }
+        matchReasons:
+          type: array
+          items: {}
+        decision: { $ref: '#/components/schemas/DuplicateDecision' }
+        reviewNote: { type: [string, 'null'], maxLength: 2000 }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        reviewedBy: { type: [string, 'null'], format: uuid }
+        createdAt: { type: string, format: date-time }
+        leftRecord: { $ref: '#/components/schemas/DuplicateRecordSummary' }
+        rightRecord: { $ref: '#/components/schemas/DuplicateRecordSummary' }
+    DuplicateCandidateList:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DuplicateCandidate' }
+        page:
+          type: object
+          additionalProperties: false
+          required: [limit, nextCursor]
+          properties:
+            limit: { type: integer, minimum: 1, maximum: 200 }
+            nextCursor: { type: [string, 'null'] }
+    DuplicateCandidateReviewInput:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision: { $ref: '#/components/schemas/DuplicateReviewDecision' }
+        note: { type: [string, 'null'], maxLength: 2000 }
+    DuplicateCandidateReviewResult:
+      type: object
+      additionalProperties: false
+      required: [entityType, id, decision, reviewNote, reviewedAt, reviewedBy]
+      properties:
+        entityType: { $ref: '#/components/schemas/DuplicateEntityType' }
+        id: { type: string, format: uuid }
+        decision: { $ref: '#/components/schemas/DuplicateReviewDecision' }
+        reviewNote: { type: [string, 'null'], maxLength: 2000 }
+        reviewedAt: { type: string, format: date-time }
+        reviewedBy: { type: string, format: uuid }
     Company:
       type: object
       required:

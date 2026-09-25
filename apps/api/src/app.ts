@@ -17,6 +17,9 @@ import { registerCompanyRoutes } from './modules/companies/company-routes.js';
 import { SupabaseSalesActivityRepository } from './modules/sales-activities/sales-activity-repository.js';
 import type { SalesActivityRepository } from './modules/sales-activities/sales-activity-repository.js';
 import { registerSalesActivityRoutes } from './modules/sales-activities/sales-activity-routes.js';
+import { SupabaseDuplicateCandidateRepository } from './modules/duplicate-candidates/duplicate-candidate-repository.js';
+import type { DuplicateCandidateRepository } from './modules/duplicate-candidates/duplicate-candidate-repository.js';
+import { registerDuplicateCandidateRoutes } from './modules/duplicate-candidates/duplicate-candidate-routes.js';
 import { SupabaseContactRepository } from './modules/contacts/contact-repository.js';
 import type { ContactRepository } from './modules/contacts/contact-repository.js';
 import { registerContactRoutes } from './modules/contacts/contact-routes.js';
@@ -94,6 +97,7 @@ export interface AppDependencies {
   authContext?: AuthContextRepository;
   companies?: CompanyRepository;
   salesActivities?: SalesActivityRepository;
+  duplicateCandidates?: DuplicateCandidateRepository;
   contacts?: ContactRepository;
   engineers?: EngineerRepository;
   proposals?: ProposalRepository;
@@ -157,6 +161,11 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerSalesActivityRoutes(
     app,
     dependencies.salesActivities ?? new SupabaseSalesActivityRepository(),
+  );
+  registerDuplicateCandidateRoutes(
+    app,
+    dependencies.duplicateCandidates ??
+      new SupabaseDuplicateCandidateRepository(),
   );
   registerContactRoutes(
     app,
