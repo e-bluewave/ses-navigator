@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [Main]
+    branches: [Main, tmp/issue-165-prettier-diff]
 
 permissions:
   contents: read
@@ -20,7 +20,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm format:check
+      - run: |
+          pnpm exec prettier --write apps/api/src/modules/proposal-message-delivery/proposal-message-delivery-repository.ts apps/api/src/modules/proposal-message-delivery/proposal-message-delivery-service.ts apps/api/test/proposal-message-delivery.test.ts apps/web/src/api/proposal-message-delivery-types.ts apps/web/src/app/App.tsx
+          git diff -- apps/api/src/modules/proposal-message-delivery/proposal-message-delivery-repository.ts apps/api/src/modules/proposal-message-delivery/proposal-message-delivery-service.ts apps/api/test/proposal-message-delivery.test.ts apps/web/src/api/proposal-message-delivery-types.ts apps/web/src/app/App.tsx
+          exit 1
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
