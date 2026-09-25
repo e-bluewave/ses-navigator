@@ -3,6 +3,8 @@ import type { FormEvent } from 'react';
 
 import { ApiClientError, createProjectsApi } from '../api/client.js';
 import type { ProjectsApi } from '../api/client.js';
+import { createSalesActivityApi } from '../api/sales-activity-client.js';
+import type { SalesActivityApi } from '../api/sales-activity-types.js';
 import type {
   Company,
   CompanyStatus,
@@ -91,6 +93,7 @@ import type { AuthService } from '../auth/auth-client.js';
 import { HomeDashboardView } from './HomeDashboardView.js';
 import { MyTasksView } from './MyTasksView.js';
 import { AiOperationsView } from './AiOperationsView.js';
+import { CompanySalesActivitiesPanel } from './CompanySalesActivitiesPanel.js';
 
 const projectStatusLabels: Record<ProjectStatus, string> = {
   draft: '下書き',
@@ -7529,6 +7532,13 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       createProjectsApi({ getAccessToken: () => session?.accessToken ?? null }),
     [providedApi, session?.accessToken],
   );
+  const salesActivityApi = useMemo(
+    () =>
+      createSalesActivityApi({
+        getAccessToken: () => session?.accessToken ?? null,
+      }),
+    [session?.accessToken],
+  );
   const [route, setRoute] = useState<Route>(currentRoute);
   const [requiresMfa, setRequiresMfa] = useState<boolean | null>(null);
 
@@ -7995,6 +8005,7 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       ) : route.page === 'company-detail' ? (
         <CompanyDetail
           api={api}
+          salesActivityApi={salesActivityApi}
           id={route.id}
           onBack={() => navigate('/companies')}
           onUnauthorized={signOut}
@@ -9378,6 +9389,7 @@ function CompanyList({
 
 function CompanyDetail({
   api,
+  salesActivityApi,
   id,
   onBack,
   onUnauthorized,
@@ -9385,6 +9397,7 @@ function CompanyDetail({
   onDeleted,
 }: {
   api: ProjectsApi;
+  salesActivityApi: SalesActivityApi;
   id: string;
   onBack: () => void;
   onUnauthorized: () => Promise<void>;
@@ -9514,6 +9527,11 @@ function CompanyDetail({
               </dd>
             </div>
           </dl>
+          <CompanySalesActivitiesPanel
+            api={salesActivityApi}
+            companyId={id}
+            onUnauthorized={onUnauthorized}
+          />
           {showDelete ? (
             <form
               className="delete-panel"
