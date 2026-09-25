@@ -14,6 +14,9 @@ import type { ProjectRepository } from './modules/projects/project-repository.js
 import { SupabaseCompanyRepository } from './modules/companies/company-repository.js';
 import type { CompanyRepository } from './modules/companies/company-repository.js';
 import { registerCompanyRoutes } from './modules/companies/company-routes.js';
+import { SupabaseSalesActivityRepository } from './modules/sales-activities/sales-activity-repository.js';
+import type { SalesActivityRepository } from './modules/sales-activities/sales-activity-repository.js';
+import { registerSalesActivityRoutes } from './modules/sales-activities/sales-activity-routes.js';
 import { SupabaseContactRepository } from './modules/contacts/contact-repository.js';
 import type { ContactRepository } from './modules/contacts/contact-repository.js';
 import { registerContactRoutes } from './modules/contacts/contact-routes.js';
@@ -90,6 +93,7 @@ export interface AppDependencies {
   projects?: ProjectRepository;
   authContext?: AuthContextRepository;
   companies?: CompanyRepository;
+  salesActivities?: SalesActivityRepository;
   contacts?: ContactRepository;
   engineers?: EngineerRepository;
   proposals?: ProposalRepository;
@@ -149,6 +153,10 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   registerCompanyRoutes(
     app,
     dependencies.companies ?? new SupabaseCompanyRepository(),
+  );
+  registerSalesActivityRoutes(
+    app,
+    dependencies.salesActivities ?? new SupabaseSalesActivityRepository(),
   );
   registerContactRoutes(
     app,
