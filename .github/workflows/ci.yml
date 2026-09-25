@@ -21,8 +21,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: |
-          pnpm exec prettier --write apps/api/src/modules/proposal-message-delivery/proposal-message-delivery-repository.ts apps/api/src/modules/proposal-message-delivery/proposal-message-delivery-service.ts apps/api/test/proposal-message-delivery.test.ts apps/web/src/api/proposal-message-delivery-types.ts apps/web/src/app/App.tsx
-          git diff -- apps/api/src/modules/proposal-message-delivery/proposal-message-delivery-repository.ts apps/api/src/modules/proposal-message-delivery/proposal-message-delivery-service.ts apps/api/test/proposal-message-delivery.test.ts apps/web/src/api/proposal-message-delivery-types.ts apps/web/src/app/App.tsx
+          pnpm exec prettier --write apps/api/test/proposal-message-delivery-security.test.ts
+          git diff -- apps/api/test/proposal-message-delivery-security.test.ts
           exit 1
       - run: pnpm lint
       - run: pnpm typecheck
