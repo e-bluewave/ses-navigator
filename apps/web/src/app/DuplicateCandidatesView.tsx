@@ -58,8 +58,7 @@ export function DuplicateCandidatesView({
   onUnauthorized,
 }: DuplicateCandidatesViewProps) {
   const [entityType, setEntityType] = useState<DuplicateEntityFilter>('all');
-  const [decision, setDecision] =
-    useState<DuplicateDecisionFilter>('pending');
+  const [decision, setDecision] = useState<DuplicateDecisionFilter>('pending');
   const [items, setItems] = useState<DuplicateCandidate[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -214,8 +213,9 @@ function DuplicateCandidateCard({
   onUnauthorized: () => Promise<void>;
   onReviewed: () => Promise<void>;
 }) {
-  const [reviewDecision, setReviewDecision] =
-    useState<DuplicateReviewDecision | ''>('');
+  const [reviewDecision, setReviewDecision] = useState<
+    DuplicateReviewDecision | ''
+  >('');
   const [note, setNote] = useState(candidate.reviewNote ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -283,7 +283,8 @@ function DuplicateCandidateCard({
 
       {candidate.reviewedAt ? (
         <p>
-          前回確認: {new Intl.DateTimeFormat('ja-JP', {
+          前回確認:{' '}
+          {new Intl.DateTimeFormat('ja-JP', {
             dateStyle: 'medium',
             timeStyle: 'short',
           }).format(new Date(candidate.reviewedAt))}

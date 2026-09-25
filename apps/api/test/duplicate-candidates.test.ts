@@ -151,15 +151,10 @@ describe('Duplicate Candidates API', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(review).toHaveBeenCalledWith(
-      'valid',
-      'company',
-      candidateId,
-      {
-        decision: 'duplicate',
-        note: '同一法人として確認',
-      },
-    );
+    expect(review).toHaveBeenCalledWith('valid', 'company', candidateId, {
+      decision: 'duplicate',
+      note: '同一法人として確認',
+    });
   });
 
   it('enforces read and manage permissions at the API boundary', async () => {

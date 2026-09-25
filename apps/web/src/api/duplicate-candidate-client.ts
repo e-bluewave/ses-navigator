@@ -17,15 +17,14 @@ export function createDuplicateCandidateApi(options: {
   const baseUrl = options.baseUrl ?? '/api/v1';
   const request = options.fetch ?? fetch;
 
-  async function call<T>(
-    path: string,
-    init: RequestInit = {},
-  ): Promise<T> {
+  async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = options.getAccessToken();
     const response = await request(`${baseUrl}${path}`, {
       ...init,
       headers: {
-        ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...(init.body === undefined
+          ? {}
+          : { 'content-type': 'application/json' }),
         ...(token === null ? {} : { authorization: `Bearer ${token}` }),
         ...(init.headers ?? {}),
       },
@@ -42,9 +41,7 @@ export function createDuplicateCandidateApi(options: {
       if (query.limit !== undefined) params.set('limit', String(query.limit));
       if (query.cursor) params.set('cursor', query.cursor);
       const suffix = params.size === 0 ? '' : `?${params.toString()}`;
-      return call<DuplicateCandidateList>(
-        `/duplicate-candidates${suffix}`,
-      );
+      return call<DuplicateCandidateList>(`/duplicate-candidates${suffix}`);
     },
 
     reviewDuplicateCandidate(

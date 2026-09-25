@@ -164,7 +164,8 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   );
   registerDuplicateCandidateRoutes(
     app,
-    dependencies.duplicateCandidates ?? new SupabaseDuplicateCandidateRepository(),
+    dependencies.duplicateCandidates ??
+      new SupabaseDuplicateCandidateRepository(),
   );
   registerContactRoutes(
     app,

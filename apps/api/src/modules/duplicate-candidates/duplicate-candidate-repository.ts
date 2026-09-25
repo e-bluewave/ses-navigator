@@ -5,11 +5,7 @@ import { dataApiSchemaHeaders } from '../../shared/supabase-schema.js';
 export type DuplicateEntityType = 'company' | 'engineer' | 'project';
 export type DuplicateEntityFilter = DuplicateEntityType | 'all';
 export type DuplicateDecision =
-  | 'pending'
-  | 'duplicate'
-  | 'not_duplicate'
-  | 'hold'
-  | 'merged';
+  'pending' | 'duplicate' | 'not_duplicate' | 'hold' | 'merged';
 export type DuplicateDecisionFilter = DuplicateDecision | 'all';
 export type DuplicateReviewDecision = 'duplicate' | 'not_duplicate' | 'hold';
 
@@ -122,9 +118,7 @@ type DuplicateCandidateReviewRow = {
   reviewed_by: string;
 };
 
-export class SupabaseDuplicateCandidateRepository
-  implements DuplicateCandidateRepository
-{
+export class SupabaseDuplicateCandidateRepository implements DuplicateCandidateRepository {
   async canRead(token: string, entityType: DuplicateEntityFilter) {
     if (entityType === 'all') {
       const checks = await Promise.all([

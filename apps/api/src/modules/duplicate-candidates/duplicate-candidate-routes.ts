@@ -103,7 +103,10 @@ export function registerDuplicateCandidateRoutes(
 
 function parseEntityFilter(value: unknown): DuplicateEntityFilter {
   if (value === undefined || value === '') return 'all';
-  if (typeof value !== 'string' || !entityFilters.has(value as DuplicateEntityFilter))
+  if (
+    typeof value !== 'string' ||
+    !entityFilters.has(value as DuplicateEntityFilter)
+  )
     throw invalid('entityType is invalid');
   return value as DuplicateEntityFilter;
 }
