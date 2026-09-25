@@ -5,6 +5,7 @@ import { ApiClientError, createProjectsApi } from '../api/client.js';
 import type { ProjectsApi } from '../api/client.js';
 import { createSalesActivityApi } from '../api/sales-activity-client.js';
 import type { SalesActivityApi } from '../api/sales-activity-types.js';
+import { createDuplicateCandidateApi } from '../api/duplicate-candidate-client.js';
 import type {
   Company,
   CompanyStatus,
@@ -94,6 +95,7 @@ import { HomeDashboardView } from './HomeDashboardView.js';
 import { MyTasksView } from './MyTasksView.js';
 import { AiOperationsView } from './AiOperationsView.js';
 import { CompanySalesActivitiesPanel } from './CompanySalesActivitiesPanel.js';
+import { DuplicateCandidatesView } from './DuplicateCandidatesView.js';
 
 const projectStatusLabels: Record<ProjectStatus, string> = {
   draft: '下書き',
@@ -216,6 +218,7 @@ const invoiceTypeLabels: Record<InvoiceType, string> = {
 type Route =
   | { page: 'home' }
   | { page: 'my-tasks' }
+  | { page: 'duplicate-candidates' }
   | { page: 'ai-operations' }
   | { page: 'sales-kpi' }
   | { page: 'profitability' }
@@ -271,6 +274,8 @@ function currentRoute(): Route {
   )
     return { page: 'home' };
   if (window.location.pathname === '/my-tasks') return { page: 'my-tasks' };
+  if (window.location.pathname === '/duplicate-candidates')
+    return { page: 'duplicate-candidates' };
   if (window.location.pathname === '/sales-kpi') return { page: 'sales-kpi' };
   if (window.location.pathname === '/ai-operations')
     return { page: 'ai-operations' };
@@ -7539,6 +7544,13 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       }),
     [session?.accessToken],
   );
+  const duplicateCandidateApi = useMemo(
+    () =>
+      createDuplicateCandidateApi({
+        getAccessToken: () => session?.accessToken ?? null,
+      }),
+    [session?.accessToken],
+  );
   const [route, setRoute] = useState<Route>(currentRoute);
   const [requiresMfa, setRequiresMfa] = useState<boolean | null>(null);
 
@@ -7626,6 +7638,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
           onClick={() => navigate('/my-tasks')}
         >
           マイタスク
+        </button>
+        <button
+          className="secondary-button"
+          onClick={() => navigate('/duplicate-candidates')}
+        >
+          重複候補
         </button>
         <button
           className="secondary-button"
@@ -7738,6 +7756,12 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
         />
       ) : route.page === 'my-tasks' ? (
         <MyTasksView api={api} onNavigate={navigate} onUnauthorized={signOut} />
+      ) : route.page === 'duplicate-candidates' ? (
+        <DuplicateCandidatesView
+          api={duplicateCandidateApi}
+          onNavigate={navigate}
+          onUnauthorized={signOut}
+        />
       ) : route.page === 'sales-kpi' ? (
         <SalesKpiView api={api} onUnauthorized={signOut} />
       ) : route.page === 'ai-operations' ? (
