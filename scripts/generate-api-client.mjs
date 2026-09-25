@@ -1945,7 +1945,8 @@ export interface ListInterviewsQuery {
 
 if (process.argv.includes('--check')) {
   const current = await readFile(outputPath, 'utf8').catch(() => '');
-  if (current !== generated) {
+  const normalizeEol = (value) => value.replace(/\r\n/g, '\n');
+  if (normalizeEol(current) !== normalizeEol(generated)) {
     throw new Error('Generated API client is stale. Run pnpm client:generate.');
   }
 } else {
