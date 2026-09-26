@@ -20,6 +20,11 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Print real mail smoke Prettier diff
+        run: |
+          pnpm exec prettier --write scripts/proposal-delivery-real-mail-smoke.mjs scripts/proposal-delivery-real-mail-smoke.test.mjs
+          git diff -- scripts/proposal-delivery-real-mail-smoke.mjs scripts/proposal-delivery-real-mail-smoke.test.mjs
+          exit 1
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
@@ -42,6 +47,8 @@ jobs:
       - run: pnpm security:data-api-sensitive:check
       - run: pnpm security:data-api:all:check
       - run: pnpm security:client-secrets:check
+      - run: pnpm smoke:microsoft-graph-preflight:check
+      - run: pnpm smoke:proposal-delivery-real-mail:check
       - run: pnpm security:data-migration
       - run: pnpm security:data-migration:check
       - run: node --test scripts/check-data-migration-evidence.test.mjs
