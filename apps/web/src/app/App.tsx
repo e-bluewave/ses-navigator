@@ -96,6 +96,7 @@ import { MyTasksView } from './MyTasksView.js';
 import { AiOperationsView } from './AiOperationsView.js';
 import { CompanySalesActivitiesPanel } from './CompanySalesActivitiesPanel.js';
 import { DuplicateCandidatesView } from './DuplicateCandidatesView.js';
+import type { ProposalMessageDelivery } from '../api/proposal-message-delivery-types.js';
 
 const projectStatusLabels: Record<ProjectStatus, string> = {
   draft: '下書き',
@@ -6853,12 +6854,17 @@ function ProposalMessageDraftPanel({
   api,
   proposalId,
   canGenerate,
+  onSent,
 }: {
   api: ProjectsApi;
   proposalId: string;
   canGenerate: boolean;
+  onSent: () => void;
 }) {
   const [draft, setDraft] = useState<ProposalMessageDraft | null>(null);
+  const [delivery, setDelivery] = useState<ProposalMessageDelivery | null>(
+    null,
+  );
   const [tone, setTone] = useState<'formal' | 'standard' | 'concise'>(
     'standard',
   );
@@ -6886,6 +6892,32 @@ function ProposalMessageDraftPanel({
     setSubject(draft?.subject ?? '');
     setBodyText(draft?.bodyText ?? '');
   }, [draft]);
+
+  useEffect(() => {
+    if (
+      !draft ||
+      !['approved', 'queued', 'sent', 'failed'].includes(draft.status)
+    ) {
+      setDelivery(null);
+      return;
+    }
+    let active = true;
+    api
+      .getProposalMessageDelivery(proposalId, draft.id)
+      .then((result) => {
+        if (active) setDelivery(result);
+      })
+      .catch((reason: unknown) => {
+        if (
+          active &&
+          !(reason instanceof ApiClientError && reason.status === 404)
+        )
+          setError(reason);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, proposalId, draft]);
 
   async function generate() {
     setBusy(true);
@@ -6941,6 +6973,23 @@ function ProposalMessageDraftPanel({
         ),
       );
       setReviewComment('');
+    } catch (reason) {
+      setError(reason);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendDelivery(retry: boolean) {
+    if (!draft) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = retry
+        ? await api.retryProposalMessage(proposalId, draft.id)
+        : await api.sendProposalMessage(proposalId, draft.id);
+      setDelivery(result);
+      if (result.status === 'sent') onSent();
     } catch (reason) {
       setError(reason);
     } finally {
@@ -7096,10 +7145,77 @@ function ProposalMessageDraftPanel({
               </div>
             </>
           ) : null}
-          {draft.status === 'approved' ? (
-            <p role="status">
-              現在版を承認しました。送信処理はまだ実行されていません。
-            </p>
+          {draft.status === 'approved' &&
+          (!delivery || delivery.status === 'approved') ? (
+            <div className="button-row">
+              <button
+                type="button"
+                className="primary-button"
+                disabled={busy || draft.recipients.length === 0}
+                onClick={() => void sendDelivery(false)}
+              >
+                承認済み本文を送信
+              </button>
+            </div>
+          ) : null}
+          {delivery ? (
+            <section aria-label="提案メール配信状況">
+              <h4>配信状況</h4>
+              <p>
+                状態: {delivery.status}
+                {delivery.sentAt ? ` ／ 送信: ${delivery.sentAt}` : ''}
+              </p>
+              {delivery.recipients.map((recipient) => (
+                <div key={recipient.id} className="audit-panel">
+                  <p>
+                    {recipient.type.toUpperCase()}:{' '}
+                    {[recipient.name, recipient.address]
+                      .filter(Boolean)
+                      .join(' ')}
+                    {' ／ '}
+                    {recipient.deliveryStatus}
+                  </p>
+                  {recipient.attempts.length ? (
+                    <ul>
+                      {recipient.attempts.map((attempt) => (
+                        <li key={attempt.id}>
+                          #{attempt.attemptNo} {attempt.status}
+                          {attempt.provider ? ` / ${attempt.provider}` : ''}
+                          {attempt.responseCode
+                            ? ` / ${attempt.responseCode}`
+                            : ''}
+                          {attempt.errorMessage
+                            ? ` / ${attempt.errorMessage}`
+                            : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>配信試行はまだありません。</p>
+                  )}
+                </div>
+              ))}
+              {delivery.status === 'failed' &&
+              delivery.recipients.some(
+                (recipient) => recipient.deliveryStatus === 'failed',
+              ) ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={busy}
+                  onClick={() => void sendDelivery(true)}
+                >
+                  失敗した宛先だけ再送
+                </button>
+              ) : null}
+              {delivery.recipients.some(
+                (recipient) => recipient.deliveryStatus === 'bounced',
+              ) ? (
+                <p role="status">
+                  バウンスした宛先は自動再送しません。宛先確認後に対応してください。
+                </p>
+              ) : null}
+            </section>
           ) : null}
         </section>
       ) : null}
@@ -7236,6 +7352,9 @@ function ProposalDetail({
           item.requirementVersionId !== null &&
           ['draft', 'pending_approval', 'approved'].includes(item.status)
         }
+        onSent={() => {
+          void api.getProposal(item.id).then(setItem);
+        }}
       />
       {winResult ? (
         <p role="status">

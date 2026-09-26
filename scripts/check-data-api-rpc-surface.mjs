@@ -9,7 +9,10 @@ export const reviewedDormantAuthenticatedRpcs = [
   'get_audit_event_detail',
 ];
 
-export const expectedServiceRoleRpcs = ['service_get_sensitive_record'];
+export const expectedServiceRoleRpcs = [
+  'record_proposal_message_delivery_result',
+  'service_get_sensitive_record',
+];
 
 export function extractApiRpcNames(files) {
   const names = new Set();

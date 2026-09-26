@@ -110,7 +110,10 @@
     "security:db-backup-capture": "node scripts/capture-database-backup.mjs",
     "security:db-backup-capture:check": "node --test scripts/capture-database-backup.test.mjs scripts/windows-cmd-spawn.test.mjs",
     "security:storage-backup-capture": "node scripts/capture-storage-backup.mjs",
-    "security:storage-backup-capture:check": "node --test scripts/capture-storage-backup.test.mjs"
+    "security:storage-backup-capture:check": "node --test scripts/capture-storage-backup.test.mjs",
+    "smoke:proposal-delivery-local-preflight": "node scripts/proposal-delivery-local-preflight.mjs",
+    "smoke:proposal-delivery-local-migrate": "node scripts/proposal-delivery-local-preflight.mjs --apply-migration-165",
+    "smoke:proposal-delivery-local-preflight:check": "node --test scripts/proposal-delivery-local-preflight.test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
