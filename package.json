@@ -113,7 +113,11 @@
     "security:storage-backup-capture:check": "node --test scripts/capture-storage-backup.test.mjs",
     "smoke:proposal-delivery-local-preflight": "node scripts/proposal-delivery-local-preflight.mjs",
     "smoke:proposal-delivery-local-migrate": "node scripts/proposal-delivery-local-preflight.mjs --apply-migration-165",
-    "smoke:proposal-delivery-local-preflight:check": "node --test scripts/proposal-delivery-local-preflight.test.mjs"
+    "smoke:proposal-delivery-local-preflight:check": "node --test scripts/proposal-delivery-local-preflight.test.mjs",
+    "smoke:microsoft-graph-preflight": "node scripts/microsoft-graph-mail-preflight.mjs",
+    "smoke:microsoft-graph-preflight:check": "node --test scripts/microsoft-graph-mail-preflight.test.mjs",
+    "smoke:proposal-delivery-real-mail": "node scripts/proposal-delivery-real-mail-smoke.mjs",
+    "smoke:proposal-delivery-real-mail:check": "node --test scripts/proposal-delivery-real-mail-smoke.test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
