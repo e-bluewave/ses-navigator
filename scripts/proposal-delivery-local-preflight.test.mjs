@@ -82,11 +82,7 @@ test('applies migrations only after the target preflight passes', async () => {
         'supabase_db_sesn-ba008-restore-drill',
       ].join('\n');
     }
-    if (
-      command === 'supabase' &&
-      args[0] === 'migration' &&
-      args[1] === 'up'
-    ) {
+    if (command === 'supabase' && args[0] === 'migration' && args[1] === 'up') {
       return 'Local database is up to date.';
     }
     throw new Error('unexpected command');

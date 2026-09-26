@@ -176,9 +176,7 @@ function isExpectedLocalDbUrl(value) {
 }
 
 function readTomlString(text, key) {
-  const match = text.match(
-    new RegExp(`^\\s*${key}\\s*=\\s*"([^"]+)"`, 'mu'),
-  );
+  const match = text.match(new RegExp(`^\\s*${key}\\s*=\\s*"([^"]+)"`, 'mu'));
   return match?.[1] ?? null;
 }
 
