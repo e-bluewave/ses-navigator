@@ -27,6 +27,7 @@ jobs:
       - run: pnpm cli:entry:check
       - run: pnpm smoke:auth-project:check
       - run: pnpm smoke:auth-lifecycle:check
+      - run: pnpm smoke:proposal-delivery-local-preflight:check
       - run: pnpm release:readiness
       - run: pnpm release:readiness:check
       - run: pnpm security:data-api:check
