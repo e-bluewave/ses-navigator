@@ -81,11 +81,9 @@ export async function runProposalDeliveryLocalPreflight({
     cwd: repoRoot,
   });
   const status = parseJsonObject(statusText, 'supabase status');
-  const dockerText = runCommand(
-    'docker',
-    ['ps', '--format', '{{.Names}}'],
-    { cwd: repoRoot },
-  );
+  const dockerText = runCommand('docker', ['ps', '--format', '{{.Names}}'], {
+    cwd: repoRoot,
+  });
   const containerNames = dockerText
     .split(/\r?\n/u)
     .map((value) => value.trim())
@@ -178,7 +176,9 @@ function isExpectedLocalDbUrl(value) {
 }
 
 function readTomlString(text, key) {
-  const match = text.match(new RegExp(`^\\s*${key}\\s*=\\s*"([^"]+)"`, 'mu'));
+  const match = text.match(
+    new RegExp(`^\\s*${key}\\s*=\\s*"([^"]+)"`, 'mu'),
+  );
   return match?.[1] ?? null;
 }
 

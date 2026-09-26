@@ -99,12 +99,7 @@ test('applies migrations only after the target preflight passes', async () => {
   });
 
   assert.equal(result.migrationCommandExecuted, true);
-  assert.deepEqual(calls.at(-1), [
-    'supabase',
-    'migration',
-    'up',
-    '--local',
-  ]);
+  assert.deepEqual(calls.at(-1), ['supabase', 'migration', 'up', '--local']);
 });
 
 test('never applies a migration when target validation fails', async () => {
