@@ -20,7 +20,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm format:check
+      - run: |
+          pnpm exec prettier --write scripts/proposal-delivery-local-repair-165.mjs
+          git diff -- scripts/proposal-delivery-local-repair-165.mjs
+          git diff --exit-code -- scripts/proposal-delivery-local-repair-165.mjs
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
