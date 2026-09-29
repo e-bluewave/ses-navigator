@@ -278,10 +278,12 @@ function makeFixtureIds() {
   };
 }
 
-function fixtureSql(input: ReturnType<typeof makeFixtureIds> & {
-  userId: string;
-  email: string;
-}) {
+function fixtureSql(
+  input: ReturnType<typeof makeFixtureIds> & {
+    userId: string;
+    email: string;
+  },
+) {
   return `
 begin;
 
@@ -402,12 +404,12 @@ async function createLocalUser({
   const response = await fetch(
     `${normalizeUrl(supabaseUrl)}/auth/v1/admin/users`,
     {
-    method: 'POST',
-    headers: {
-      apikey: serviceRoleKey,
-      authorization: `Bearer ${serviceRoleKey}`,
-      'content-type': 'application/json',
-    },
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        authorization: `Bearer ${serviceRoleKey}`,
+        'content-type': 'application/json',
+      },
       body: JSON.stringify({
         email,
         password,
