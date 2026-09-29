@@ -80,6 +80,15 @@ async function main() {
     });
     assert(unauth.statusCode === 401, `Expected 401, got ${unauth.statusCode}`);
 
+    await diagnoseDeliveryDataApi({
+      supabaseUrl,
+      anonKey,
+      serviceRoleKey,
+      accessToken,
+      proposalId: ids.proposalId,
+      messageId: ids.messageId,
+    });
+
     log('6/9 Send with fake provider and observe retryable failure');
     const first = await app.inject({
       method: 'POST',
@@ -89,6 +98,16 @@ async function main() {
         'idempotency-key': `local-smoke-send-${ids.suffix}`,
       },
     });
+    if (first.statusCode !== 200) {
+      const stage = runPsqlQuery(
+        `select concat_ws('|',
+          (select status from app.outbound_messages where id = '${ids.messageId}'::uuid),
+          (select count(*) from app.message_delivery_attempts where outbound_message_id = '${ids.messageId}'::uuid),
+          (select count(*) from app.idempotency_records where tenant_id = '${ids.tenantId}'::uuid and operation_name = 'proposal_message.send')
+        );`,
+      ).trim();
+      console.error(`Send failure database stage evidence: ${stage}`);
+    }
     assert(first.statusCode === 200, describeFailure('send', first));
     const firstBody = first.json<DeliveryBody>();
     assert(firstBody.status === 'failed', 'First fake delivery must fail');
@@ -388,6 +407,98 @@ insert into app.outbound_message_recipients(
 
 commit;
 `;
+}
+
+
+async function diagnoseDeliveryDataApi({
+  supabaseUrl,
+  anonKey,
+  serviceRoleKey,
+  accessToken,
+  proposalId,
+  messageId,
+}: {
+  supabaseUrl: string;
+  anonKey: string;
+  serviceRoleKey: string;
+  accessToken: string;
+  proposalId: string;
+  messageId: string;
+}) {
+  log('5a/9 Probe delivery Data API boundaries');
+
+  const userHeaders = {
+    apikey: anonKey,
+    authorization: `Bearer ${accessToken}`,
+    'content-type': 'application/json',
+    accept: 'application/json',
+  };
+
+  for (const permission of ['message.send', 'proposal.send']) {
+    const response = await fetch(
+      `${normalizeUrl(supabaseUrl)}/rest/v1/rpc/has_permission`,
+      {
+        method: 'POST',
+        headers: userHeaders,
+        body: JSON.stringify({ required_permission: permission }),
+      },
+    );
+    const body = await response.text();
+    console.log(
+      `Data API has_permission(${permission}): HTTP ${response.status} ${safeDiagnosticBody(body)}`,
+    );
+  }
+
+  const readResponse = await fetch(
+    `${normalizeUrl(supabaseUrl)}/rest/v1/rpc/get_proposal_message_delivery`,
+    {
+      method: 'POST',
+      headers: userHeaders,
+      body: JSON.stringify({
+        p_proposal_id: proposalId,
+        p_message_id: messageId,
+      }),
+    },
+  );
+  const readBody = await readResponse.text();
+  console.log(
+    `Data API get_proposal_message_delivery: HTTP ${readResponse.status} ${safeDiagnosticBody(readBody)}`,
+  );
+
+  const serviceHeaders: Record<string, string> = {
+    apikey: serviceRoleKey,
+    'content-type': 'application/json',
+    accept: 'application/json',
+  };
+  if (!serviceRoleKey.startsWith('sb_secret_')) {
+    serviceHeaders.authorization = `Bearer ${serviceRoleKey}`;
+  }
+
+  const serviceResponse = await fetch(
+    `${normalizeUrl(supabaseUrl)}/rest/v1/rpc/record_proposal_message_delivery_result`,
+    {
+      method: 'POST',
+      headers: serviceHeaders,
+      body: JSON.stringify({
+        p_attempt_id: randomUUID(),
+        p_status: 'failed',
+        p_provider: 'local-smoke-probe',
+        p_provider_message_id: null,
+        p_response_code: null,
+        p_response_payload: null,
+        p_error_message: 'local smoke service-role probe',
+      }),
+    },
+  );
+  const serviceBody = await serviceResponse.text();
+  console.log(
+    `Data API service-role result probe: HTTP ${serviceResponse.status} ${safeDiagnosticBody(serviceBody)}`,
+  );
+}
+
+function safeDiagnosticBody(value: string) {
+  const compact = value.replace(/\s+/gu, ' ').trim();
+  return compact.length > 500 ? `${compact.slice(0, 500)}...` : compact;
 }
 
 async function createLocalUser({
