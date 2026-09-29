@@ -409,7 +409,6 @@ commit;
 `;
 }
 
-
 async function diagnoseDeliveryDataApi({
   supabaseUrl,
   anonKey,
