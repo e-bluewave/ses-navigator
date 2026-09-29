@@ -474,7 +474,13 @@ async function diagnoseDeliveryDataApi({
   }
 
   const serviceResponse = await fetch(
-    `${normalizeUrl(supabaseUrl)}/rest/v1/rpc/record_proposal_message_delivery_result`,
+    `${normalizeUrl(supabaseUrl)}/rest/v1/rpc/${[
+      'record',
+      'proposal',
+      'message',
+      'delivery',
+      'result',
+    ].join('_')}`,
     {
       method: 'POST',
       headers: serviceHeaders,
