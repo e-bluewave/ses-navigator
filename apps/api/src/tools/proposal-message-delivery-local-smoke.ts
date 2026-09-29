@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import { buildApp } from '../app.js';
 import { FakeProposalMessageDeliveryProvider } from '../modules/proposal-message-delivery/proposal-message-delivery-service.js';
+
+const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 
 const EXPECTED = {
   apiUrl: 'http://127.0.0.1:54321',
@@ -504,7 +507,7 @@ function run(command: string, args: string[], input?: string) {
       ? 'supabase.exe'
       : command;
   const outcome = spawnSync(executable, args, {
-    cwd: process.cwd(),
+    cwd: REPO_ROOT,
     env: process.env,
     encoding: 'utf8',
     shell: false,
