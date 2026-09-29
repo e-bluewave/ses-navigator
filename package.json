@@ -113,7 +113,8 @@
     "security:storage-backup-capture:check": "node --test scripts/capture-storage-backup.test.mjs",
     "smoke:proposal-delivery-local-preflight": "node scripts/proposal-delivery-local-preflight.mjs",
     "smoke:proposal-delivery-local-migrate": "node scripts/proposal-delivery-local-preflight.mjs --apply-migration-165",
-    "smoke:proposal-delivery-local-preflight:check": "node --test scripts/proposal-delivery-local-preflight.test.mjs"
+    "smoke:proposal-delivery-local-preflight:check": "node --test scripts/proposal-delivery-local-preflight.test.mjs",
+    "smoke:proposal-delivery-local-runtime": "pnpm --filter @sesn/api exec tsx src/tools/proposal-message-delivery-local-smoke.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
