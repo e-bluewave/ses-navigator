@@ -20,9 +20,12 @@ export function buildProposalDeliveryMigration165RepairSql(migrationSql) {
   if (migrationSql.includes('public.digest(')) {
     throw new Error('Migration 165 still contains public.digest');
   }
-  const digestCount = (migrationSql.match(/extensions\.digest\(/gu) ?? []).length;
+  const digestCount = (migrationSql.match(/extensions\.digest\(/gu) ?? [])
+    .length;
   if (digestCount < 2) {
-    throw new Error('Migration 165 does not contain both qualified digest calls');
+    throw new Error(
+      'Migration 165 does not contain both qualified digest calls',
+    );
   }
 
   const functions = FUNCTION_MARKERS.map((marker) =>
@@ -44,7 +47,10 @@ export async function runProposalDeliveryMigration165Repair({
   });
 
   const migrationSql = await readFile(
-    new URL('../supabase/migrations/165_proposal_message_delivery_rpc.sql', import.meta.url),
+    new URL(
+      '../supabase/migrations/165_proposal_message_delivery_rpc.sql',
+      import.meta.url,
+    ),
     'utf8',
   );
   const repairSql = buildProposalDeliveryMigration165RepairSql(migrationSql);
@@ -175,7 +181,9 @@ function defaultRunCommand(command, args, { cwd, input } = {}) {
 if (isMainModule(import.meta.url)) {
   runProposalDeliveryMigration165Repair()
     .then(() => {
-      console.log('NORMAL LOCAL proposal delivery Migration 165 repair complete');
+      console.log(
+        'NORMAL LOCAL proposal delivery Migration 165 repair complete',
+      );
     })
     .catch((error) => {
       console.error(
