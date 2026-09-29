@@ -1,3 +1,5 @@
+import { nodeSmtpTransport } from './smtp-transport.js';
+
 export interface ProposalMessageDeliveryProviderInput {
   attemptId: string;
   attemptNo: number;
@@ -437,9 +439,7 @@ export function createDefaultProposalMessageDeliveryProvider(): ProposalMessageD
       username: process.env.SMTP_USERNAME ?? '',
       password: process.env.SMTP_PASSWORD ?? '',
       sender: process.env.SMTP_SENDER ?? '',
-      // Runtime transport is intentionally injected by the API composition layer.
-      // Until configured, SMTP fails closed rather than risking an unintended send.
-      transport: undefined,
+      transport: nodeSmtpTransport,
     });
   }
   if (mode === 'microsoft_graph') {
