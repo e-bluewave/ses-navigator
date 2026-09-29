@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { buildApp } from '../app.js';
+import { dataApiSchemaHeaders } from '../shared/supabase-schema.js';
 import { FakeProposalMessageDeliveryProvider } from '../modules/proposal-message-delivery/proposal-message-delivery-service.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -433,12 +434,16 @@ async function diagnoseDeliveryDataApi({
     accept: 'application/json',
   };
 
+  const permissionPath = '/rpc/has_permission';
   for (const permission of ['message.send', 'proposal.send']) {
     const response = await fetch(
-      `${normalizeUrl(supabaseUrl)}/rest/v1/rpc/has_permission`,
+      `${normalizeUrl(supabaseUrl)}/rest/v1${permissionPath}`,
       {
         method: 'POST',
-        headers: userHeaders,
+        headers: {
+          ...userHeaders,
+          ...dataApiSchemaHeaders(permissionPath),
+        },
         body: JSON.stringify({ required_permission: permission }),
       },
     );
@@ -448,11 +453,15 @@ async function diagnoseDeliveryDataApi({
     );
   }
 
+  const readPath = '/rpc/get_proposal_message_delivery';
   const readResponse = await fetch(
-    `${normalizeUrl(supabaseUrl)}/rest/v1/rpc/get_proposal_message_delivery`,
+    `${normalizeUrl(supabaseUrl)}/rest/v1${readPath}`,
     {
       method: 'POST',
-      headers: userHeaders,
+      headers: {
+        ...userHeaders,
+        ...dataApiSchemaHeaders(readPath),
+      },
       body: JSON.stringify({
         p_proposal_id: proposalId,
         p_message_id: messageId,
@@ -473,17 +482,21 @@ async function diagnoseDeliveryDataApi({
     serviceHeaders.authorization = `Bearer ${serviceRoleKey}`;
   }
 
+  const serviceRpcPath = `/rpc/${[
+    'record',
+    'proposal',
+    'message',
+    'delivery',
+    'result',
+  ].join('_')}`;
   const serviceResponse = await fetch(
-    `${normalizeUrl(supabaseUrl)}/rest/v1/rpc/${[
-      'record',
-      'proposal',
-      'message',
-      'delivery',
-      'result',
-    ].join('_')}`,
+    `${normalizeUrl(supabaseUrl)}/rest/v1${serviceRpcPath}`,
     {
       method: 'POST',
-      headers: serviceHeaders,
+      headers: {
+        ...serviceHeaders,
+        ...dataApiSchemaHeaders(serviceRpcPath),
+      },
       body: JSON.stringify({
         p_attempt_id: randomUUID(),
         p_status: 'failed',
