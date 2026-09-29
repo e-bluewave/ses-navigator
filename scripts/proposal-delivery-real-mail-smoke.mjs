@@ -33,7 +33,10 @@ export async function runProposalDeliveryRealMailSmoke({
   if (env.SESN_REAL_SEND_CONFIRM !== CONFIRM_TEXT) {
     throw new Error('Explicit real mail confirmation is required');
   }
-  if (!UUID_RE.test(env.SESN_PROPOSAL_ID) || !UUID_RE.test(env.SESN_MESSAGE_ID)) {
+  if (
+    !UUID_RE.test(env.SESN_PROPOSAL_ID) ||
+    !UUID_RE.test(env.SESN_MESSAGE_ID)
+  ) {
     throw new Error('SESN_PROPOSAL_ID and SESN_MESSAGE_ID must be UUIDs');
   }
 
@@ -71,8 +74,7 @@ export async function runProposalDeliveryRealMailSmoke({
   }
 
   const accessToken = tokenBody.access_token;
-  const deliveryUrl =
-    `${apiUrl}/api/v1/proposals/${env.SESN_PROPOSAL_ID}/messages/${env.SESN_MESSAGE_ID}/delivery`;
+  const deliveryUrl = `${apiUrl}/api/v1/proposals/${env.SESN_PROPOSAL_ID}/messages/${env.SESN_MESSAGE_ID}/delivery`;
 
   try {
     log('2/5 Read approved delivery target');
@@ -93,7 +95,9 @@ export async function runProposalDeliveryRealMailSmoke({
     if (!sameStrings(actualRecipients, expectedRecipients)) {
       throw new Error('Delivery recipients do not match expected recipients');
     }
-    log(`Recipient verification passed (${actualRecipients.length} recipient(s))`);
+    log(
+      `Recipient verification passed (${actualRecipients.length} recipient(s))`,
+    );
 
     log('3/5 Send approved proposal message');
     const sendResponse = await fetchImpl(
@@ -175,7 +179,9 @@ function assertMicrosoftGraphAccepted(delivery) {
 }
 
 function normalizeExpectedRecipients(value) {
-  return [...new Set(value.split(',').map(normalizeAddress).filter(Boolean))].sort();
+  return [
+    ...new Set(value.split(',').map(normalizeAddress).filter(Boolean)),
+  ].sort();
 }
 
 function normalizeDeliveryRecipients(recipients) {
