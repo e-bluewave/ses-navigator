@@ -108,6 +108,14 @@ async function main() {
         );`,
       ).trim();
       console.error(`Send failure database stage evidence: ${stage}`);
+      await diagnosePrepareSendRpc({
+        supabaseUrl,
+        anonKey,
+        accessToken,
+        proposalId: ids.proposalId,
+        messageId: ids.messageId,
+        suffix: ids.suffix,
+      });
     }
     assert(first.statusCode === 200, describeFailure('send', first));
     const firstBody = first.json<DeliveryBody>();
@@ -511,6 +519,44 @@ async function diagnoseDeliveryDataApi({
   const serviceBody = await serviceResponse.text();
   console.log(
     `Data API service-role result probe: HTTP ${serviceResponse.status} ${safeDiagnosticBody(serviceBody)}`,
+  );
+}
+
+async function diagnosePrepareSendRpc({
+  supabaseUrl,
+  anonKey,
+  accessToken,
+  proposalId,
+  messageId,
+  suffix,
+}: {
+  supabaseUrl: string;
+  anonKey: string;
+  accessToken: string;
+  proposalId: string;
+  messageId: string;
+  suffix: string;
+}) {
+  const path = '/rpc/prepare_proposal_message_delivery';
+  const response = await fetch(`${normalizeUrl(supabaseUrl)}/rest/v1${path}`, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey,
+      authorization: `Bearer ${accessToken}`,
+      ...dataApiSchemaHeaders(path),
+      'content-type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({
+      p_proposal_id: proposalId,
+      p_message_id: messageId,
+      p_idempotency_key: `local-smoke-diagnostic-${suffix}`,
+      p_request_id: `local-smoke-diagnostic-${suffix}`,
+    }),
+  });
+  const body = await response.text();
+  console.error(
+    `Data API prepare_proposal_message_delivery diagnostic: HTTP ${response.status} ${safeDiagnosticBody(body)}`,
   );
 }
 
