@@ -20,10 +20,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: |
-          pnpm exec prettier --write apps/api/src/tools/proposal-message-delivery-local-smoke.ts
-          git diff -- apps/api/src/tools/proposal-message-delivery-local-smoke.ts
-          git diff --exit-code -- apps/api/src/tools/proposal-message-delivery-local-smoke.ts
+      - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
