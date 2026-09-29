@@ -176,7 +176,7 @@ begin
   end if;
 
   request_hash := encode(
-    public.digest(
+    extensions.digest(
       convert_to(
         concat_ws(':', p_proposal_id::text, p_message_id::text, message.approved_version_id::text),
         'UTF8'
@@ -392,7 +392,7 @@ begin
   end if;
 
   request_hash := encode(
-    public.digest(
+    extensions.digest(
       convert_to(
         concat_ws(':', p_proposal_id::text, p_message_id::text, message.approved_version_id::text, 'retry'),
         'UTF8'
