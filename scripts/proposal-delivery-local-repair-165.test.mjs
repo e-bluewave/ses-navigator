@@ -6,20 +6,29 @@ import { buildProposalDeliveryMigration165RepairSql } from './proposal-delivery-
 
 test('builds a narrow repair from the corrected Migration 165 source', async () => {
   const migrationSql = await readFile(
-    new URL('../supabase/migrations/165_proposal_message_delivery_rpc.sql', import.meta.url),
+    new URL(
+      '../supabase/migrations/165_proposal_message_delivery_rpc.sql',
+      import.meta.url,
+    ),
     'utf8',
   );
 
   const repairSql = buildProposalDeliveryMigration165RepairSql(migrationSql);
 
   assert.equal(
-    (repairSql.match(/create or replace function public\.prepare_proposal_message_delivery\(/gu) ?? [])
-      .length,
+    (
+      repairSql.match(
+        /create or replace function public\.prepare_proposal_message_delivery\(/gu,
+      ) ?? []
+    ).length,
     1,
   );
   assert.equal(
-    (repairSql.match(/create or replace function public\.prepare_proposal_message_retry\(/gu) ?? [])
-      .length,
+    (
+      repairSql.match(
+        /create or replace function public\.prepare_proposal_message_retry\(/gu,
+      ) ?? []
+    ).length,
     1,
   );
   assert.equal((repairSql.match(/extensions\.digest\(/gu) ?? []).length, 2);
