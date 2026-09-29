@@ -31,6 +31,7 @@ async function main() {
   log('1/9 Verify NORMAL LOCAL target');
   const status = readSupabaseStatus();
   assertLocalTarget(status);
+  cleanupStaleLocalSmokeResidue();
 
   const supabaseUrl = requiredStatusString(status, ['API_URL', 'api_url']);
   const anonKey = requiredStatusString(status, ['ANON_KEY', 'anon_key']);
@@ -219,7 +220,7 @@ async function main() {
     await app.close().catch(() => undefined);
     if (ids.tenantId) {
       try {
-        runPsql(`delete from app.tenants where id = '${ids.tenantId}'::uuid;`);
+        cleanupLocalSmokeTenant(ids.tenantId);
       } catch (error) {
         console.error(
           `Local fixture cleanup warning: ${
@@ -652,6 +653,34 @@ async function login({
     `Local auth login failed (HTTP ${response.status})`,
   );
   return body.access_token;
+}
+
+function cleanupStaleLocalSmokeResidue() {
+  runPsql(`
+delete from audit.audit_logs
+where tenant_id in (
+  select id
+  from app.tenants
+  where settings @> '{"local_smoke": true}'::jsonb
+    and code::text like 'smoke-%'
+);
+
+delete from app.tenants
+where settings @> '{"local_smoke": true}'::jsonb
+  and code::text like 'smoke-%';
+`);
+}
+
+function cleanupLocalSmokeTenant(tenantId: string) {
+  runPsql(`
+delete from audit.audit_logs
+where tenant_id = '${tenantId}'::uuid;
+
+delete from app.tenants
+where id = '${tenantId}'::uuid
+  and settings @> '{"local_smoke": true}'::jsonb
+  and code::text like 'smoke-%';
+`);
 }
 
 function runPsql(sql: string) {
