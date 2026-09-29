@@ -85,6 +85,99 @@ export class FakeProposalMessageDeliveryProvider implements ProposalMessageDeliv
   }
 }
 
+interface SmtpProposalMessageDeliveryProviderOptions {
+  host: string;
+  port: number;
+  secure: boolean;
+  username: string;
+  password: string;
+  sender: string;
+  transport?: SmtpTransport;
+}
+
+export interface SmtpTransportInput {
+  host: string;
+  port: number;
+  secure: boolean;
+  username: string;
+  password: string;
+  sender: string;
+  recipient: string;
+  subject: string;
+  bodyText: string;
+}
+
+export interface SmtpTransportResult {
+  accepted: boolean;
+  responseCode: string | null;
+  messageId: string | null;
+}
+
+export type SmtpTransport = (
+  input: SmtpTransportInput,
+) => Promise<SmtpTransportResult>;
+
+export class SmtpProposalMessageDeliveryProvider implements ProposalMessageDeliveryProvider {
+  readonly name = 'smtp';
+  readonly available: boolean;
+
+  private readonly options: SmtpProposalMessageDeliveryProviderOptions;
+
+  constructor(options: SmtpProposalMessageDeliveryProviderOptions) {
+    this.options = options;
+    this.available =
+      options.host.trim().length > 0 &&
+      Number.isInteger(options.port) &&
+      options.port > 0 &&
+      options.username.trim().length > 0 &&
+      options.password.length > 0 &&
+      options.sender.trim().length > 0 &&
+      typeof options.transport === 'function';
+  }
+
+  async deliver(
+    input: ProposalMessageDeliveryProviderInput,
+  ): Promise<ProposalMessageDeliveryProviderResult> {
+    if (!this.available || !this.options.transport) {
+      throw new Error('SMTP delivery provider is not configured');
+    }
+
+    try {
+      const result = await this.options.transport({
+        host: this.options.host,
+        port: this.options.port,
+        secure: this.options.secure,
+        username: this.options.username,
+        password: this.options.password,
+        sender: this.options.sender,
+        recipient: input.recipient.address,
+        subject: input.subject,
+        bodyText: input.bodyText,
+      });
+
+      if (!result.accepted) {
+        return failureResult(
+          result.responseCode,
+          'SMTP server rejected request',
+          result.responseCode ? { responseCode: result.responseCode } : null,
+        );
+      }
+
+      return {
+        status: 'accepted',
+        providerMessageId: result.messageId,
+        responseCode: result.responseCode,
+        responsePayload: result.responseCode
+          ? { responseCode: result.responseCode }
+          : null,
+        errorMessage: null,
+      };
+    } catch {
+      return failureResult(null, 'SMTP request failed', { stage: 'send' });
+    }
+  }
+}
+
 interface MicrosoftGraphProposalMessageDeliveryProviderOptions {
   tenantId: string;
   clientId: string;
@@ -334,6 +427,20 @@ export function createDefaultProposalMessageDeliveryProvider(): ProposalMessageD
 
   if (mode === 'fake' && !production) {
     return new FakeProposalMessageDeliveryProvider();
+  }
+  if (mode === 'smtp') {
+    const port = Number(process.env.SMTP_PORT ?? '');
+    return new SmtpProposalMessageDeliveryProvider({
+      host: process.env.SMTP_HOST ?? '',
+      port,
+      secure: process.env.SMTP_SECURE?.trim().toLowerCase() === 'true',
+      username: process.env.SMTP_USERNAME ?? '',
+      password: process.env.SMTP_PASSWORD ?? '',
+      sender: process.env.SMTP_SENDER ?? '',
+      // Runtime transport is intentionally injected by the API composition layer.
+      // Until configured, SMTP fails closed rather than risking an unintended send.
+      transport: undefined,
+    });
   }
   if (mode === 'microsoft_graph') {
     return new MicrosoftGraphProposalMessageDeliveryProvider({
