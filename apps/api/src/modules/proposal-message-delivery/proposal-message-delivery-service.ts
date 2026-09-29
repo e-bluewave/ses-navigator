@@ -1,4 +1,4 @@
-import { nodeSmtpTransport } from './smtp-transport.js';
+import { nodeSmtpTransport, SmtpResponseError } from './smtp-transport.js';
 
 export interface ProposalMessageDeliveryProviderInput {
   attemptId: string;
@@ -94,7 +94,7 @@ interface SmtpProposalMessageDeliveryProviderOptions {
   username: string;
   password: string;
   sender: string;
-  transport?: SmtpTransport;
+  transport?: SmtpTransport | undefined;
 }
 
 export interface SmtpTransportInput {
@@ -131,9 +131,11 @@ export class SmtpProposalMessageDeliveryProvider implements ProposalMessageDeliv
       options.host.trim().length > 0 &&
       Number.isInteger(options.port) &&
       options.port > 0 &&
+      options.port <= 65535 &&
+      typeof options.secure === 'boolean' &&
       options.username.trim().length > 0 &&
       options.password.length > 0 &&
-      options.sender.trim().length > 0 &&
+      /^[^<>\s\r\n@]+@[^<>\s\r\n@]+$/.test(options.sender) &&
       typeof options.transport === 'function';
   }
 
@@ -174,7 +176,16 @@ export class SmtpProposalMessageDeliveryProvider implements ProposalMessageDeliv
           : null,
         errorMessage: null,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof SmtpResponseError) {
+        return failureResult(
+          error.responseCode,
+          'SMTP server rejected request',
+          {
+            responseCode: error.responseCode,
+          },
+        );
+      }
       return failureResult(null, 'SMTP request failed', { stage: 'send' });
     }
   }
@@ -431,15 +442,20 @@ export function createDefaultProposalMessageDeliveryProvider(): ProposalMessageD
     return new FakeProposalMessageDeliveryProvider();
   }
   if (mode === 'smtp') {
-    const port = Number(process.env.SMTP_PORT ?? '');
+    const rawPort = process.env.SMTP_PORT ?? '';
+    const rawSecure = process.env.SMTP_SECURE?.trim().toLowerCase();
+    const port = /^\d{1,5}$/.test(rawPort) ? Number(rawPort) : NaN;
     return new SmtpProposalMessageDeliveryProvider({
       host: process.env.SMTP_HOST ?? '',
       port,
-      secure: process.env.SMTP_SECURE?.trim().toLowerCase() === 'true',
+      secure: rawSecure === 'true',
       username: process.env.SMTP_USERNAME ?? '',
       password: process.env.SMTP_PASSWORD ?? '',
       sender: process.env.SMTP_SENDER ?? '',
-      transport: nodeSmtpTransport,
+      transport:
+        rawSecure === 'true' || rawSecure === 'false'
+          ? nodeSmtpTransport
+          : undefined,
     });
   }
   if (mode === 'microsoft_graph') {

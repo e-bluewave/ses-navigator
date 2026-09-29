@@ -3,14 +3,22 @@ import {
   DisabledProposalMessageDeliveryProvider,
   FakeProposalMessageDeliveryProvider,
   MicrosoftGraphProposalMessageDeliveryProvider,
+  SmtpProposalMessageDeliveryProvider,
   createDefaultProposalMessageDeliveryProvider,
   type ProposalMessageDeliveryProviderInput,
 } from '../src/modules/proposal-message-delivery/proposal-message-delivery-service.js';
+import { SmtpResponseError } from '../src/modules/proposal-message-delivery/smtp-transport.js';
 
 type FetchLike = typeof fetch;
 
 const envKeys = [
   'MESSAGE_DELIVERY_PROVIDER',
+  'SMTP_HOST',
+  'SMTP_PORT',
+  'SMTP_SECURE',
+  'SMTP_USERNAME',
+  'SMTP_PASSWORD',
+  'SMTP_SENDER',
   'MICROSOFT_GRAPH_TENANT_ID',
   'MICROSOFT_GRAPH_CLIENT_ID',
   'MICROSOFT_GRAPH_CLIENT_SECRET',
@@ -306,4 +314,110 @@ describe('createDefaultProposalMessageDeliveryProvider', () => {
     );
     expect(provider.available).toBe(false);
   });
+});
+
+describe('SmtpProposalMessageDeliveryProvider', () => {
+  const smtpOptions = {
+    host: 'mail.example.com',
+    port: 587,
+    secure: false,
+    username: 'sender@example.com',
+    password: 'test-password-do-not-use',
+    sender: 'sender@example.com',
+  };
+
+  it('accepts SMTP success without exposing credentials', async () => {
+    const transport = vi.fn().mockResolvedValue({
+      accepted: true,
+      responseCode: '250',
+      messageId: '<id@example.com>',
+    });
+    const provider = new SmtpProposalMessageDeliveryProvider({
+      ...smtpOptions,
+      transport,
+    });
+    expect(provider.available).toBe(true);
+    const result = await provider.deliver(input);
+    expect(result).toMatchObject({
+      status: 'accepted',
+      responseCode: '250',
+      providerMessageId: '<id@example.com>',
+    });
+    expect(transport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        password: smtpOptions.password,
+        recipient: input.recipient.address,
+      }),
+    );
+    expect(JSON.stringify(result)).not.toContain(smtpOptions.password);
+  });
+
+  it.each(['535', '450', '550'])(
+    'records safe SMTP rejection %s',
+    async (code) => {
+      const transport = vi.fn().mockRejectedValue(new SmtpResponseError(code));
+      const provider = new SmtpProposalMessageDeliveryProvider({
+        ...smtpOptions,
+        transport,
+      });
+      await expect(provider.deliver(input)).resolves.toEqual({
+        status: 'failed',
+        providerMessageId: null,
+        responseCode: code,
+        responsePayload: { responseCode: code },
+        errorMessage: 'SMTP server rejected request',
+      });
+    },
+  );
+
+  it('redacts network errors', async () => {
+    const transport = vi
+      .fn()
+      .mockRejectedValue(new Error('test-password-do-not-use'));
+    const provider = new SmtpProposalMessageDeliveryProvider({
+      ...smtpOptions,
+      transport,
+    });
+    const result = await provider.deliver(input);
+    expect(result).toMatchObject({
+      status: 'failed',
+      responseCode: null,
+      errorMessage: 'SMTP request failed',
+    });
+    expect(JSON.stringify(result)).not.toContain(smtpOptions.password);
+  });
+
+  it.each([
+    { port: 0 },
+    { port: 65536 },
+    { host: '' },
+    { password: '' },
+    { sender: 'invalid' },
+    { transport: undefined },
+  ])('fails closed for invalid settings %o', async (overrides) => {
+    const provider = new SmtpProposalMessageDeliveryProvider({
+      ...smtpOptions,
+      transport: vi.fn(),
+      ...overrides,
+    });
+    expect(provider.available).toBe(false);
+    await expect(provider.deliver(input)).rejects.toThrow('not configured');
+  });
+
+  it.each([undefined, '', 'yes', 'TRUE-ish'])(
+    'fails closed for SMTP_SECURE=%s',
+    (secure) => {
+      process.env.MESSAGE_DELIVERY_PROVIDER = 'smtp';
+      process.env.SMTP_HOST = smtpOptions.host;
+      process.env.SMTP_PORT = String(smtpOptions.port);
+      process.env.SMTP_USERNAME = smtpOptions.username;
+      process.env.SMTP_PASSWORD = smtpOptions.password;
+      process.env.SMTP_SENDER = smtpOptions.sender;
+      if (secure === undefined) delete process.env.SMTP_SECURE;
+      else process.env.SMTP_SECURE = secure;
+      expect(createDefaultProposalMessageDeliveryProvider().available).toBe(
+        false,
+      );
+    },
+  );
 });
