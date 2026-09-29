@@ -738,6 +738,15 @@ function api(overrides: Partial<ProjectsApi> = {}): ProjectsApi {
     reviewProposalMessageDraft: vi.fn(() =>
       Promise.reject(new Error('not configured')),
     ),
+    sendProposalMessage: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    retryProposalMessage: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
+    getProposalMessageDelivery: vi.fn(() =>
+      Promise.reject(new Error('not configured')),
+    ),
     createProjectEngineerMatch: vi.fn(() =>
       Promise.reject(new Error('not configured')),
     ),
@@ -2251,15 +2260,22 @@ describe('App', () => {
         reviewRowVersion: 2,
         generatedTaskIds: ['22222222-3333-4333-8333-222222222222'],
       });
+    const getLatestInterviewSummary = vi
+      .fn<ProjectsApi['getLatestInterviewSummary']>()
+      .mockResolvedValue(null);
     render(
       <App
         auth={auth()}
         api={api({
           getInterview: vi.fn(() => Promise.resolve(completed)),
           createInterviewSummary,
+          getLatestInterviewSummary,
           reviewInterviewSummary,
         })}
       />,
+    );
+    await waitFor(() =>
+      expect(getLatestInterviewSummary).toHaveBeenCalledOnce(),
     );
     fireEvent.click(
       await screen.findByRole('button', { name: '面談を要約する' }),
@@ -2426,6 +2442,25 @@ describe('App', () => {
     const createProposalMessageDraft = vi.fn(() => Promise.resolve(created));
     const updateProposalMessageDraft = vi.fn(() => Promise.resolve(edited));
     const reviewProposalMessageDraft = vi.fn(() => Promise.resolve(approved));
+    const getProposalMessageDelivery =
+      vi.fn<ProjectsApi['getProposalMessageDelivery']>();
+    getProposalMessageDelivery.mockResolvedValue({
+      messageId: approved.id,
+      proposalId: ready.id,
+      status: 'approved',
+      sentAt: null,
+      approvedVersionId: approved.currentVersionId!,
+      rowVersion: approved.rowVersion,
+      recipients: approved.recipients.map((recipient, index) => ({
+        id: `30303030-3030-4030-8030-30303030303${index}`,
+        type: recipient.type,
+        name: recipient.name,
+        address: recipient.address,
+        deliveryStatus: 'pending',
+        attempts: [],
+      })),
+    });
+    const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
     window.history.replaceState({}, '', `/proposals/${ready.id}`);
     render(
       <App
@@ -2435,6 +2470,8 @@ describe('App', () => {
           createProposalMessageDraft,
           updateProposalMessageDraft,
           reviewProposalMessageDraft,
+          getProposalMessageDelivery,
+          sendProposalMessage,
         })}
       />,
     );
@@ -2456,8 +2493,9 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '現在版を承認' }));
     await waitFor(() => expect(reviewProposalMessageDraft).toHaveBeenCalled());
     expect(
-      await screen.findByText(/送信処理はまだ実行されていません/),
+      await screen.findByRole('button', { name: '承認済み本文を送信' }),
     ).toBeInTheDocument();
+    expect(sendProposalMessage).not.toHaveBeenCalled();
   });
   it('transitions proposal status with optimistic locking', async () => {
     window.history.replaceState({}, '', `/proposals/${proposal.id}`);

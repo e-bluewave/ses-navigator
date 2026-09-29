@@ -142,10 +142,11 @@
 - AI面談要約から生成されたタスクをマイタスクへ接続し、関連業務画面へ遷移できる導線
 - 会社・担当者・案件・技術者に紐づく営業活動履歴、次回対応タスク生成、タイムライン表示
 - 会社・技術者・案件の重複候補を横断表示し、重複／非重複／保留を人が判断するレビューキュー（実データmergeは後続）
+- 承認済み提案メッセージの送信準備、失敗履歴、失敗宛先だけの再送、配信試行履歴、提案`sent`遷移
 
 ## 現在作業中
 
-- MVP日次営業導線の継続拡充（次候補：提案の実送信本文と送信・再送・失敗履歴）
+- MVP日次営業導線の継続拡充（現在：Microsoft Graph実送信プロバイダ #167）
 
 # 開発進捗
 
@@ -206,7 +207,7 @@ docs/
 
 # 構成レビュー結果
 
-- Migration 001〜164：欠番なし、3桁連番のため辞書順と適用順が一致
+- Migration 001〜165：欠番なし、3桁連番のため辞書順と適用順が一致
 - `supabase/tests/data_api/`：検証SQL、PowerShell、手順書、レポートを配置済み
 - `ddl-initial`：Migration 001〜119を`Main`へマージ済み
 - `supabase/config.toml`：作成・`Main`反映済み
@@ -220,11 +221,21 @@ docs/
 
 # 次にやること
 
-1. 提案の実送信本文と送信・再送・失敗履歴を業務画面へ接続する
+1. Microsoft Graph実送信プロバイダ（#167）のMicrosoft 365 / Entra設定と実メールsmokeを完了する
 2. BP会社・担当者の評価、注意情報、得意領域を実装する
 3. メール・添付・CSV取込を段階的に実装する
 
 # 更新履歴
+
+## 2026-09-29
+
+- Migration 165で承認済み提案メッセージの送信準備、失敗宛先だけの再送、Service Role限定の配信結果記録、配信履歴参照RPCを実装
+- `proposal.send` + `message.send`、承認済み固定版、Idempotency-Key、追記型配信試行履歴、監査ログ、Transactional Outboxを接続
+- 提案詳細へ送信状態、宛先別状態、配信試行履歴、送信／再送操作を追加
+- NORMAL LOCALへMigration 165を適用し、`public.digest`解決不備を`extensions.digest`へ修正後、送信失敗→失敗宛先のみ再送→送信成功→提案`sent`をruntime smokeで確認
+- runtime smokeで未認証401、初回`failed`、再送`accepted`、最終message/proposal=`sent`、attempt 2件、配信試行監査2件、後片付けwarningなしを確認
+- restore-drill、Staging DB、Production DBには未接触
+- GitHub CI #590 PASS、Vercel staging / production preview Readyを確認
 
 ## 2026-09-25
 

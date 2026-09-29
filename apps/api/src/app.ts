@@ -82,6 +82,11 @@ import type { ProposalMessageDraftRepository } from './modules/proposal-message-
 import { registerProposalMessageDraftRoutes } from './modules/proposal-message-drafts/proposal-message-draft-routes.js';
 import { OpenAIProposalMessageComposer } from './modules/proposal-message-drafts/proposal-message-draft-service.js';
 import type { ProposalMessageComposer } from './modules/proposal-message-drafts/proposal-message-draft-service.js';
+import { SupabaseProposalMessageDeliveryRepository } from './modules/proposal-message-delivery/proposal-message-delivery-repository.js';
+import type { ProposalMessageDeliveryRepository } from './modules/proposal-message-delivery/proposal-message-delivery-repository.js';
+import { registerProposalMessageDeliveryRoutes } from './modules/proposal-message-delivery/proposal-message-delivery-routes.js';
+import { createDefaultProposalMessageDeliveryProvider } from './modules/proposal-message-delivery/proposal-message-delivery-service.js';
+import type { ProposalMessageDeliveryProvider } from './modules/proposal-message-delivery/proposal-message-delivery-service.js';
 import { SupabaseInterviewSummaryRepository } from './modules/interview-summaries/interview-summary-repository.js';
 import type { InterviewSummaryRepository } from './modules/interview-summaries/interview-summary-repository.js';
 import { registerInterviewSummaryRoutes } from './modules/interview-summaries/interview-summary-routes.js';
@@ -120,6 +125,8 @@ export interface AppDependencies {
   projectMatchExplainer?: ProjectMatchExplainer;
   proposalMessageDrafts?: ProposalMessageDraftRepository;
   proposalMessageComposer?: ProposalMessageComposer;
+  proposalMessageDeliveries?: ProposalMessageDeliveryRepository;
+  proposalMessageDeliveryProvider?: ProposalMessageDeliveryProvider;
   interviewSummaries?: InterviewSummaryRepository;
   interviewSummarizer?: InterviewSummarizer;
   tasks?: TaskRepository;
@@ -244,6 +251,13 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
     dependencies.proposalMessageDrafts ??
       new SupabaseProposalMessageDraftRepository(),
     dependencies.proposalMessageComposer ?? new OpenAIProposalMessageComposer(),
+  );
+  registerProposalMessageDeliveryRoutes(
+    app,
+    dependencies.proposalMessageDeliveries ??
+      new SupabaseProposalMessageDeliveryRepository(),
+    dependencies.proposalMessageDeliveryProvider ??
+      createDefaultProposalMessageDeliveryProvider(),
   );
   registerInterviewSummaryRoutes(
     app,

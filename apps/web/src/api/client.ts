@@ -115,6 +115,7 @@ import type {
   MyTaskUpdateResult,
   ListMyTasksQuery,
 } from './generated.js';
+import type { ProposalMessageDelivery } from './proposal-message-delivery-types.js';
 
 export interface ProjectsApi {
   listMyTasks(query?: ListMyTasksQuery): Promise<MyTaskList>;
@@ -314,6 +315,18 @@ export interface ProjectsApi {
     rowVersion: number,
     input: ProposalMessageDraftReviewInput,
   ): Promise<ProposalMessageDraft>;
+  sendProposalMessage(
+    proposalId: string,
+    messageId: string,
+  ): Promise<ProposalMessageDelivery>;
+  retryProposalMessage(
+    proposalId: string,
+    messageId: string,
+  ): Promise<ProposalMessageDelivery>;
+  getProposalMessageDelivery(
+    proposalId: string,
+    messageId: string,
+  ): Promise<ProposalMessageDelivery>;
   listEngineerCareerHistories(id: string): Promise<EngineerCareerHistoryList>;
   saveEngineerCareerHistory(
     id: string,
@@ -930,6 +943,29 @@ export function createProjectsApi(options: {
         'POST',
         input,
         rowVersion,
+      );
+    },
+    sendProposalMessage(proposalId, messageId) {
+      return send<ProposalMessageDelivery>(
+        `/proposals/${encodeURIComponent(proposalId)}/messages/${encodeURIComponent(messageId)}/send`,
+        'POST',
+        {},
+        undefined,
+        { 'idempotency-key': createIdempotencyKey() },
+      );
+    },
+    retryProposalMessage(proposalId, messageId) {
+      return send<ProposalMessageDelivery>(
+        `/proposals/${encodeURIComponent(proposalId)}/messages/${encodeURIComponent(messageId)}/retry`,
+        'POST',
+        {},
+        undefined,
+        { 'idempotency-key': createIdempotencyKey() },
+      );
+    },
+    getProposalMessageDelivery(proposalId, messageId) {
+      return get<ProposalMessageDelivery>(
+        `/proposals/${encodeURIComponent(proposalId)}/messages/${encodeURIComponent(messageId)}/delivery`,
       );
     },
     listEngineerCareerHistories(id) {

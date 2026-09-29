@@ -26,10 +26,14 @@ const reviewedGrants = [
   )
   .join('\n');
 
-const serviceGrant =
-  `revoke all on function public.${expectedServiceRoleRpcs[0]}() ` +
-  'from public, anon, authenticated, service_role;\n' +
-  `grant execute on function public.${expectedServiceRoleRpcs[0]}() to service_role;`;
+const serviceGrant = expectedServiceRoleRpcs
+  .map(
+    (name) =>
+      `revoke all on function public.${name}() ` +
+      'from public, anon, authenticated, service_role;\n' +
+      `grant execute on function public.${name}() to service_role;`,
+  )
+  .join('\n');
 
 test('accepts the API RPCs and reviewed role boundaries', () => {
   const result = validateDataApiRpcSurface({

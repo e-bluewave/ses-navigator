@@ -18,6 +18,21 @@ test('accepts Data API request files with explicit schema routing', () => {
   assert.deepEqual(result.failures, []);
 });
 
+test('accepts schema routing from a one-level api tools directory', () => {
+  const result = validateDataApiSchemaRouting([
+    {
+      name: 'tools/local-smoke.ts',
+      source: `import { dataApiSchemaHeaders } from '../shared/supabase-schema.js';
+fetch(\`https://example.test/rest/v1\${path}\`, {
+  headers: { ...dataApiSchemaHeaders(path) },
+});`,
+    },
+  ]);
+
+  assert.equal(result.status, 'DATA_API_SCHEMA_ROUTING_PASSED');
+  assert.deepEqual(result.failures, []);
+});
+
 test('rejects a Data API request without the shared import', () => {
   const result = validateDataApiSchemaRouting([
     {
