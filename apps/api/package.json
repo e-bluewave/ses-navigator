@@ -8,7 +8,8 @@
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke:proposal-delivery-local-runtime": "tsx src/tools/proposal-message-delivery-local-smoke.ts"
   },
   "dependencies": {
     "fastify": "^5.5.0"
