@@ -1,6 +1,10 @@
 import net from 'node:net';
 import tls from 'node:tls';
-import type { SmtpTransport, SmtpTransportInput, SmtpTransportResult } from './proposal-message-delivery-service.js';
+import type {
+  SmtpTransport,
+  SmtpTransportInput,
+  SmtpTransportResult,
+} from './proposal-message-delivery-service.js';
 
 type Socket = net.Socket | tls.TLSSocket;
 
@@ -69,7 +73,10 @@ export const nodeSmtpTransport: SmtpTransport = async (
 
 function waitConnected(socket: Socket, secure: boolean): Promise<void> {
   const event = secure ? 'secureConnect' : 'connect';
-  if ((!secure && !socket.connecting) || (secure && (socket as tls.TLSSocket).authorized)) {
+  if (
+    (!secure && !socket.connecting) ||
+    (secure && (socket as tls.TLSSocket).authorized)
+  ) {
     return Promise.resolve();
   }
   return new Promise((resolve, reject) => {
