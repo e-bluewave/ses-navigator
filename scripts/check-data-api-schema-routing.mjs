@@ -6,7 +6,10 @@ export function validateDataApiSchemaRouting(files) {
   const requestFiles = files.filter((file) => file.source.includes('/rest/v1'));
   const missingImport = requestFiles
     .filter(
-      (file) => !file.source.includes("from '../../shared/supabase-schema.js'"),
+      (file) =>
+        !/from\s+['"][^'"]*shared\/supabase-schema\.js['"]/u.test(
+          file.source,
+        ),
     )
     .map((file) => file.name)
     .sort();
