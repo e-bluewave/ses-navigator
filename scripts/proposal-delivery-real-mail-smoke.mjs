@@ -11,6 +11,7 @@ const REQUIRED_VARIABLES = [
   'SESN_EXPECTED_RECIPIENTS',
   'SESN_TARGET_ENVIRONMENT',
   'SESN_REAL_SEND_CONFIRM',
+  'SESN_EXPECTED_PROVIDER',
 ];
 
 const UUID_RE =
@@ -33,6 +34,11 @@ export async function runProposalDeliveryRealMailSmoke({
   if (env.SESN_REAL_SEND_CONFIRM !== CONFIRM_TEXT) {
     throw new Error('Explicit real mail confirmation is required');
   }
+  const expectedProvider = env.SESN_EXPECTED_PROVIDER.trim().toLowerCase();
+  if (!['smtp', 'microsoft_graph'].includes(expectedProvider)) {
+    throw new Error('Expected provider must be smtp or microsoft_graph');
+  }
+  const expectedCode = expectedProvider === 'smtp' ? '250' : '202';
   if (
     !UUID_RE.test(env.SESN_PROPOSAL_ID) ||
     !UUID_RE.test(env.SESN_MESSAGE_ID)
@@ -117,8 +123,8 @@ export async function runProposalDeliveryRealMailSmoke({
       );
     }
 
-    assertMicrosoftGraphAccepted(sent);
-    log('Microsoft Graph delivery attempt accepted');
+    assertProviderAccepted(sent, expectedProvider, expectedCode);
+    log('Delivery attempt accepted');
 
     log('4/5 Re-read delivery history');
     const afterResponse = await fetchImpl(deliveryUrl, {
@@ -130,14 +136,14 @@ export async function runProposalDeliveryRealMailSmoke({
         `Delivery history read failed (HTTP ${afterResponse.status}, code ${safeCode(after)})`,
       );
     }
-    assertMicrosoftGraphAccepted(after);
+    assertProviderAccepted(after, expectedProvider, expectedCode);
 
     const result = {
       status: 'PROPOSAL_DELIVERY_REAL_MAIL_SMOKE_PASSED',
       targetEnvironment: 'Staging',
       recipientCount: actualRecipients.length,
-      provider: 'microsoft_graph',
-      responseCode: '202',
+      provider: expectedProvider,
+      responseCode: expectedCode,
       messageStatus: after.status,
     };
     log(JSON.stringify(result, null, 2));
@@ -154,7 +160,7 @@ export async function runProposalDeliveryRealMailSmoke({
   }
 }
 
-function assertMicrosoftGraphAccepted(delivery) {
+function assertProviderAccepted(delivery, provider, code) {
   const recipients = Array.isArray(delivery?.recipients)
     ? delivery.recipients
     : [];
@@ -168,13 +174,13 @@ function assertMicrosoftGraphAccepted(delivery) {
       : [];
     const latest = attempts.at(-1);
     return (
-      latest?.provider === 'microsoft_graph' &&
-      latest?.responseCode === '202' &&
+      latest?.provider === provider &&
+      latest?.responseCode === code &&
       (latest?.status === 'accepted' || latest?.status === 'delivered')
     );
   });
   if (!accepted) {
-    throw new Error('Microsoft Graph accepted attempt was not recorded');
+    throw new Error('Expected provider accepted attempt was not recorded');
   }
 }
 

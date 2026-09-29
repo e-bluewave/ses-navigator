@@ -16,6 +16,7 @@ const env = {
   SESN_EXPECTED_RECIPIENTS: 'recipient@example.com',
   SESN_TARGET_ENVIRONMENT: 'Staging',
   SESN_REAL_SEND_CONFIRM: 'SEND_APPROVED_TEST_EMAIL',
+  SESN_EXPECTED_PROVIDER: 'smtp',
 };
 
 function approvedDelivery(status = 'approved') {
@@ -32,8 +33,8 @@ function approvedDelivery(status = 'approved') {
             : [
                 {
                   status: 'accepted',
-                  provider: 'microsoft_graph',
-                  responseCode: '202',
+                  provider: 'smtp',
+                  responseCode: '250',
                 },
               ],
       },

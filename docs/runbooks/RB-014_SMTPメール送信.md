@@ -26,7 +26,7 @@ SMTPの `250` はサーバーによる受け付けを表し、宛先への最終
 2. 責任者の承認を受けてからStagingに上記設定を登録する。秘密値を画面共有やログへ表示しない。
 3. Staging deploymentがReadyになり、API serverだけが設定を参照することを確認する。
 4. 送信先と承認済みメッセージを責任者が指定し、**実メール送信の個別承認**を受ける。
-5. ガード付き `pnpm smoke:proposal-delivery-real-mail` を使う。Staging指定、宛先の完全一致、明示確認文字列を満たした場合だけ送信する。設定方法はスクリプト内の必須環境変数を参照する。
+5. ガード付き `pnpm smoke:proposal-delivery-real-mail` を使う。`SESN_EXPECTED_PROVIDER=smtp`、Staging指定、宛先の完全一致、明示確認文字列を満たした場合だけ送信する。設定方法はスクリプト内の必須環境変数を参照する。
 6. 配信履歴のattemptが`accepted`でresponse codeが`250`、受信側で実メールが届くことを確認する。重複送信と宛先不一致時の防止も確認する。
 7. SMTPパスワードやSMTPサーバー応答本文が履歴・API応答・ログ・browser bundleへ露出しないことを確認する。
 
