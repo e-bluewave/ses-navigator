@@ -76,10 +76,7 @@ test('verifies recipients, sends once, confirms history, and logs out', async ()
 
   assert.equal(result.status, 'PROPOSAL_DELIVERY_REAL_MAIL_SMOKE_PASSED');
   assert.equal(result.recipientCount, 1);
-  assert.equal(
-    calls.filter(({ url }) => url.endsWith('/send')).length,
-    1,
-  );
+  assert.equal(calls.filter(({ url }) => url.endsWith('/send')).length, 1);
   const send = calls.find(({ url }) => url.endsWith('/send'));
   assert.equal(
     send.options.headers['idempotency-key'],
@@ -113,7 +110,10 @@ test('never sends when expected recipients do not match', async () => {
     /do not match/u,
   );
 
-  assert.equal(calls.some((url) => url.endsWith('/send')), false);
+  assert.equal(
+    calls.some((url) => url.endsWith('/send')),
+    false,
+  );
   assert.match(calls.at(-1), /\/auth\/v1\/logout$/u);
 });
 
@@ -175,7 +175,10 @@ test('requires an approved message before sending', async () => {
     /must be approved/u,
   );
 
-  assert.equal(urls.some((url) => url.endsWith('/send')), false);
+  assert.equal(
+    urls.some((url) => url.endsWith('/send')),
+    false,
+  );
 });
 
 function jsonResponse(status, body) {
