@@ -120,7 +120,10 @@ async function main() {
       'Recipient must be sent after retry',
     );
     const retryAttempts = retryBody.recipients?.[0]?.attempts ?? [];
-    assert(retryAttempts.length === 2, 'Delivery history must contain 2 attempts');
+    assert(
+      retryAttempts.length === 2,
+      'Delivery history must contain 2 attempts',
+    );
     assert(
       retryAttempts.some(
         (attempt) => attempt.attemptNo === 2 && attempt.status === 'accepted',
@@ -134,7 +137,10 @@ async function main() {
       url: `/api/v1/proposals/${ids.proposalId}/messages/${ids.messageId}/delivery`,
       headers: { authorization: `Bearer ${accessToken}` },
     });
-    assert(delivery.statusCode === 200, describeFailure('delivery read', delivery));
+    assert(
+      delivery.statusCode === 200,
+      describeFailure('delivery read', delivery),
+    );
     const deliveryBody = delivery.json<DeliveryBody>();
     assert(deliveryBody.status === 'sent', 'Delivery read must report sent');
     assert(
@@ -188,7 +194,9 @@ async function main() {
         runPsql(`delete from app.tenants where id = '${ids.tenantId}'::uuid;`);
       } catch (error) {
         console.error(
-          `Local fixture cleanup warning: ${error instanceof Error ? error.message : 'unknown error'}`,
+          `Local fixture cleanup warning: ${
+            error instanceof Error ? error.message : 'unknown error'
+          }`,
         );
       }
     }
@@ -199,7 +207,9 @@ async function main() {
         userId,
       }).catch((error: unknown) => {
         console.error(
-          `Local auth cleanup warning: ${error instanceof Error ? error.message : 'unknown error'}`,
+          `Local auth cleanup warning: ${
+            error instanceof Error ? error.message : 'unknown error'
+          }`,
         );
       });
     }
@@ -220,12 +230,17 @@ function readSupabaseStatus(): SupabaseStatus {
 }
 
 function assertLocalTarget(status: SupabaseStatus) {
-  const apiUrl = normalizeUrl(requiredStatusString(status, ['API_URL', 'api_url']));
+  const apiUrl = normalizeUrl(
+    requiredStatusString(status, ['API_URL', 'api_url']),
+  );
   assert(apiUrl === EXPECTED.apiUrl, `Unexpected API URL: ${apiUrl}`);
 
   const dbUrl = requiredStatusString(status, ['DB_URL', 'db_url']);
   const url = new URL(dbUrl);
-  assert(url.hostname === EXPECTED.dbHost, `Unexpected DB host: ${url.hostname}`);
+  assert(
+    url.hostname === EXPECTED.dbHost,
+    `Unexpected DB host: ${url.hostname}`,
+  );
   assert(url.port === EXPECTED.dbPort, `Unexpected DB port: ${url.port}`);
 
   const containers = run('docker', ['ps', '--format', '{{.Names}}'])
@@ -384,19 +399,22 @@ async function createLocalUser({
   email: string;
   password: string;
 }) {
-  const response = await fetch(`${normalizeUrl(supabaseUrl)}/auth/v1/admin/users`, {
+  const response = await fetch(
+    `${normalizeUrl(supabaseUrl)}/auth/v1/admin/users`,
+    {
     method: 'POST',
     headers: {
       apikey: serviceRoleKey,
       authorization: `Bearer ${serviceRoleKey}`,
       'content-type': 'application/json',
     },
-    body: JSON.stringify({
-      email,
-      password,
-      email_confirm: true,
-    }),
-  });
+      body: JSON.stringify({
+        email,
+        password,
+        email_confirm: true,
+      }),
+    },
+  );
   const body = (await readJson(response)) as { id?: unknown };
   assert(
     response.ok && typeof body.id === 'string',
@@ -530,7 +548,10 @@ async function readJson(response: Response) {
   }
 }
 
-function describeFailure(label: string, response: { statusCode: number; body: string }) {
+function describeFailure(
+  label: string,
+  response: { statusCode: number; body: string },
+) {
   return `${label} failed (HTTP ${response.statusCode}): ${response.body.slice(0, 500)}`;
 }
 
