@@ -14,16 +14,32 @@ const env = {
   SESN_PROPOSAL_ID: proposalId,
   SESN_MESSAGE_ID: messageId,
   SESN_EXPECTED_RECIPIENTS: 'recipient@example.com',
+  SESN_EXPECTED_SUBJECT: 'Approved test subject',
+  SESN_EXPECTED_BODY: 'Approved test body',
   SESN_TARGET_ENVIRONMENT: 'Staging',
   SESN_REAL_SEND_CONFIRM: 'SEND_APPROVED_TEST_EMAIL',
   SESN_EXPECTED_PROVIDER: 'smtp',
 };
+
+function approvedDraft(overrides = {}) {
+  return {
+    id: messageId,
+    proposalId,
+    status: 'approved',
+    approvedVersionId: '33333333-3333-4333-8333-333333333333',
+    subject: env.SESN_EXPECTED_SUBJECT,
+    bodyText: env.SESN_EXPECTED_BODY,
+    recipients: [{ address: 'recipient@example.com' }],
+    ...overrides,
+  };
+}
 
 function approvedDelivery(status = 'approved') {
   return {
     proposalId,
     messageId,
     status,
+    approvedVersionId: approvedDraft().approvedVersionId,
     recipients: [
       {
         address: 'recipient@example.com',
@@ -56,6 +72,9 @@ test('verifies recipients, sends once, confirms history, and logs out', async ()
     }
     if (url.endsWith('/send')) {
       return jsonResponse(200, approvedDelivery('sent'));
+    }
+    if (url.endsWith('/message-drafts/latest')) {
+      return jsonResponse(200, approvedDraft());
     }
     if (url.endsWith('/delivery')) {
       deliveryReads += 1;
@@ -96,6 +115,9 @@ test('never sends when expected recipients do not match', async () => {
     if (url.endsWith('/delivery')) {
       return jsonResponse(200, approvedDelivery('approved'));
     }
+    if (url.endsWith('/message-drafts/latest')) {
+      return jsonResponse(200, approvedDraft());
+    }
     return jsonResponse(204, {});
   };
 
@@ -108,7 +130,7 @@ test('never sends when expected recipients do not match', async () => {
       fetchImpl,
       log: () => undefined,
     }),
-    /do not match/u,
+    /does not match/u,
   );
 
   assert.equal(
@@ -116,6 +138,47 @@ test('never sends when expected recipients do not match', async () => {
     false,
   );
   assert.match(calls.at(-1), /\/auth\/v1\/logout$/u);
+});
+
+test('never sends if approved content differs or attempts already exist', async () => {
+  for (const mismatch of ['subject', 'bodyText', 'recipients', 'attempts']) {
+    const calls = [];
+    const fetchImpl = async (url) => {
+      calls.push(url);
+      if (url.includes('/token?')) {
+        return jsonResponse(200, { access_token: 'access-token' });
+      }
+      if (url.endsWith('/message-drafts/latest')) {
+        const overrides = {
+          subject: { subject: 'different' },
+          bodyText: { bodyText: 'different' },
+          recipients: {
+            recipients: [
+              { address: 'recipient@example.com' },
+              { address: 'other@example.com' },
+            ],
+          },
+        };
+        return jsonResponse(200, approvedDraft(overrides[mismatch] ?? {}));
+      }
+      if (url.endsWith('/delivery')) {
+        const delivery = approvedDelivery();
+        if (mismatch === 'attempts') {
+          delivery.recipients[0].attempts = [{ status: 'failed' }];
+        }
+        return jsonResponse(200, delivery);
+      }
+      return jsonResponse(204, {});
+    };
+    await assert.rejects(
+      runProposalDeliveryRealMailSmoke({
+        env,
+        fetchImpl,
+        log: () => undefined,
+      }),
+    );
+    assert.equal(calls.some((url) => url.endsWith('/send')), false, mismatch);
+  }
 });
 
 test('never authenticates without explicit real-send confirmation', async () => {
@@ -160,6 +223,9 @@ test('requires an approved message before sending', async () => {
     urls.push(url);
     if (url.includes('/token?')) {
       return jsonResponse(200, { access_token: 'access-token' });
+    }
+    if (url.endsWith('/message-drafts/latest')) {
+      return jsonResponse(200, approvedDraft());
     }
     if (url.endsWith('/delivery')) {
       return jsonResponse(200, approvedDelivery('failed'));
