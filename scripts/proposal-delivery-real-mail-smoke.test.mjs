@@ -140,7 +140,7 @@ test('never sends when expected recipients do not match', async () => {
   assert.match(calls.at(-1), /\/auth\/v1\/logout$/u);
 });
 
-test('never sends if approved content differs or attempts already exist', async () => {
+test('rejects content mismatches and existing attempts', async () => {
   for (const mismatch of ['subject', 'bodyText', 'recipients', 'attempts']) {
     const calls = [];
     const fetchImpl = async (url) => {
