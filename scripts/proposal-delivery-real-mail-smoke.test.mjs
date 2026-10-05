@@ -177,7 +177,11 @@ test('rejects content mismatches and existing attempts', async () => {
         log: () => undefined,
       }),
     );
-    assert.equal(calls.some((url) => url.endsWith('/send')), false, mismatch);
+    assert.equal(
+      calls.some((url) => url.endsWith('/send')),
+      false,
+      mismatch,
+    );
   }
 });
 
