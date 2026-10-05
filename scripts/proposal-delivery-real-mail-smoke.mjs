@@ -9,6 +9,8 @@ const REQUIRED_VARIABLES = [
   'SESN_PROPOSAL_ID',
   'SESN_MESSAGE_ID',
   'SESN_EXPECTED_RECIPIENTS',
+  'SESN_EXPECTED_SUBJECT',
+  'SESN_EXPECTED_BODY',
   'SESN_TARGET_ENVIRONMENT',
   'SESN_REAL_SEND_CONFIRM',
   'SESN_EXPECTED_PROVIDER',
@@ -49,8 +51,11 @@ export async function runProposalDeliveryRealMailSmoke({
   const expectedRecipients = normalizeExpectedRecipients(
     env.SESN_EXPECTED_RECIPIENTS,
   );
-  if (expectedRecipients.length === 0) {
-    throw new Error('At least one expected recipient is required');
+  if (
+    expectedRecipients.length !== 1 ||
+    env.SESN_EXPECTED_RECIPIENTS.split(',').length !== 1
+  ) {
+    throw new Error('Exactly one expected recipient is required');
   }
 
   const supabaseUrl = withoutTrailingSlash(env.SESN_SUPABASE_URL);
@@ -81,9 +86,32 @@ export async function runProposalDeliveryRealMailSmoke({
 
   const accessToken = tokenBody.access_token;
   const deliveryUrl = `${apiUrl}/api/v1/proposals/${env.SESN_PROPOSAL_ID}/messages/${env.SESN_MESSAGE_ID}/delivery`;
+  const draftUrl = `${apiUrl}/api/v1/proposals/${env.SESN_PROPOSAL_ID}/ai/message-drafts/latest`;
 
   try {
-    log('2/5 Read approved delivery target');
+    log('2/5 Verify approved message and delivery target');
+    const draftResponse = await fetchImpl(draftUrl, {
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    const draft = await readJson(draftResponse);
+    if (!draftResponse.ok) {
+      throw new Error(
+        `Message read failed (HTTP ${draftResponse.status}, code ${safeCode(draft)})`,
+      );
+    }
+    if (
+      draft?.id !== env.SESN_MESSAGE_ID ||
+      draft?.proposalId !== env.SESN_PROPOSAL_ID ||
+      draft?.status !== 'approved' ||
+      !draft?.approvedVersionId ||
+      draft.subject !== env.SESN_EXPECTED_SUBJECT ||
+      draft.bodyText !== env.SESN_EXPECTED_BODY ||
+      !exactlyOneRecipient(draft.recipients, expectedRecipients[0])
+    ) {
+      throw new Error(
+        'Approved message does not match expected identity, content, or recipient',
+      );
+    }
     const beforeResponse = await fetchImpl(deliveryUrl, {
       headers: { authorization: `Bearer ${accessToken}` },
     });
@@ -93,14 +121,22 @@ export async function runProposalDeliveryRealMailSmoke({
         `Delivery read failed (HTTP ${beforeResponse.status}, code ${safeCode(before)})`,
       );
     }
-    if (before.status !== 'approved') {
+    if (
+      before.messageId !== env.SESN_MESSAGE_ID ||
+      before.proposalId !== env.SESN_PROPOSAL_ID ||
+      before.approvedVersionId !== draft.approvedVersionId ||
+      before.status !== 'approved'
+    ) {
       throw new Error('Message must be approved before real mail smoke');
     }
 
-    const actualRecipients = normalizeDeliveryRecipients(before.recipients);
-    if (!sameStrings(actualRecipients, expectedRecipients)) {
+    if (!exactlyOneRecipient(before.recipients, expectedRecipients[0])) {
       throw new Error('Delivery recipients do not match expected recipients');
     }
+    if (before.recipients[0].attempts?.length !== 0) {
+      throw new Error('Delivery already has an attempt');
+    }
+    const actualRecipients = expectedRecipients;
     log(
       `Recipient verification passed (${actualRecipients.length} recipient(s))`,
     );
@@ -190,26 +226,16 @@ function normalizeExpectedRecipients(value) {
   ].sort();
 }
 
-function normalizeDeliveryRecipients(recipients) {
-  if (!Array.isArray(recipients)) return [];
-  return [
-    ...new Set(
-      recipients
-        .map((recipient) => normalizeAddress(recipient?.address))
-        .filter(Boolean),
-    ),
-  ].sort();
+function exactlyOneRecipient(recipients, expected) {
+  return (
+    Array.isArray(recipients) &&
+    recipients.length === 1 &&
+    normalizeAddress(recipients[0]?.address) === expected
+  );
 }
 
 function normalizeAddress(value) {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
-}
-
-function sameStrings(left, right) {
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index])
-  );
 }
 
 async function readJson(response) {
