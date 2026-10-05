@@ -21,8 +21,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
-      - if: failure()
-        run: pnpm exec prettier scripts/proposal-delivery-real-mail-smoke.test.mjs | diff -u scripts/proposal-delivery-real-mail-smoke.test.mjs -
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
