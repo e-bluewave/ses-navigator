@@ -1,6 +1,6 @@
 # Read-only preparation for PR #168. This file has no mail-send operation.
 param(
-  [string]$Deployment = 'https://ses-navigator-staging-green.vercel.app',
+  [string]$Deployment = 'https://ses-navigator-staging-3y5w7tmtx-ebw-s-projects.vercel.app',
   [int]$MaxPages = 10
 )
 
@@ -31,7 +31,7 @@ function Get-ProtectedJson([string]$Path, [string]$AccessToken) {
 }
 
 try {
-  if ($Deployment -ne 'https://ses-navigator-staging-green.vercel.app' -or $MaxPages -lt 1 -or $MaxPages -gt 10) {
+  if ($Deployment -ne 'https://ses-navigator-staging-3y5w7tmtx-ebw-s-projects.vercel.app' -or $MaxPages -lt 1 -or $MaxPages -gt 10) {
     throw 'Stagingの固定URLと1〜10ページの範囲で実行してください。'
   }
   if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) { throw 'Vercel CLIが必要です。' }
