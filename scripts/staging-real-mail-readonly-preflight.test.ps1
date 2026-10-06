@@ -46,7 +46,6 @@ try {
 
   function vercel {
     if ($script:bootstrapMode) {
-      Write-Host "Bootstrap synthetic argv: first5=$($args[0..4] -join ',') child=$($args -contains '-InternalChild') file=$($args -contains '-File') count=$($args.Count)"
       if (($args[0..4] -join ' ') -cne 'env run -e production --' -or
           -not ($args -contains '-InternalChild') -or -not ($args -contains '-File')) {
         throw 'Bootstrap selected the wrong Vercel target or child command.'
