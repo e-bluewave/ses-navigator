@@ -1,4 +1,4 @@
-# Read-only preparation for PR #168. This file has no mail-send operation.
+﻿# Read-only preparation for PR #168. This file has no mail-send operation.
 param(
   [string]$Deployment = 'https://ses-navigator-staging-3y5w7tmtx-ebw-s-projects.vercel.app',
   [int]$MaxPages = 10
