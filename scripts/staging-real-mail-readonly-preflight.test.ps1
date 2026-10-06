@@ -41,8 +41,22 @@ try {
   $messageId = '22222222-2222-4222-8222-222222222222'
   $script:mode = 'valid'
   $script:requests = @()
+  $script:bootstrapMode = $false
+  $script:bootstrapVerified = $false
 
   function vercel {
+    if ($script:bootstrapMode) {
+      if (($args[0..4] -join ' ') -cne 'env run -e production --' -or
+          -not ($args -contains '-InternalChild') -or -not ($args -contains '-File')) {
+        throw 'Bootstrap selected the wrong Vercel target or child command.'
+      }
+      Assert-ProjectBinding (Get-Location).Path
+      $fileIndex = [array]::IndexOf($args, '-File')
+      if ([string]$args[$fileIndex + 1] -cne $preflight) { throw 'Bootstrap did not execute the pinned script.' }
+      $script:bootstrapVerified = $true
+      $global:LASTEXITCODE = 0
+      return
+    }
     if ($args[0] -cne 'curl' -or ($args -join ' ') -match '(^| )(-X|--request|-d|--data)( |$)') {
       throw 'A non-GET API operation was attempted.'
     }
@@ -84,6 +98,9 @@ try {
   Assert-Throws { Invoke-ReadOnlyChild 'test-nonce' 1 }
   $script:mode = 'wrong-body'
   Assert-Throws { Invoke-ReadOnlyChild 'test-nonce' 1 }
+  $script:bootstrapMode = $true
+  Invoke-Bootstrap 1
+  if (-not $script:bootstrapVerified) { throw 'Bootstrap was not exercised.' }
   Write-Host 'Windows PowerShell read-only preflight tests passed.'
 } finally {
   Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
