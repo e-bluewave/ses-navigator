@@ -28,7 +28,7 @@ SMTPの `250` はサーバーによる受け付けを表し、宛先への最終
 4. 送信先と承認済みメッセージを責任者が指定し、**実メール送信の個別承認**を受ける。
 5. ガード付き `pnpm smoke:proposal-delivery-real-mail` を使う。`SESN_EXPECTED_PROVIDER=smtp`、Staging指定、宛先1件、`SESN_EXPECTED_SUBJECT` と `SESN_EXPECTED_BODY` の完全一致、承認版IDの一致、既存attempt 0件、明示確認文字列を満たした場合だけ送信する。期待本文には改行も含めて正確に設定する。設定方法はスクリプト内の必須環境変数を参照する。Vercel Deployment Protectionが有効なURLには通常の`fetch`だけでは到達できないため、保護を通過する認証済み実行経路を別途確立するまでsmokeを実行しない。
 6. 送信前の読み取り専用確認には `scripts/staging-real-mail-readonly-preflight.ps1` を使う。StagingのSupabase URL・publishable key・権限付きユーザーをローカルで入力し、Vercel CLIのログイン済みセッションで保護されたStaging APIをGETする。proposal一覧から最新draftを走査し、件名・本文・宛先1件・承認版・deliveryのattempt 0件を照合し、一致するIDが一意の場合だけ表示する。最大2000件のproposalを走査し、上限到達や認証失敗時は停止する。このスクリプトに送信操作はない。Vercel CLIに渡すAuth bearerは一時的にローカルの子プロセス引数となるため、共用PCやプロセス引数を記録する環境では実行しない。CLIの応答内容や資格情報をログへ保存しない。WindowsでのCLI互換性は実行時に確認する。
-7. 本番の実送信smokeはVercel Deployment Protectionを通常のfetchで通過できない。保護を無効化せず、別途認証済みの中継経路を検証してから実施する。読み取り確認の成功だけで送信経路が確立したとは扱わない。
+7. Stagingの実メール送信smokeはVercel Deployment Protectionを通常のfetchで通過できない。保護を無効化せず、別途認証済みの中継経路を検証してから実施する。読み取り確認の成功だけで送信経路が確立したとは扱わない。
 8. 配信履歴のattemptが`accepted`でresponse codeが`250`、受信側で実メールが届くことを確認する。重複送信と宛先不一致時の防止も確認する。
 9. SMTPパスワードやSMTPサーバー応答本文が履歴・API応答・ログ・browser bundleへ露出しないことを確認する。
 
