@@ -54,8 +54,8 @@ try {
       return (@{ id = $messageId; proposalId = $proposalId; status = 'approved'; approvedVersionId = 'v1'; subject = $expectedSubject; bodyText = $(if ($script:mode -eq 'wrong-body') { 'wrong' } else { $expectedBody }); recipients = @(@{ address = $expectedTo }) } | ConvertTo-Json -Depth 8 -Compress)
     }
     if ($url.EndsWith('/delivery')) {
-      $attempts = if ($script:mode -eq 'attempted') { @(@{ status = 'accepted' }) } else { @() }
-      return (@{ proposalId = $proposalId; messageId = $messageId; status = 'approved'; approvedVersionId = 'v1'; recipients = @(@{ address = $expectedTo; attempts = $attempts }) } | ConvertTo-Json -Depth 8 -Compress)
+      $attemptsJson = if ($script:mode -eq 'attempted') { '[{"status":"accepted"}]' } else { '[]' }
+      return ('{"proposalId":"' + $proposalId + '","messageId":"' + $messageId + '","status":"approved","approvedVersionId":"v1","recipients":[{"address":"' + $expectedTo + '","attempts":' + $attemptsJson + '}]}')
     }
     if ($url.Contains('/api/v1/proposals?')) {
       return (@{ items = @(@{ id = $proposalId }); page = @{ nextCursor = $null } } | ConvertTo-Json -Depth 8 -Compress)
