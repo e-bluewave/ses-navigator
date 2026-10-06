@@ -1,0 +1,17 @@
+name: Staging Read-Only PowerShell
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-readonly:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse and exercise safe staging preflight with synthetic responses
+        shell: powershell
+        run: .\scripts\staging-real-mail-readonly-preflight.test.ps1
