@@ -146,7 +146,7 @@ function Invoke-Bootstrap([int]$PageLimit) {
     Assert-ProjectBinding $root
     Push-Location $root
     try {
-      & vercel env run -e production -- powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptFilePath -InternalChild -Nonce $env:SESN_STAGING_PREFLIGHT_NONCE -MaxPages $PageLimit
+      & vercel env run -e production '--' powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptFilePath -InternalChild -Nonce $env:SESN_STAGING_PREFLIGHT_NONCE -MaxPages $PageLimit
       if ($LASTEXITCODE -ne 0) { throw 'Staging読み取り確認を完了できませんでした。' }
     } finally { Pop-Location }
   } finally {
