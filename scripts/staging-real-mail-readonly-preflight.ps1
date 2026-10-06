@@ -1,6 +1,7 @@
 ﻿# Read-only preparation for PR #168. This file has no mail-send operation.
 param(
-  [string]$Deployment = 'https://ses-navigator-staging-3y5w7tmtx-ebw-s-projects.vercel.app',
+  [switch]$InternalChild,
+  [string]$Nonce,
   [int]$MaxPages = 10
 )
 
@@ -10,19 +11,39 @@ $expectedTo = 'info@e-bluewave.com'
 $expectedSubject = 'SES Navigator SMTP Staging Test'
 $expectedBody = "SES Navigator Staging環境からのSMTP送信テストです。`n受信確認用のテストメールです。"
 $uuid = '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+$Deployment = 'https://ses-navigator-staging-3y5w7tmtx-ebw-s-projects.vercel.app'
+$stagingProjectId = 'prj_gpgM7keccxqbJpZssLH5UOBSb0OU'
+$stagingOrgId = 'team_Wd9vCeAN0Q0MZCaqKXtVjRRw'
+$scriptFilePath = $PSCommandPath
 
-function Assert-SafeEndpoint([string]$Url) {
-  $uri = [uri]$Url
-  if ($uri.Scheme -ne 'https' -or $uri.UserInfo -or $uri.Query -or $uri.Fragment) {
-    throw 'HTTPSのURLのみ指定してください。'
+function Assert-ProjectBinding([string]$Root) {
+  $file = Join-Path $Root '.vercel/project.json'
+  if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw '固定Stagingプロジェクトのリンクがありません。' }
+  $binding = Get-Content -LiteralPath $file -Raw -Encoding UTF8 | ConvertFrom-Json
+  if ($binding.projectId -cne $stagingProjectId -or $binding.orgId -cne $stagingOrgId) {
+    throw 'VercelプロジェクトがStagingと一致しません。'
   }
-  return $uri.AbsoluteUri.TrimEnd('/')
+}
+
+function Assert-StagingEnvironment([string]$Url, [string]$Key, [string]$Provider,
+    [string]$HostName, [string]$Port, [string]$Secure) {
+  $uri = $null
+  if (-not [uri]::TryCreate($Url, [uriKind]::Absolute, [ref]$uri) -or
+      $uri.Scheme -cne 'https' -or $uri.UserInfo -or $uri.Query -or $uri.Fragment -or
+      $uri.AbsolutePath -ne '/' -or $uri.Host -notmatch '^[a-z0-9-]+\.supabase\.co$') {
+    throw 'StagingのSupabase URL形式が不正です。'
+  }
+  if ([string]::IsNullOrWhiteSpace($Key) -or $Provider -cne 'smtp' -or
+      $HostName -cne 'mail.e-bluewave.com' -or $Port -cne '587' -or $Secure -cne 'false') {
+    throw 'Staging環境の認証またはSMTP設定が期待値と一致しません。'
+  }
+  return $Url.TrimEnd('/')
 }
 
 function Get-ProtectedJson([string]$Path, [string]$AccessToken) {
   # Vercel CLI authenticates the protected deployment; the bearer token is
   # passed only to this local process, never printed or saved to a file.
-  $arguments = @('curl', "$Deployment$Path", '--', '--silent', '--show-error')
+  $arguments = @('curl', "$Deployment$Path", '--', '--silent', '--fail')
   if ($AccessToken) { $arguments += @('-H', "Authorization: Bearer $AccessToken") }
   $raw = & vercel @arguments 2>$null
   if ($LASTEXITCODE -ne 0) { throw 'Vercel CLIの保護付きGETに失敗しました。ログイン・アクセス権を確認してください。' }
@@ -30,20 +51,28 @@ function Get-ProtectedJson([string]$Path, [string]$AccessToken) {
   catch { throw '保護付きGETがJSONを返しませんでした。Vercel CLIとDeployment Protectionを確認してください。' }
 }
 
-try {
-  if ($Deployment -ne 'https://ses-navigator-staging-3y5w7tmtx-ebw-s-projects.vercel.app' -or $MaxPages -lt 1 -or $MaxPages -gt 10) {
-    throw 'Stagingの固定URLと1〜10ページの範囲で実行してください。'
+function Invoke-ReadOnlyChild([string]$ExpectedNonce, [int]$PageLimit) {
+  $root = $env:SESN_STAGING_PREFLIGHT_ROOT
+  if (-not $root -or -not $ExpectedNonce -or $ExpectedNonce -cne $env:SESN_STAGING_PREFLIGHT_NONCE) {
+    throw 'Stagingの一括起動から実行してください。'
   }
+  Assert-ProjectBinding $root
   if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) { throw 'Vercel CLIが必要です。' }
-  $supabaseUrl = Assert-SafeEndpoint (Read-Host 'Staging Supabase URL (HTTPS)')
-  $key = Read-Host 'Staging Supabase publishable/anon key'
-  $email = Read-Host 'Stagingの権限付きユーザーのメールアドレス'
-  $securePassword = Read-Host 'Stagingユーザーのパスワード' -AsSecureString
-  if (-not $key -or -not $email -or $securePassword.Length -eq 0) { throw '認証情報が不足しています。' }
+  $supabaseUrl = Assert-StagingEnvironment $env:SUPABASE_URL $env:SUPABASE_ANON_KEY $env:MESSAGE_DELIVERY_PROVIDER $env:SMTP_HOST $env:SMTP_PORT $env:SMTP_SECURE
+  $key = $env:SUPABASE_ANON_KEY
+  foreach ($name in @('SMTP_PASSWORD', 'SMTP_USERNAME', 'SMTP_SENDER', 'OPENAI_API_KEY',
+      'DATABASE_URL', 'POSTGRES_URL', 'SUPABASE_SERVICE_ROLE_KEY')) {
+    [Environment]::SetEnvironmentVariable($name, $null, 'Process')
+  }
+  try {
 
   $health = Get-ProtectedJson '/health' ''
   if ($health.status -ne 'ok') { throw 'Staging APIのhealthを確認できません。' }
   Write-Host 'Deployment Protection経由のStaging API GET: 成功'
+
+  $email = Read-Host 'Stagingの権限付きユーザーのメールアドレス'
+  $securePassword = Read-Host 'Stagingユーザーのパスワード' -AsSecureString
+  if (-not $email -or $securePassword.Length -eq 0) { throw '認証情報が不足しています。' }
 
   $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
   try { $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
@@ -96,12 +125,45 @@ try {
   Write-Host "Proposal ID: $($matches[0].proposalId)"
   Write-Host "Message ID: $($matches[0].messageId)"
   Write-Host '読み取り専用preflight完了。実メールは送信していません。'
-} catch {
-  # Never print the original exception: CLI/HTTP errors may contain credentials.
-  Write-Error '読み取り専用preflightは安全確認に失敗し停止しました。画面の直前の状態を確認してください。' -ErrorAction Continue
-  exit 1
-} finally {
+  } finally {
   $accessToken = $null
   $key = $null
   $securePassword = $null
+  }
+}
+
+function Invoke-Bootstrap([int]$PageLimit) {
+  if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) { throw 'Vercel CLIが必要です。' }
+  if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) { throw 'curl.exeが必要です。' }
+  $root = Join-Path ([IO.Path]::GetTempPath()) ('sesn-staging-readonly-' + [guid]::NewGuid().ToString('N'))
+  $linkDir = Join-Path $root '.vercel'
+  New-Item -ItemType Directory -Path $linkDir -Force | Out-Null
+  $env:SESN_STAGING_PREFLIGHT_NONCE = [guid]::NewGuid().ToString('N')
+  $env:SESN_STAGING_PREFLIGHT_ROOT = $root
+  try {
+    @{ projectId = $stagingProjectId; orgId = $stagingOrgId } |
+      ConvertTo-Json -Compress | Set-Content -LiteralPath (Join-Path $linkDir 'project.json') -Encoding UTF8
+    Assert-ProjectBinding $root
+    Push-Location $root
+    try {
+      & vercel env run -e production -- powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptFilePath -InternalChild -Nonce $env:SESN_STAGING_PREFLIGHT_NONCE -MaxPages $PageLimit
+      if ($LASTEXITCODE -ne 0) { throw 'Staging読み取り確認を完了できませんでした。' }
+    } finally { Pop-Location }
+  } finally {
+    $env:SESN_STAGING_PREFLIGHT_NONCE = $null
+    $env:SESN_STAGING_PREFLIGHT_ROOT = $null
+    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
+
+if ($MyInvocation.InvocationName -ne '.') {
+  try {
+    if ($MaxPages -lt 1 -or $MaxPages -gt 10) { throw '探索上限は1〜10ページです。' }
+    if ($InternalChild) { Invoke-ReadOnlyChild $Nonce $MaxPages }
+    else { Invoke-Bootstrap $MaxPages }
+  } catch {
+    # Never print underlying CLI/HTTP exceptions, which may contain tokens.
+    [Console]::Error.WriteLine('読み取り専用preflightは安全確認に失敗し停止しました。メールは送信していません。')
+    exit 1
+  }
 }
