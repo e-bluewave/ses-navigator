@@ -87,7 +87,7 @@ function Invoke-ReadOnlyChild([string]$ExpectedNonce, [int]$PageLimit) {
   $accessToken = [string]$session.access_token
   $session = $null
 
-  $matches = @()
+  $candidates = @()
   $cursor = $null
   for ($page = 0; $page -lt $MaxPages; $page++) {
     $path = '/api/v1/proposals?limit=200'
@@ -113,17 +113,17 @@ function Invoke-ReadOnlyChild([string]$ExpectedNonce, [int]$PageLimit) {
           @($deliveryRecipients[0].attempts).Count -ne 0) {
         throw 'Deliveryの承認版・宛先・attempt=0を確認できません。停止しました。'
       }
-      $matches += @{ proposalId = $proposal.id; messageId = $draft.id }
+      $candidates += @{ proposalId = $proposal.id; messageId = $draft.id }
     }
     $cursor = $list.page.nextCursor
     if (-not $cursor) { break }
   }
   if ($cursor) { throw '探索上限に達しました。対象を一意に確認できません。' }
-  if ($matches.Count -ne 1) { throw "一致する承認済みメッセージが一意ではありません（件数: $($matches.Count)）。" }
+  if ($candidates.Count -ne 1) { throw '一致する承認済みメッセージが一意ではありません。' }
   Write-Host 'Staging認証・proposal.read/message.read: 成功'
   Write-Host 'To/Subject/Body/承認版/attempt=0: 完全一致'
-  Write-Host "Proposal ID: $($matches[0].proposalId)"
-  Write-Host "Message ID: $($matches[0].messageId)"
+  Write-Host "Proposal ID: $($candidates[0].proposalId)"
+  Write-Host "Message ID: $($candidates[0].messageId)"
   Write-Host '読み取り専用preflight完了。実メールは送信していません。'
   } finally {
   $accessToken = $null
