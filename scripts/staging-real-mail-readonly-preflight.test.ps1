@@ -76,6 +76,10 @@ try {
   }
 
   Assert-Throws { Invoke-ReadOnlyChild 'incorrect-nonce' 1 }
+  $sample = Get-ProtectedJson "/api/v1/proposals/$proposalId/messages/$messageId/delivery" 'synthetic-token'
+  $sampleRecipients = @($sample.recipients)
+  $attemptsType = if ($null -eq $sampleRecipients[0].attempts) { 'null' } else { $sampleRecipients[0].attempts.GetType().Name }
+  Write-Host "Synthetic delivery: recipients=$($sampleRecipients.Count), attempts=$(@($sampleRecipients[0].attempts).Count), attemptsType=$attemptsType"
   $result = Invoke-ReadOnlyChild 'test-nonce' 1 | Out-String
   if ($result -notmatch [regex]::Escape($messageId)) { throw 'Valid read-only candidate was not identified.' }
   if ($script:requests.Count -ne 4) { throw 'Unexpected number of read-only GET requests.' }
