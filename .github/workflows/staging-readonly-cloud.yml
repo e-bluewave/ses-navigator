@@ -1,0 +1,55 @@
+name: Staging Read-Only Cloud Preflight
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  staging-readonly:
+    # A label triggers this only for the reviewed, same-repository PR #168.
+    # A required reviewer on the GitHub Environment gates access to secrets.
+    if: >-
+      github.event.label.name == 'sesn-staging-readonly' &&
+      github.event.pull_request.number == 168 &&
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.head.ref == 'codex/issue-167-microsoft-graph-mail-provider' &&
+      github.event.pull_request.head.repo.full_name == 'e-bluewave/ses-navigator'
+    runs-on: ubuntu-latest
+    environment: sesn-staging-readonly
+    timeout-minutes: 15
+    concurrency:
+      group: sesn-pr168-readonly
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.16.0
+      - name: Read-only Staging verification
+        shell: bash
+        env:
+          SESN_READONLY_PREFLIGHT: 'true'
+          SESN_STAGING_SUPABASE_REF: ${{ vars.SESN_STAGING_SUPABASE_REF }}
+          SESN_STAGING_TEST_EMAIL: ${{ secrets.SESN_STAGING_TEST_EMAIL }}
+          SESN_STAGING_TEST_PASSWORD: ${{ secrets.SESN_STAGING_TEST_PASSWORD }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$VERCEL_TOKEN" || -z "$SESN_STAGING_TEST_EMAIL" || -z "$SESN_STAGING_TEST_PASSWORD" || -z "$SESN_STAGING_SUPABASE_REF" ]]; then
+            echo 'Staging read-only environment is incomplete.' >&2
+            exit 1
+          fi
+          readonly_root="$(mktemp -d)"
+          trap 'rm -rf "$readonly_root"' EXIT
+          mkdir -p "$readonly_root/.vercel"
+          printf '%s\n' '{"projectId":"prj_gpgM7keccxqbJpZssLH5UOBSb0OU","orgId":"team_Wd9vCeAN0Q0MZCaqKXtVjRRw"}' > "$readonly_root/.vercel/project.json"
+          cd "$readonly_root"
+          vercel env run -e production -- node "$GITHUB_WORKSPACE/scripts/staging-real-mail-cloud-preflight.mjs"
