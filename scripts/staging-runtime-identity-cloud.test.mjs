@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   assertStagingIdentityConfig,
+  githubOidcToken,
+  protectedStatus,
   runStagingIdentityCheck,
 } from './staging-runtime-identity-cloud.mjs';
 
@@ -60,5 +62,37 @@ test('only protected GET status 204 passes without logging token or refs', async
       check: async () => 403,
       log: () => {},
     }),
+  );
+});
+
+test('OIDC token request and protected probe stay on pinned HTTPS hosts', async () => {
+  const token = await githubOidcToken(env, async (url, options) => {
+    assert.equal(url.hostname, 'pipelines.actions.githubusercontent.com');
+    assert.equal(
+      url.searchParams.get('audience'),
+      'https://github.com/e-bluewave',
+    );
+    assert.equal(options.redirect, 'manual');
+    assert.equal(options.headers.authorization, 'Bearer fixture-runner-token');
+    return { ok: true, json: async () => ({ value: 'fixture-oidc-token' }) };
+  });
+  const status = await protectedStatus({}, token, async (url, options) => {
+    assert.equal(
+      url,
+      'https://ses-navigator-staging-git-codex-issue-167-b1ce58-ebw-s-projects.vercel.app/internal/staging-runtime-identity',
+    );
+    assert.equal(options.method, 'GET');
+    assert.equal(options.redirect, 'manual');
+    assert.equal(options.headers['x-vercel-trusted-oidc-idp-token'], token);
+    return { status: 204 };
+  });
+  assert.equal(status, 204);
+  await assert.rejects(() =>
+    githubOidcToken(
+      { ...env, ACTIONS_ID_TOKEN_REQUEST_URL: 'https://evil.example/token' },
+      async () => {
+        throw new Error('unexpected request');
+      },
+    ),
   );
 });
