@@ -5,6 +5,44 @@ const BRANCH_HOST =
   'ses-navigator-staging-git-codex-issue-167-b1ce58-ebw-s-projects.vercel.app';
 const REF = /^[a-z0-9]{8,40}$/u;
 const SHA = /^[a-f0-9]{40}$/u;
+const EXPECTED_CLAIMS = {
+  iss: 'https://token.actions.githubusercontent.com',
+  aud: 'https://github.com/e-bluewave',
+  repository: 'e-bluewave/ses-navigator',
+  sub: 'repo:e-bluewave/ses-navigator:environment:sesn-staging-readonly',
+  environment: 'sesn-staging-readonly',
+  event_name: 'pull_request',
+  head_ref: 'codex/issue-167-microsoft-graph-mail-provider',
+  ref: 'refs/pull/168/merge',
+  workflow_ref:
+    'e-bluewave/ses-navigator/.github/workflows/staging-readonly-cloud.yml@refs/pull/168/merge',
+};
+
+// The token is obtained from GitHub's runner endpoint. Decode only for local
+// fail-closed claim checks; Vercel independently verifies its signature.
+export function assertOidcClaims(token) {
+  try {
+    if (typeof token !== 'string' || token.length > 16_384) {
+      throw new Error('Invalid token');
+    }
+    const parts = token.split('.');
+    if (parts.length !== 3 || !parts.every(Boolean)) {
+      throw new Error('Invalid token');
+    }
+    const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    if (
+      !claims ||
+      typeof claims !== 'object' ||
+      Object.entries(EXPECTED_CLAIMS).some(
+        ([name, value]) => claims[name] !== value,
+      )
+    ) {
+      throw new Error('Claims did not match');
+    }
+  } catch {
+    throw new Error('Staging read-only OIDC identity did not match');
+  }
+}
 
 export function assertStagingIdentityConfig(env) {
   if (
@@ -12,6 +50,7 @@ export function assertStagingIdentityConfig(env) {
     env.GITHUB_EVENT_NAME !== 'pull_request' ||
     env.GITHUB_REPOSITORY !== 'e-bluewave/ses-navigator' ||
     env.GITHUB_HEAD_REF !== 'codex/issue-167-microsoft-graph-mail-provider' ||
+    env.GITHUB_REF !== 'refs/pull/168/merge' ||
     env.SESN_READONLY_PREFLIGHT !== 'true' ||
     !env.ACTIONS_ID_TOKEN_REQUEST_URL ||
     !env.ACTIONS_ID_TOKEN_REQUEST_TOKEN
@@ -88,6 +127,7 @@ export async function runStagingIdentityCheck({
   const config = assertStagingIdentityConfig(env);
   const hash = (ref) => createHash('sha256').update(ref).digest('hex');
   const token = await getToken(env);
+  assertOidcClaims(token);
   const status = await check(
     {
       'x-sesn-expected-commit': config.commit,
