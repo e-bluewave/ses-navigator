@@ -42,7 +42,9 @@ const fixtureToken = tokenFor(claims);
 test('checks every trusted claim locally without exposing a token', () => {
   assert.doesNotThrow(() => assertOidcClaims(fixtureToken));
   for (const name of Object.keys(claims)) {
-    assert.throws(() => assertOidcClaims(tokenFor({ ...claims, [name]: 'wrong' })));
+    assert.throws(() =>
+      assertOidcClaims(tokenFor({ ...claims, [name]: 'wrong' })),
+    );
   }
   assert.throws(() => assertOidcClaims('malformed-token'));
 });
