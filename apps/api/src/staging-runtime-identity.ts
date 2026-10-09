@@ -2,6 +2,8 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 
 const STAGING_PROJECT_ID = 'prj_gpgM7keccxqbJpZssLH5UOBSb0OU';
+const STAGING_BRANCH_HOST =
+  'ses-navigator-staging-git-codex-issue-167-b1ce58-ebw-s-projects.vercel.app';
 const DEPLOYMENT_HOST =
   /^ses-navigator-staging-[a-z0-9]+-ebw-s-projects\.vercel\.app$/u;
 const REF = /^[a-z0-9]{8,40}$/u;
@@ -24,7 +26,7 @@ export function matchesStagingRuntimeIdentity(
     env.VERCEL_ENV !== 'preview' ||
     typeof env.VERCEL_URL !== 'string' ||
     !DEPLOYMENT_HOST.test(env.VERCEL_URL) ||
-    host !== env.VERCEL_URL ||
+    host !== STAGING_BRANCH_HOST ||
     typeof expectedCommit !== 'string' ||
     !COMMIT.test(expectedCommit) ||
     env.VERCEL_GIT_COMMIT_SHA !== expectedCommit ||
