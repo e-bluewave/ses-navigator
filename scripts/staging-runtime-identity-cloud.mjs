@@ -31,34 +31,54 @@ export function assertStagingIdentityConfig(env, binding) {
   ) {
     throw new Error('Independent project identities or PR head are invalid');
   }
-  let url;
+  return { staging, production, commit: env.SESN_PR_HEAD_SHA };
+}
+
+export function selectStagingDeployment(data, commit) {
+  const matches = data?.deployments?.filter(
+    (entry) =>
+      entry?.projectId === PROJECT_ID &&
+      entry?.meta?.githubCommitSha === commit &&
+      entry?.meta?.githubCommitRef ===
+        'codex/issue-167-microsoft-graph-mail-provider' &&
+      entry?.state === 'READY' &&
+      (entry?.target === null || entry?.target === 'preview') &&
+      typeof entry?.url === 'string' &&
+      HOST.test(entry.url),
+  );
+  if (!Array.isArray(matches) || matches.length !== 1) {
+    throw new Error('A unique Ready Staging Preview deployment was not found');
+  }
+  return `https://${matches[0].url}`;
+}
+
+async function discoverStagingDeployment(commit, token) {
+  const url = new URL('https://api.vercel.com/v7/deployments');
+  url.searchParams.set('projectId', PROJECT_ID);
+  url.searchParams.set('teamId', ORG_ID);
+  url.searchParams.set('sha', commit);
+  url.searchParams.set('limit', '10');
   try {
-    url = new URL(env.SESN_STAGING_IDENTITY_DEPLOYMENT_URL);
+    const response = await fetch(url, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) throw new Error('Vercel metadata request failed');
+    return selectStagingDeployment(await response.json(), commit);
   } catch {
-    throw new Error('Pinned Staging deployment URL is invalid');
+    throw new Error('Staging Preview deployment discovery failed');
   }
-  if (
-    url.protocol !== 'https:' ||
-    !HOST.test(url.hostname) ||
-    url.port ||
-    url.username ||
-    url.password ||
-    url.pathname !== '/' ||
-    url.search ||
-    url.hash
-  ) {
-    throw new Error('Pinned Staging deployment URL is invalid');
-  }
-  return { url: url.origin, staging, production, commit: env.SESN_PR_HEAD_SHA };
 }
 
 export async function runStagingIdentityCheck({
   env = process.env,
   binding,
+  discover = discoverStagingDeployment,
   check,
   log = console.log,
 } = {}) {
   const config = assertStagingIdentityConfig(env, binding);
+  const deployment = await discover(config.commit, env.VERCEL_TOKEN);
   const hash = (ref) => createHash('sha256').update(ref).digest('hex');
   const headers = [
     '-H',
@@ -69,7 +89,7 @@ export async function runStagingIdentityCheck({
     `x-sesn-production-ref-sha256: ${hash(config.production)}`,
   ];
   const status = await check(
-    `${config.url}/internal/staging-runtime-identity`,
+    `${deployment}/internal/staging-runtime-identity`,
     headers,
   );
   if (status !== '204')
