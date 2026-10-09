@@ -34,12 +34,17 @@ export function assertStagingIdentityConfig(env) {
 async function githubOidcToken(env, fetchImpl = fetch) {
   try {
     const url = new URL(env.ACTIONS_ID_TOKEN_REQUEST_URL);
-    if (url.protocol !== 'https:' || !url.hostname.endsWith('.actions.githubusercontent.com')) {
+    if (
+      url.protocol !== 'https:' ||
+      !url.hostname.endsWith('.actions.githubusercontent.com')
+    ) {
       throw new Error('Invalid OIDC issuer endpoint');
     }
     url.searchParams.set('audience', 'https://github.com/e-bluewave');
     const response = await fetchImpl(url, {
-      headers: { authorization: `Bearer ${env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` },
+      headers: {
+        authorization: `Bearer ${env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}`,
+      },
       redirect: 'manual',
       signal: AbortSignal.timeout(15_000),
     });
@@ -92,7 +97,9 @@ export async function runStagingIdentityCheck({
     token,
   );
   if (status !== 204) throw new Error('Staging runtime identity did not match');
-  log('Staging runtime Supabase project identity: PASS. No database or mail operation.');
+  log(
+    'Staging runtime Supabase project identity: PASS. No database or mail operation.',
+  );
   return true;
 }
 
@@ -100,7 +107,9 @@ if (isMainModule(import.meta.url)) {
   try {
     await runStagingIdentityCheck();
   } catch {
-    console.error('Staging identity check stopped safely. No database or mail operation.');
+    console.error(
+      'Staging identity check stopped safely. No database or mail operation.',
+    );
     process.exitCode = 1;
   }
 }
