@@ -82,7 +82,10 @@ test('only protected GET status 204 passes without logging token or refs', async
     JSON.stringify({ passedHeaders, lines }),
     /stagingexampleproject|productionexamplepro/u,
   );
-  assert.equal(JSON.stringify({ passedHeaders, lines }).includes(fixtureToken), false);
+  assert.equal(
+    JSON.stringify({ passedHeaders, lines }).includes(fixtureToken),
+    false,
+  );
   await assert.rejects(() =>
     runStagingIdentityCheck({
       env,
