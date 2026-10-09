@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   staging-readonly:
@@ -31,8 +32,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Install pinned Vercel CLI
-        run: npm install --global vercel@59.16.0
       - name: Staging runtime identity verification
         shell: bash
         env:
@@ -40,10 +39,9 @@ jobs:
           SESN_STAGING_SUPABASE_REF: ${{ vars.SESN_STAGING_SUPABASE_REF }}
           SESN_PRODUCTION_SUPABASE_REF: ${{ vars.SESN_PRODUCTION_SUPABASE_REF }}
           SESN_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "$VERCEL_TOKEN" || -z "$SESN_STAGING_SUPABASE_REF" || -z "$SESN_PRODUCTION_SUPABASE_REF" ]]; then
+          if [[ -z "$SESN_STAGING_SUPABASE_REF" || -z "$SESN_PRODUCTION_SUPABASE_REF" ]]; then
             echo 'Staging read-only environment is incomplete.' >&2
             exit 1
           fi
