@@ -1,23 +1,20 @@
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { promisify } from 'node:util';
 import { isMainModule } from './cli-entry.mjs';
 
-const execFileAsync = promisify(execFile);
-const PROJECT_ID = 'prj_gpgM7keccxqbJpZssLH5UOBSb0OU';
-const ORG_ID = 'team_Wd9vCeAN0Q0MZCaqKXtVjRRw';
-const HOST = /^ses-navigator-staging-[a-z0-9]+-ebw-s-projects\.vercel\.app$/u;
+const BRANCH_HOST =
+  'ses-navigator-staging-git-codex-issue-167-b1ce58-ebw-s-projects.vercel.app';
 const REF = /^[a-z0-9]{8,40}$/u;
 const SHA = /^[a-f0-9]{40}$/u;
 
-export function assertStagingIdentityConfig(env, binding) {
+export function assertStagingIdentityConfig(env) {
   if (
     env.GITHUB_ACTIONS !== 'true' ||
+    env.GITHUB_EVENT_NAME !== 'pull_request' ||
+    env.GITHUB_REPOSITORY !== 'e-bluewave/ses-navigator' ||
+    env.GITHUB_HEAD_REF !== 'codex/issue-167-microsoft-graph-mail-provider' ||
     env.SESN_READONLY_PREFLIGHT !== 'true' ||
-    binding?.projectId !== PROJECT_ID ||
-    binding?.orgId !== ORG_ID ||
-    !env.VERCEL_TOKEN
+    !env.ACTIONS_ID_TOKEN_REQUEST_URL ||
+    !env.ACTIONS_ID_TOKEN_REQUEST_TOKEN
   ) {
     throw new Error('Staging identity job configuration is incomplete');
   }
@@ -34,112 +31,76 @@ export function assertStagingIdentityConfig(env, binding) {
   return { staging, production, commit: env.SESN_PR_HEAD_SHA };
 }
 
-export function selectStagingDeployment(data, commit) {
-  const matches = data?.deployments?.filter(
-    (entry) =>
-      entry?.projectId === PROJECT_ID &&
-      entry?.meta?.githubCommitSha === commit &&
-      entry?.meta?.githubCommitRef ===
-        'codex/issue-167-microsoft-graph-mail-provider' &&
-      entry?.state === 'READY' &&
-      (entry?.target === null || entry?.target === 'preview') &&
-      typeof entry?.url === 'string' &&
-      HOST.test(entry.url),
-  );
-  if (!Array.isArray(matches) || matches.length !== 1) {
-    throw new Error('A unique Ready Staging Preview deployment was not found');
-  }
-  return `https://${matches[0].url}`;
-}
-
-async function discoverStagingDeployment(commit, token) {
-  const url = new URL('https://api.vercel.com/v7/deployments');
-  url.searchParams.set('projectId', PROJECT_ID);
-  url.searchParams.set('teamId', ORG_ID);
-  url.searchParams.set('sha', commit);
-  url.searchParams.set('limit', '10');
+async function githubOidcToken(env, fetchImpl = fetch) {
   try {
-    const response = await fetch(url, {
-      headers: { authorization: `Bearer ${token}` },
+    const url = new URL(env.ACTIONS_ID_TOKEN_REQUEST_URL);
+    if (url.protocol !== 'https:' || !url.hostname.endsWith('.actions.githubusercontent.com')) {
+      throw new Error('Invalid OIDC issuer endpoint');
+    }
+    url.searchParams.set('audience', 'https://github.com/e-bluewave');
+    const response = await fetchImpl(url, {
+      headers: { authorization: `Bearer ${env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` },
+      redirect: 'manual',
       signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok) throw new Error('Vercel metadata request failed');
-    return selectStagingDeployment(await response.json(), commit);
+    if (!response.ok) throw new Error('OIDC request failed');
+    const data = await response.json();
+    if (typeof data?.value !== 'string' || !data.value) {
+      throw new Error('OIDC token missing');
+    }
+    return data.value;
   } catch {
-    throw new Error('Staging Preview deployment discovery failed');
+    throw new Error('GitHub Actions OIDC token could not be obtained');
   }
 }
 
-export async function runStagingIdentityCheck({
-  env = process.env,
-  binding,
-  discover = discoverStagingDeployment,
-  check,
-  log = console.log,
-} = {}) {
-  const config = assertStagingIdentityConfig(env, binding);
-  const deployment = await discover(config.commit, env.VERCEL_TOKEN);
-  const hash = (ref) => createHash('sha256').update(ref).digest('hex');
-  const headers = [
-    '-H',
-    `x-sesn-expected-commit: ${config.commit}`,
-    '-H',
-    `x-sesn-staging-ref-sha256: ${hash(config.staging)}`,
-    '-H',
-    `x-sesn-production-ref-sha256: ${hash(config.production)}`,
-  ];
-  const status = await check(
-    `${deployment}/internal/staging-runtime-identity`,
-    headers,
-  );
-  if (status !== '204')
-    throw new Error('Staging runtime identity did not match');
-  log(
-    'Staging Vercel runtime Supabase project identity: PASS. No database or mail operation.',
-  );
-  return true;
-}
-
-async function protectedStatus(url, headers) {
+async function protectedStatus(headers, token, fetchImpl = fetch) {
   try {
-    const result = await execFileAsync(
-      'vercel',
-      [
-        'curl',
-        url,
-        '--',
-        '--silent',
-        '--output',
-        '/dev/null',
-        '--write-out',
-        '%{http_code}',
-        ...headers,
-      ],
+    const response = await fetchImpl(
+      `https://${BRANCH_HOST}/internal/staging-runtime-identity`,
       {
-        env: {
-          PATH: process.env.PATH,
-          HOME: process.env.HOME,
-          CI: '1',
-          VERCEL_TOKEN: process.env.VERCEL_TOKEN,
+        method: 'GET',
+        headers: {
+          ...headers,
+          'x-vercel-trusted-oidc-idp-token': token,
         },
-        timeout: 20_000,
-        maxBuffer: 1024,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(20_000),
       },
     );
-    return result.stdout.trim();
+    return response.status;
   } catch {
     throw new Error('Protected Staging identity GET failed');
   }
 }
 
+export async function runStagingIdentityCheck({
+  env = process.env,
+  getToken = githubOidcToken,
+  check = protectedStatus,
+  log = console.log,
+} = {}) {
+  const config = assertStagingIdentityConfig(env);
+  const hash = (ref) => createHash('sha256').update(ref).digest('hex');
+  const token = await getToken(env);
+  const status = await check(
+    {
+      'x-sesn-expected-commit': config.commit,
+      'x-sesn-staging-ref-sha256': hash(config.staging),
+      'x-sesn-production-ref-sha256': hash(config.production),
+    },
+    token,
+  );
+  if (status !== 204) throw new Error('Staging runtime identity did not match');
+  log('Staging runtime Supabase project identity: PASS. No database or mail operation.');
+  return true;
+}
+
 if (isMainModule(import.meta.url)) {
   try {
-    const binding = JSON.parse(readFileSync('.vercel/project.json', 'utf8'));
-    await runStagingIdentityCheck({ binding, check: protectedStatus });
+    await runStagingIdentityCheck();
   } catch {
-    console.error(
-      'Staging identity check stopped safely. No database or mail operation.',
-    );
+    console.error('Staging identity check stopped safely. No database or mail operation.');
     process.exitCode = 1;
   }
 }
