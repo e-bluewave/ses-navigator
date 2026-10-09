@@ -31,7 +31,7 @@ export function assertStagingIdentityConfig(env) {
   return { staging, production, commit: env.SESN_PR_HEAD_SHA };
 }
 
-async function githubOidcToken(env, fetchImpl = fetch) {
+export async function githubOidcToken(env, fetchImpl = fetch) {
   try {
     const url = new URL(env.ACTIONS_ID_TOKEN_REQUEST_URL);
     if (
@@ -59,7 +59,7 @@ async function githubOidcToken(env, fetchImpl = fetch) {
   }
 }
 
-async function protectedStatus(headers, token, fetchImpl = fetch) {
+export async function protectedStatus(headers, token, fetchImpl = fetch) {
   try {
     const response = await fetchImpl(
       `https://${BRANCH_HOST}/internal/staging-runtime-identity`,
