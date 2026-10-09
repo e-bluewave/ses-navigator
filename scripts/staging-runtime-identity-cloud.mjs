@@ -7,7 +7,7 @@ import { isMainModule } from './cli-entry.mjs';
 const execFileAsync = promisify(execFile);
 const PROJECT_ID = 'prj_gpgM7keccxqbJpZssLH5UOBSb0OU';
 const ORG_ID = 'team_Wd9vCeAN0Q0MZCaqKXtVjRRw';
-const HOST = /^ses-navigator-staging-[a-z0-9]+-ebw-s-projects\\.vercel\\.app$/u;
+const HOST = /^ses-navigator-staging-[a-z0-9]+-ebw-s-projects\.vercel\.app$/u;
 const REF = /^[a-z0-9]{8,40}$/u;
 const SHA = /^[a-f0-9]{40}$/u;
 
