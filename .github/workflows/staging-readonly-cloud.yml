@@ -39,12 +39,11 @@ jobs:
           SESN_READONLY_PREFLIGHT: 'true'
           SESN_STAGING_SUPABASE_REF: ${{ vars.SESN_STAGING_SUPABASE_REF }}
           SESN_PRODUCTION_SUPABASE_REF: ${{ vars.SESN_PRODUCTION_SUPABASE_REF }}
-          SESN_STAGING_IDENTITY_DEPLOYMENT_URL: ${{ vars.SESN_STAGING_IDENTITY_DEPLOYMENT_URL }}
           SESN_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "$VERCEL_TOKEN" || -z "$SESN_STAGING_SUPABASE_REF" || -z "$SESN_PRODUCTION_SUPABASE_REF" || -z "$SESN_STAGING_IDENTITY_DEPLOYMENT_URL" ]]; then
+          if [[ -z "$VERCEL_TOKEN" || -z "$SESN_STAGING_SUPABASE_REF" || -z "$SESN_PRODUCTION_SUPABASE_REF" ]]; then
             echo 'Staging read-only environment is incomplete.' >&2
             exit 1
           fi
