@@ -33,17 +33,18 @@ jobs:
           node-version: 24
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@59.16.0
-      - name: Read-only Staging verification
+      - name: Staging runtime identity verification
         shell: bash
         env:
           SESN_READONLY_PREFLIGHT: 'true'
           SESN_STAGING_SUPABASE_REF: ${{ vars.SESN_STAGING_SUPABASE_REF }}
-          SESN_STAGING_TEST_EMAIL: ${{ secrets.SESN_STAGING_TEST_EMAIL }}
-          SESN_STAGING_TEST_PASSWORD: ${{ secrets.SESN_STAGING_TEST_PASSWORD }}
+          SESN_PRODUCTION_SUPABASE_REF: ${{ vars.SESN_PRODUCTION_SUPABASE_REF }}
+          SESN_STAGING_IDENTITY_DEPLOYMENT_URL: ${{ vars.SESN_STAGING_IDENTITY_DEPLOYMENT_URL }}
+          SESN_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "$VERCEL_TOKEN" || -z "$SESN_STAGING_TEST_EMAIL" || -z "$SESN_STAGING_TEST_PASSWORD" || -z "$SESN_STAGING_SUPABASE_REF" ]]; then
+          if [[ -z "$VERCEL_TOKEN" || -z "$SESN_STAGING_SUPABASE_REF" || -z "$SESN_PRODUCTION_SUPABASE_REF" || -z "$SESN_STAGING_IDENTITY_DEPLOYMENT_URL" ]]; then
             echo 'Staging read-only environment is incomplete.' >&2
             exit 1
           fi
@@ -52,4 +53,4 @@ jobs:
           mkdir -p "$readonly_root/.vercel"
           printf '%s\n' '{"projectId":"prj_gpgM7keccxqbJpZssLH5UOBSb0OU","orgId":"team_Wd9vCeAN0Q0MZCaqKXtVjRRw"}' > "$readonly_root/.vercel/project.json"
           cd "$readonly_root"
-          vercel env run -e production -- node "$GITHUB_WORKSPACE/scripts/staging-real-mail-cloud-preflight.mjs"
+          node "$GITHUB_WORKSPACE/scripts/staging-runtime-identity-cloud.mjs"
