@@ -12,11 +12,12 @@ const refHash = (value: string): string =>
 const staging = refHash('stagingexampleproject');
 const production = refHash('productionexamplepro');
 const commit = 'a'.repeat(40);
-const host = 'ses-navigator-staging-abc123-ebw-s-projects.vercel.app';
+const host =
+  'ses-navigator-staging-git-codex-issue-167-b1ce58-ebw-s-projects.vercel.app';
 const env = {
   VERCEL_PROJECT_ID: 'prj_gpgM7keccxqbJpZssLH5UOBSb0OU',
   VERCEL_ENV: 'preview',
-  VERCEL_URL: host,
+  VERCEL_URL: 'ses-navigator-staging-abc123-ebw-s-projects.vercel.app',
   VERCEL_GIT_COMMIT_SHA: commit,
   SUPABASE_URL: 'https://stagingexampleproject.supabase.co',
 };
