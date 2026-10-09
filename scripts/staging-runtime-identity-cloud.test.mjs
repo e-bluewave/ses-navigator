@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   assertStagingIdentityConfig,
+  assertOidcClaims,
   githubOidcToken,
   protectedStatus,
   runStagingIdentityCheck,
@@ -12,6 +13,7 @@ const env = {
   GITHUB_EVENT_NAME: 'pull_request',
   GITHUB_REPOSITORY: 'e-bluewave/ses-navigator',
   GITHUB_HEAD_REF: 'codex/issue-167-microsoft-graph-mail-provider',
+  GITHUB_REF: 'refs/pull/168/merge',
   SESN_READONLY_PREFLIGHT: 'true',
   ACTIONS_ID_TOKEN_REQUEST_URL:
     'https://pipelines.actions.githubusercontent.com/token',
@@ -20,6 +22,30 @@ const env = {
   SESN_PRODUCTION_SUPABASE_REF: 'productionexamplepro',
   SESN_PR_HEAD_SHA: 'a'.repeat(40),
 };
+
+const claims = {
+  iss: 'https://token.actions.githubusercontent.com',
+  aud: 'https://github.com/e-bluewave',
+  repository: 'e-bluewave/ses-navigator',
+  sub: 'repo:e-bluewave/ses-navigator:environment:sesn-staging-readonly',
+  environment: 'sesn-staging-readonly',
+  event_name: 'pull_request',
+  head_ref: 'codex/issue-167-microsoft-graph-mail-provider',
+  ref: 'refs/pull/168/merge',
+  workflow_ref:
+    'e-bluewave/ses-navigator/.github/workflows/staging-readonly-cloud.yml@refs/pull/168/merge',
+};
+const tokenFor = (payload) =>
+  `eyJhbGciOiJSUzI1NiJ9.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.fixture`;
+const fixtureToken = tokenFor(claims);
+
+test('checks every trusted claim locally without exposing a token', () => {
+  assert.doesNotThrow(() => assertOidcClaims(fixtureToken));
+  for (const name of Object.keys(claims)) {
+    assert.throws(() => assertOidcClaims(tokenFor({ ...claims, [name]: 'wrong' })));
+  }
+  assert.throws(() => assertOidcClaims('malformed-token'));
+});
 
 test('accepts only the pinned read-only PR job and distinct independent refs', () => {
   assert.equal(
@@ -30,6 +56,7 @@ test('accepts only the pinned read-only PR job and distinct independent refs', (
     { GITHUB_EVENT_NAME: 'workflow_dispatch' },
     { GITHUB_REPOSITORY: 'other/repo' },
     { GITHUB_HEAD_REF: 'Main' },
+    { GITHUB_REF: 'refs/heads/Main' },
     { SESN_PRODUCTION_SUPABASE_REF: env.SESN_STAGING_SUPABASE_REF },
     { ACTIONS_ID_TOKEN_REQUEST_TOKEN: '' },
     { SESN_PR_HEAD_SHA: '' },
@@ -43,9 +70,9 @@ test('only protected GET status 204 passes without logging token or refs', async
   const lines = [];
   await runStagingIdentityCheck({
     env,
-    getToken: async () => 'fixture-oidc-token',
+    getToken: async () => fixtureToken,
     check: async (headers, token) => {
-      assert.equal(token, 'fixture-oidc-token');
+      assert.equal(token, fixtureToken);
       passedHeaders = headers;
       return 204;
     },
@@ -53,12 +80,13 @@ test('only protected GET status 204 passes without logging token or refs', async
   });
   assert.doesNotMatch(
     JSON.stringify({ passedHeaders, lines }),
-    /stagingexampleproject|productionexamplepro|fixture-oidc-token/u,
+    /stagingexampleproject|productionexamplepro/u,
   );
+  assert.equal(JSON.stringify({ passedHeaders, lines }).includes(fixtureToken), false);
   await assert.rejects(() =>
     runStagingIdentityCheck({
       env,
-      getToken: async () => 'fixture-oidc-token',
+      getToken: async () => fixtureToken,
       check: async () => 403,
       log: () => {},
     }),
@@ -74,7 +102,7 @@ test('OIDC token request and protected probe stay on pinned HTTPS hosts', async 
     );
     assert.equal(options.redirect, 'manual');
     assert.equal(options.headers.authorization, 'Bearer fixture-runner-token');
-    return { ok: true, json: async () => ({ value: 'fixture-oidc-token' }) };
+    return { ok: true, json: async () => ({ value: fixtureToken }) };
   });
   const status = await protectedStatus({}, token, async (url, options) => {
     assert.equal(
