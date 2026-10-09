@@ -11,7 +11,8 @@ const env = {
   GITHUB_REPOSITORY: 'e-bluewave/ses-navigator',
   GITHUB_HEAD_REF: 'codex/issue-167-microsoft-graph-mail-provider',
   SESN_READONLY_PREFLIGHT: 'true',
-  ACTIONS_ID_TOKEN_REQUEST_URL: 'https://pipelines.actions.githubusercontent.com/token',
+  ACTIONS_ID_TOKEN_REQUEST_URL:
+    'https://pipelines.actions.githubusercontent.com/token',
   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'fixture-runner-token',
   SESN_STAGING_SUPABASE_REF: 'stagingexampleproject',
   SESN_PRODUCTION_SUPABASE_REF: 'productionexamplepro',
