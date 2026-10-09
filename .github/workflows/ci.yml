@@ -46,6 +46,7 @@ jobs:
       - run: pnpm smoke:microsoft-graph-preflight:check
       - run: pnpm smoke:proposal-delivery-real-mail:check
       - run: node --test scripts/staging-real-mail-cloud-preflight.test.mjs
+      - run: node --test scripts/staging-runtime-identity-cloud.test.mjs
       - run: pnpm security:data-migration
       - run: pnpm security:data-migration:check
       - run: node --test scripts/check-data-migration-evidence.test.mjs
