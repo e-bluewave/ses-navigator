@@ -15,7 +15,7 @@ const commit = 'a'.repeat(40);
 const host = 'ses-navigator-staging-abc123-ebw-s-projects.vercel.app';
 const env = {
   VERCEL_PROJECT_ID: 'prj_gpgM7keccxqbJpZssLH5UOBSb0OU',
-  VERCEL_ENV: 'production',
+  VERCEL_ENV: 'preview',
   VERCEL_URL: host,
   VERCEL_GIT_COMMIT_SHA: commit,
   SUPABASE_URL: 'https://stagingexampleproject.supabase.co',
@@ -30,7 +30,7 @@ describe('Staging runtime identity probe', () => {
 
   it.each([
     [{ VERCEL_PROJECT_ID: 'prj_other' }, staging, production],
-    [{ VERCEL_ENV: 'preview' }, staging, production],
+    [{ VERCEL_ENV: 'production' }, staging, production],
     [{ VERCEL_URL: 'ses-navigator-production-abc.vercel.app' }, staging, production],
     [{ VERCEL_GIT_COMMIT_SHA: 'b'.repeat(40) }, staging, production],
     [{ SUPABASE_URL: 'https://productionexamplepro.supabase.co' }, staging, production],
