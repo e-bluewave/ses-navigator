@@ -3,106 +3,60 @@ import { test } from 'node:test';
 import {
   assertStagingIdentityConfig,
   runStagingIdentityCheck,
-  selectStagingDeployment,
 } from './staging-runtime-identity-cloud.mjs';
 
-const binding = {
-  projectId: 'prj_gpgM7keccxqbJpZssLH5UOBSb0OU',
-  orgId: 'team_Wd9vCeAN0Q0MZCaqKXtVjRRw',
-};
 const env = {
   GITHUB_ACTIONS: 'true',
+  GITHUB_EVENT_NAME: 'pull_request',
+  GITHUB_REPOSITORY: 'e-bluewave/ses-navigator',
+  GITHUB_HEAD_REF: 'codex/issue-167-microsoft-graph-mail-provider',
   SESN_READONLY_PREFLIGHT: 'true',
-  VERCEL_TOKEN: 'fixture-token',
+  ACTIONS_ID_TOKEN_REQUEST_URL: 'https://pipelines.actions.githubusercontent.com/token',
+  ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'fixture-runner-token',
   SESN_STAGING_SUPABASE_REF: 'stagingexampleproject',
   SESN_PRODUCTION_SUPABASE_REF: 'productionexamplepro',
   SESN_PR_HEAD_SHA: 'a'.repeat(40),
 };
-const deployment = {
-  projectId: binding.projectId,
-  meta: {
-    githubCommitSha: env.SESN_PR_HEAD_SHA,
-    githubCommitRef: 'codex/issue-167-microsoft-graph-mail-provider',
-  },
-  state: 'READY',
-  target: null,
-  url: 'ses-navigator-staging-abc123-ebw-s-projects.vercel.app',
-};
 
-test('accepts independent distinct refs and a pinned staging deployment', () => {
+test('accepts only the pinned read-only PR job and distinct independent refs', () => {
   assert.equal(
-    assertStagingIdentityConfig(env, binding).staging,
+    assertStagingIdentityConfig(env).staging,
     env.SESN_STAGING_SUPABASE_REF,
   );
-});
-
-test('rejects same ref, wrong project, missing token, or missing head', () => {
-  for (const [override, project] of [
-    [{ SESN_PRODUCTION_SUPABASE_REF: env.SESN_STAGING_SUPABASE_REF }, binding],
-    [{ VERCEL_TOKEN: '' }, binding],
-    [{ SESN_PR_HEAD_SHA: '' }, binding],
-    [{}, { ...binding, projectId: 'prj_other' }],
+  for (const override of [
+    { GITHUB_EVENT_NAME: 'workflow_dispatch' },
+    { GITHUB_REPOSITORY: 'other/repo' },
+    { GITHUB_HEAD_REF: 'Main' },
+    { SESN_PRODUCTION_SUPABASE_REF: env.SESN_STAGING_SUPABASE_REF },
+    { ACTIONS_ID_TOKEN_REQUEST_TOKEN: '' },
+    { SESN_PR_HEAD_SHA: '' },
   ]) {
-    assert.throws(() =>
-      assertStagingIdentityConfig({ ...env, ...override }, project),
-    );
+    assert.throws(() => assertStagingIdentityConfig({ ...env, ...override }));
   }
 });
 
-test('selects only one Ready immutable Preview deployment', () => {
-  assert.equal(
-    selectStagingDeployment(
-      { deployments: [deployment] },
-      env.SESN_PR_HEAD_SHA,
-    ),
-    `https://${deployment.url}`,
-  );
-  for (const changed of [
-    { target: 'production' },
-    { projectId: 'prj_other' },
-    { state: 'QUEUED' },
-    { url: 'ses-navigator-staging-green.vercel.app' },
-    { meta: { ...deployment.meta, githubCommitSha: 'b'.repeat(40) } },
-  ]) {
-    assert.throws(() =>
-      selectStagingDeployment(
-        { deployments: [{ ...deployment, ...changed }] },
-        env.SESN_PR_HEAD_SHA,
-      ),
-    );
-  }
-  assert.throws(() =>
-    selectStagingDeployment(
-      { deployments: [deployment, deployment] },
-      env.SESN_PR_HEAD_SHA,
-    ),
-  );
-});
-
-test('only GET status 204 is accepted, never emitting refs', async () => {
+test('only protected GET status 204 passes without logging token or refs', async () => {
   let passedHeaders;
   const lines = [];
   await runStagingIdentityCheck({
     env,
-    binding,
-    discover: async () => `https://${deployment.url}`,
-    check: async (url, headers) => {
-      assert.match(url, /\/internal\/staging-runtime-identity$/u);
+    getToken: async () => 'fixture-oidc-token',
+    check: async (headers, token) => {
+      assert.equal(token, 'fixture-oidc-token');
       passedHeaders = headers;
-      return '204';
+      return 204;
     },
     log: (line) => lines.push(line),
   });
   assert.doesNotMatch(
     JSON.stringify({ passedHeaders, lines }),
-    /stagingexampleproject|productionexamplepro|fixture-token/u,
+    /stagingexampleproject|productionexamplepro|fixture-oidc-token/u,
   );
   await assert.rejects(() =>
     runStagingIdentityCheck({
       env,
-      binding,
-      discover: async () => `https://${deployment.url}`,
-      check: async () => '404',
+      getToken: async () => 'fixture-oidc-token',
+      check: async () => 403,
       log: () => {},
     }),
   );
