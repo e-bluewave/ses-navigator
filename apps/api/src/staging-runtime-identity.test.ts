@@ -31,15 +31,37 @@ describe('Staging runtime identity probe', () => {
   it.each([
     [{ VERCEL_PROJECT_ID: 'prj_other' }, staging, production],
     [{ VERCEL_ENV: 'production' }, staging, production],
-    [{ VERCEL_URL: 'ses-navigator-production-abc.vercel.app' }, staging, production],
+    [
+      { VERCEL_URL: 'ses-navigator-production-abc.vercel.app' },
+      staging,
+      production,
+    ],
     [{ VERCEL_GIT_COMMIT_SHA: 'b'.repeat(40) }, staging, production],
-    [{ SUPABASE_URL: 'https://productionexamplepro.supabase.co' }, staging, production],
-    [{ SUPABASE_URL: 'https://stagingexampleproject.supabase.co.evil.test' }, staging, production],
-    [{ SUPABASE_URL: 'http://stagingexampleproject.supabase.co' }, staging, production],
-    [{ SUPABASE_URL: 'https://stagingexampleproject.supabase.co/path' }, staging, production],
+    [
+      { SUPABASE_URL: 'https://productionexamplepro.supabase.co' },
+      staging,
+      production,
+    ],
+    [
+      { SUPABASE_URL: 'https://stagingexampleproject.supabase.co.evil.test' },
+      staging,
+      production,
+    ],
+    [
+      { SUPABASE_URL: 'http://stagingexampleproject.supabase.co' },
+      staging,
+      production,
+    ],
+    [
+      { SUPABASE_URL: 'https://stagingexampleproject.supabase.co/path' },
+      staging,
+      production,
+    ],
     [{ SUPABASE_URL: undefined }, staging, production],
     [{}, staging, staging],
-  ])('rejects environment confusion', (override, expectedStaging, expectedProduction) => {
+  ])(
+    'rejects environment confusion',
+    (override, expectedStaging, expectedProduction) => {
     expect(
       matchesStagingRuntimeIdentity(
         { ...env, ...override },
@@ -49,7 +71,8 @@ describe('Staging runtime identity probe', () => {
         expectedProduction,
       ),
     ).toBe(false);
-  });
+    },
+  );
 
   it('returns only empty 204 or 404 with no cache', async () => {
     const app = Fastify();
@@ -65,12 +88,20 @@ describe('Staging runtime identity probe', () => {
         'x-sesn-staging-ref-sha256': staging,
         'x-sesn-production-ref-sha256': production,
       };
-      const ok = await app.inject({ method: 'GET', url: '/internal/staging-runtime-identity', headers });
+      const ok = await app.inject({
+        method: 'GET',
+        url: '/internal/staging-runtime-identity',
+        headers,
+      });
       expect(ok.statusCode).toBe(204);
       expect(ok.body).toBe('');
       expect(ok.headers['cache-control']).toBe('no-store');
 
-      const fail = await app.inject({ method: 'GET', url: '/internal/staging-runtime-identity', headers: { ...headers, 'x-sesn-staging-ref-sha256': production } });
+      const fail = await app.inject({
+        method: 'GET',
+        url: '/internal/staging-runtime-identity',
+        headers: { ...headers, 'x-sesn-staging-ref-sha256': production },
+      });
       expect(fail.statusCode).toBe(404);
       expect(fail.body).toBe('');
     } finally {
