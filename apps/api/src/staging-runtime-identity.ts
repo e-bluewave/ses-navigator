@@ -39,10 +39,11 @@ export function matchesStagingRuntimeIdentity(
   try {
     const url = new URL(env.SUPABASE_URL ?? '');
     const match = /^([a-z0-9]{8,40})\.supabase\.co$/u.exec(url.hostname);
+    const ref = match?.[1];
     if (
       url.protocol !== 'https:' ||
-      !match ||
-      !REF.test(match[1]) ||
+      typeof ref !== 'string' ||
+      !REF.test(ref) ||
       url.port ||
       url.username ||
       url.password ||
@@ -52,7 +53,7 @@ export function matchesStagingRuntimeIdentity(
     ) {
       return false;
     }
-    const actual = digest(match[1]);
+    const actual = digest(ref);
     return (
       timingSafeEqual(actual, Buffer.from(stagingDigest, 'hex')) &&
       !timingSafeEqual(actual, Buffer.from(productionDigest, 'hex'))
