@@ -20,7 +20,7 @@ export function matchesStagingRuntimeIdentity(
 ): boolean {
   if (
     env.VERCEL_PROJECT_ID !== STAGING_PROJECT_ID ||
-    env.VERCEL_ENV !== 'production' ||
+    env.VERCEL_ENV !== 'preview' ||
     typeof env.VERCEL_URL !== 'string' ||
     !DEPLOYMENT_HOST.test(env.VERCEL_URL) ||
     host !== env.VERCEL_URL ||
