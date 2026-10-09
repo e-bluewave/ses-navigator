@@ -70,3 +70,19 @@ test('reports file and line without returning matched secret text', () => {
   assert.equal(result.findings[0].line, 2);
   assert.equal(JSON.stringify(result).includes('do_not_log'), false);
 });
+
+test('rejects Microsoft Graph client secret configuration in browser files', () => {
+  const result = validateClientSecretBoundary([
+    {
+      name: 'src/config.ts',
+      source: 'const secret = import.meta.env.MICROSOFT_GRAPH_CLIENT_SECRET;',
+    },
+  ]);
+
+  assert.ok(
+    result.findings.some(
+      (finding) =>
+        finding.rule === 'microsoft-graph-client-secret-environment-variable',
+    ),
+  );
+});

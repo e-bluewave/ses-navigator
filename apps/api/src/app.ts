@@ -1,5 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 
+import { registerStagingRuntimeIdentityRoute } from './staging-runtime-identity.js';
+
 import { registerAuthentication } from './plugins/authentication.js';
 import {
   registerAuthContextRoute,
@@ -151,6 +153,7 @@ export function buildApp(dependencies: AppDependencies = {}): FastifyInstance {
   });
 
   app.get('/health', () => ({ status: 'ok' as const }));
+  registerStagingRuntimeIdentityRoute(app);
 
   registerAuthContextRoute(
     app,

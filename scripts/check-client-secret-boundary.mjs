@@ -15,6 +15,10 @@ const FORBIDDEN_PATTERNS = [
     pattern:
       /\bVITE_[A-Z0-9_]*(?:SECRET|PRIVATE_KEY|SERVICE_ROLE)[A-Z0-9_]*\b/g,
   },
+  {
+    rule: 'microsoft-graph-client-secret-environment-variable',
+    pattern: /\b(?:VITE_|NEXT_PUBLIC_)?MICROSOFT_GRAPH_CLIENT_SECRET\b/g,
+  },
 ];
 
 const TEXT_EXTENSIONS = new Set([
