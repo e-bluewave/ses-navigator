@@ -11,7 +11,7 @@ permissions:
 jobs:
   staging-readonly:
     # A label triggers this only for the reviewed, same-repository PR #168.
-    # A required reviewer on the GitHub Environment gates access to secrets.
+    # A required reviewer gates access to the read-only OIDC identity job.
     if: >-
       github.event.label.name == 'sesn-staging-readonly' &&
       github.event.pull_request.number == 168 &&
@@ -45,9 +45,4 @@ jobs:
             echo 'Staging read-only environment is incomplete.' >&2
             exit 1
           fi
-          readonly_root="$(mktemp -d)"
-          trap 'rm -rf "$readonly_root"' EXIT
-          mkdir -p "$readonly_root/.vercel"
-          printf '%s\n' '{"projectId":"prj_gpgM7keccxqbJpZssLH5UOBSb0OU","orgId":"team_Wd9vCeAN0Q0MZCaqKXtVjRRw"}' > "$readonly_root/.vercel/project.json"
-          cd "$readonly_root"
           node "$GITHUB_WORKSPACE/scripts/staging-runtime-identity-cloud.mjs"
