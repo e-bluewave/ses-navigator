@@ -22,6 +22,7 @@ async function withGreeting(
 ) {
   const commands: string[] = [];
   const server = net.createServer((socket) => {
+    socket.on('error', () => undefined);
     socket.on('data', (chunk) => commands.push(chunk.toString('utf8')));
     socket.write(greeting);
   });
@@ -37,20 +38,26 @@ async function withGreeting(
 
 describe('SMTP response parser safety', () => {
   it('rejects an oversized greeting before authentication', async () => {
-    await withGreeting(`220 ${'x'.repeat(70_000)}\r\n`, async (port, commands) => {
-      await expect(nodeSmtpTransport({ ...input, port })).rejects.toThrow(
-        'SMTP response exceeds limit',
-      );
-      expect(commands).toEqual([]);
-    });
+    await withGreeting(
+      `220 ${'x'.repeat(70_000)}\r\n`,
+      async (port, commands) => {
+        await expect(nodeSmtpTransport({ ...input, port })).rejects.toThrow(
+          'SMTP response exceeds limit',
+        );
+        expect(commands).toEqual([]);
+      },
+    );
   });
 
   it('rejects inconsistent multiline codes before authentication', async () => {
-    await withGreeting('220-first\r\n250 second\r\n', async (port, commands) => {
-      await expect(nodeSmtpTransport({ ...input, port })).rejects.toThrow(
-        'Invalid SMTP multiline response',
-      );
-      expect(commands).toEqual([]);
-    });
+    await withGreeting(
+      '220-first\r\n250 second\r\n',
+      async (port, commands) => {
+        await expect(nodeSmtpTransport({ ...input, port })).rejects.toThrow(
+          'Invalid SMTP multiline response',
+        );
+        expect(commands).toEqual([]);
+      },
+    );
   });
 });
