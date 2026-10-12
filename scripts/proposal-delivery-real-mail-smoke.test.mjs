@@ -6,11 +6,14 @@ import { runProposalDeliveryRealMailSmoke } from './proposal-delivery-real-mail-
 const proposalId = '11111111-1111-4111-8111-111111111111';
 const messageId = '22222222-2222-4222-8222-222222222222';
 const env = {
-  SESN_SUPABASE_URL: 'https://example.supabase.co',
+  SESN_SUPABASE_URL: 'https://stagingexampleproject.supabase.co',
+  SESN_STAGING_SUPABASE_REF: 'stagingexampleproject',
+  SESN_PRODUCTION_SUPABASE_REF: 'productionexamplepro',
   SESN_SUPABASE_PUBLISHABLE_KEY: 'publishable-key',
   SESN_TEST_EMAIL: 'smoke@example.com',
   SESN_TEST_PASSWORD: 'not-a-real-password',
-  SESN_API_URL: 'https://staging.example.com',
+  SESN_API_URL:
+    'https://ses-navigator-staging-git-codex-issue-167-b1ce58-ebw-s-projects.vercel.app',
   SESN_PROPOSAL_ID: proposalId,
   SESN_MESSAGE_ID: messageId,
   SESN_EXPECTED_RECIPIENTS: 'recipient@example.com',
@@ -221,6 +224,44 @@ test('refuses non-Staging targets', async () => {
   assert.equal(called, false);
 });
 
+test('refuses wrong project, production identity, and unpinned API before auth', async () => {
+  for (const override of [
+    { SESN_SUPABASE_URL: 'https://productionexamplepro.supabase.co' },
+    { SESN_PRODUCTION_SUPABASE_REF: env.SESN_STAGING_SUPABASE_REF },
+    { SESN_STAGING_SUPABASE_REF: '' },
+    { SESN_API_URL: 'https://ses-navigator-production.vercel.app' },
+    { SESN_API_URL: `${env.SESN_API_URL}/api` },
+    { SESN_SUPABASE_URL: 'https://stagingexampleproject.supabase.co@evil.example' },
+  ]) {
+    let called = false;
+    await assert.rejects(
+      runProposalDeliveryRealMailSmoke({
+        env: { ...env, ...override },
+        fetchImpl: async () => {
+          called = true;
+          return jsonResponse(200, {});
+        },
+        log: () => undefined,
+      }),
+    );
+    assert.equal(called, false);
+  }
+});
+
+test('does not copy untrusted server error codes into logs', async () => {
+  const logs = [];
+  await assert.rejects(
+    runProposalDeliveryRealMailSmoke({
+      env,
+      fetchImpl: async () =>
+        jsonResponse(401, { code: 'secret-value-in-server-error' }),
+      log: (line) => logs.push(line),
+    }),
+    /Supabase Auth login failed/u,
+  );
+  assert.equal(logs.join(' ').includes('secret-value-in-server-error'), false);
+});
+
 test('requires an approved message before sending', async () => {
   const urls = [];
   const fetchImpl = async (url) => {
@@ -259,3 +300,4 @@ function jsonResponse(status, body) {
     json: async () => body,
   };
 }
+
