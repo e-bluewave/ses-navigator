@@ -303,4 +303,3 @@ function jsonResponse(status, body) {
     json: async () => body,
   };
 }
-
