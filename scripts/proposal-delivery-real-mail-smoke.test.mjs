@@ -231,7 +231,10 @@ test('refuses wrong project, production identity, and unpinned API before auth',
     { SESN_STAGING_SUPABASE_REF: '' },
     { SESN_API_URL: 'https://ses-navigator-production.vercel.app' },
     { SESN_API_URL: `${env.SESN_API_URL}/api` },
-    { SESN_SUPABASE_URL: 'https://stagingexampleproject.supabase.co@evil.example' },
+    {
+      SESN_SUPABASE_URL:
+        'https://stagingexampleproject.supabase.co@evil.example',
+    },
   ]) {
     let called = false;
     await assert.rejects(
