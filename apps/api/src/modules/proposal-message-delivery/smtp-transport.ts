@@ -9,6 +9,8 @@ import type {
 
 type Socket = net.Socket | tls.TLSSocket;
 const TIMEOUT_MS = 15_000;
+const MAX_RESPONSE_BYTES = 64 * 1024;
+const MAX_RESPONSE_LINES = 100;
 
 export class SmtpResponseError extends Error {
   constructor(readonly responseCode: string) {
@@ -125,12 +127,19 @@ function waitConnected(socket: Socket, secure: boolean): Promise<void> {
 
 function responseReader(socket: Socket) {
   let buffer = '';
-  let lines: string[] = [];
+  let responseBytes = 0;
+  let responseLines = 0;
+  let multilineCode: number | null = null;
   const responses: number[] = [];
   let terminalError: Error | null = null;
   let waiting: ((code: number) => void) | null = null;
   let rejectWaiting: ((error: Error) => void) | null = null;
   const onData = (chunk: Buffer) => {
+    responseBytes += chunk.length;
+    if (responseBytes > MAX_RESPONSE_BYTES) {
+      onError(new Error('SMTP response exceeds limit'));
+      return;
+    }
     buffer += chunk.toString('utf8');
     let end: number;
     while ((end = buffer.indexOf('\r\n')) !== -1) {
@@ -141,10 +150,20 @@ function responseReader(socket: Socket) {
         onError(new Error('Invalid SMTP response'));
         return;
       }
-      lines.push(line);
+      responseLines++;
+      const code = Number(match[1]);
+      if (
+        responseLines > MAX_RESPONSE_LINES ||
+        (multilineCode !== null && code !== multilineCode)
+      ) {
+        onError(new Error('Invalid SMTP multiline response'));
+        return;
+      }
+      if (match[2] === '-') multilineCode = code;
       if (match[2] === ' ') {
-        const code = Number(match[1]);
-        lines = [];
+        responseBytes = Buffer.byteLength(buffer, 'utf8');
+        responseLines = 0;
+        multilineCode = null;
         if (waiting) {
           const resolve = waiting;
           waiting = null;
