@@ -1,7 +1,13 @@
 import { isMainModule } from './cli-entry.mjs';
 
+const STAGING_API_ORIGIN =
+  'https://ses-navigator-staging-git-codex-issue-167-b1ce58-ebw-s-projects.vercel.app';
+const PROJECT_REF = /^[a-z0-9]{8,40}$/u;
+
 const REQUIRED_VARIABLES = [
   'SESN_SUPABASE_URL',
+  'SESN_STAGING_SUPABASE_REF',
+  'SESN_PRODUCTION_SUPABASE_REF',
   'SESN_SUPABASE_PUBLISHABLE_KEY',
   'SESN_TEST_EMAIL',
   'SESN_TEST_PASSWORD',
@@ -33,6 +39,7 @@ export async function runProposalDeliveryRealMailSmoke({
   if (env.SESN_TARGET_ENVIRONMENT.trim() !== 'Staging') {
     throw new Error('Real mail smoke is restricted to Staging');
   }
+  assertStagingSmokeTargets(env);
   if (env.SESN_REAL_SEND_CONFIRM !== CONFIRM_TEXT) {
     throw new Error('Explicit real mail confirmation is required');
   }
@@ -58,8 +65,8 @@ export async function runProposalDeliveryRealMailSmoke({
     throw new Error('Exactly one expected recipient is required');
   }
 
-  const supabaseUrl = withoutTrailingSlash(env.SESN_SUPABASE_URL);
-  const apiUrl = withoutTrailingSlash(env.SESN_API_URL);
+  const supabaseUrl = new URL(env.SESN_SUPABASE_URL).origin;
+  const apiUrl = STAGING_API_ORIGIN;
   const publishableKey = env.SESN_SUPABASE_PUBLISHABLE_KEY;
 
   log('1/5 Supabase Auth login');
@@ -96,7 +103,7 @@ export async function runProposalDeliveryRealMailSmoke({
     const draft = await readJson(draftResponse);
     if (!draftResponse.ok) {
       throw new Error(
-        `Message read failed (HTTP ${draftResponse.status}, code ${safeCode(draft)})`,
+        `Message read failed (HTTP ${draftResponse.status})`,
       );
     }
     if (
@@ -118,7 +125,7 @@ export async function runProposalDeliveryRealMailSmoke({
     const before = await readJson(beforeResponse);
     if (!beforeResponse.ok) {
       throw new Error(
-        `Delivery read failed (HTTP ${beforeResponse.status}, code ${safeCode(before)})`,
+        `Delivery read failed (HTTP ${beforeResponse.status})`,
       );
     }
     if (
@@ -155,7 +162,7 @@ export async function runProposalDeliveryRealMailSmoke({
     const sent = await readJson(sendResponse);
     if (!sendResponse.ok) {
       throw new Error(
-        `Real mail send failed (HTTP ${sendResponse.status}, code ${safeCode(sent)})`,
+        `Real mail send failed (HTTP ${sendResponse.status})`,
       );
     }
 
@@ -169,7 +176,7 @@ export async function runProposalDeliveryRealMailSmoke({
     const after = await readJson(afterResponse);
     if (!afterResponse.ok) {
       throw new Error(
-        `Delivery history read failed (HTTP ${afterResponse.status}, code ${safeCode(after)})`,
+        `Delivery history read failed (HTTP ${afterResponse.status})`,
       );
     }
     assertProviderAccepted(after, expectedProvider, expectedCode);
@@ -246,12 +253,39 @@ async function readJson(response) {
   }
 }
 
-function safeCode(body) {
-  return typeof body?.code === 'string' ? body.code : 'unknown';
-}
-
-function withoutTrailingSlash(value) {
-  return value.replace(/\/+$/u, '');
+export function assertStagingSmokeTargets(env) {
+  const staging = env.SESN_STAGING_SUPABASE_REF;
+  const production = env.SESN_PRODUCTION_SUPABASE_REF;
+  if (
+    !PROJECT_REF.test(staging ?? '') ||
+    !PROJECT_REF.test(production ?? '') ||
+    staging === production
+  ) {
+    throw new Error('Independent Staging and Production refs are required');
+  }
+  try {
+    for (const [raw, host] of [
+      [env.SESN_SUPABASE_URL, `${staging}.supabase.co`],
+      [env.SESN_API_URL, new URL(STAGING_API_ORIGIN).hostname],
+    ]) {
+      const url = new URL(raw);
+      if (
+        url.protocol !== 'https:' ||
+        url.hostname !== host ||
+        url.username ||
+        url.password ||
+        url.port ||
+        url.pathname !== '/' ||
+        url.search ||
+        url.hash ||
+        (raw !== url.origin && raw !== `${url.origin}/`)
+      ) {
+        throw new Error('Invalid target');
+      }
+    }
+  } catch {
+    throw new Error('Real mail smoke target is not the pinned Staging target');
+  }
 }
 
 if (isMainModule(import.meta.url)) {
@@ -264,3 +298,4 @@ if (isMainModule(import.meta.url)) {
       process.exitCode = 1;
     });
 }
+
