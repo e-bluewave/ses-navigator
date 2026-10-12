@@ -21,7 +21,9 @@ async function withGreeting(
   check: (port: number, commands: string[]) => Promise<void>,
 ) {
   const commands: string[] = [];
+  const sockets: net.Socket[] = [];
   const server = net.createServer((socket) => {
+    sockets.push(socket);
     socket.on('error', () => undefined);
     socket.on('data', (chunk) => commands.push(chunk.toString('utf8')));
     socket.write(greeting);
@@ -31,7 +33,7 @@ async function withGreeting(
     const address = server.address() as AddressInfo;
     await check(address.port, commands);
   } finally {
-    server.closeAllConnections();
+    for (const socket of sockets) socket.destroy();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 }
