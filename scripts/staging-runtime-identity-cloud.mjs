@@ -9,7 +9,10 @@ const EXPECTED_CLAIMS = {
   iss: 'https://token.actions.githubusercontent.com',
   aud: 'https://github.com/e-bluewave',
   repository: 'e-bluewave/ses-navigator',
-  sub: 'repo:e-bluewave/ses-navigator:environment:sesn-staging-readonly',
+  repository_id: '1306589109',
+  repository_owner_id: '212184551',
+  sub:
+    'repo:e-bluewave@212184551/ses-navigator@1306589109:environment:sesn-staging-readonly',
   environment: 'sesn-staging-readonly',
   event_name: 'pull_request',
   head_ref: 'codex/issue-167-microsoft-graph-mail-provider',
