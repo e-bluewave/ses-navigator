@@ -102,9 +102,7 @@ export async function runProposalDeliveryRealMailSmoke({
     });
     const draft = await readJson(draftResponse);
     if (!draftResponse.ok) {
-      throw new Error(
-        `Message read failed (HTTP ${draftResponse.status})`,
-      );
+      throw new Error(`Message read failed (HTTP ${draftResponse.status})`);
     }
     if (
       draft?.id !== env.SESN_MESSAGE_ID ||
@@ -124,9 +122,7 @@ export async function runProposalDeliveryRealMailSmoke({
     });
     const before = await readJson(beforeResponse);
     if (!beforeResponse.ok) {
-      throw new Error(
-        `Delivery read failed (HTTP ${beforeResponse.status})`,
-      );
+      throw new Error(`Delivery read failed (HTTP ${beforeResponse.status})`);
     }
     if (
       before.messageId !== env.SESN_MESSAGE_ID ||
@@ -161,9 +157,7 @@ export async function runProposalDeliveryRealMailSmoke({
     );
     const sent = await readJson(sendResponse);
     if (!sendResponse.ok) {
-      throw new Error(
-        `Real mail send failed (HTTP ${sendResponse.status})`,
-      );
+      throw new Error(`Real mail send failed (HTTP ${sendResponse.status})`);
     }
 
     assertProviderAccepted(sent, expectedProvider, expectedCode);
