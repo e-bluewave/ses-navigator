@@ -2497,6 +2497,135 @@ describe('App', () => {
     ).toBeInTheDocument();
     expect(sendProposalMessage).not.toHaveBeenCalled();
   });
+  it('shows failed delivery history and retries only after an explicit click', async () => {
+    const approved = {
+      ...proposalMessageDraft,
+      status: 'approved' as const,
+      approvedVersionId: proposalMessageDraft.currentVersionId,
+      approvedAt: '2026-08-14T03:02:00Z',
+      reviewStatus: 'approved' as const,
+    };
+    const failed: Awaited<
+      ReturnType<ProjectsApi['getProposalMessageDelivery']>
+    > = {
+      messageId: approved.id,
+      proposalId: proposal.id,
+      status: 'failed',
+      sentAt: null,
+      approvedVersionId: approved.currentVersionId!,
+      rowVersion: 4,
+      recipients: [
+        {
+          id: '30303030-3030-4030-8030-303030303030',
+          type: 'to',
+          name: '営業担当者',
+          address: 'sales@example.com',
+          deliveryStatus: 'failed',
+          attempts: [
+            {
+              id: '40404040-4040-4040-8040-404040404040',
+              attemptNo: 1,
+              status: 'failed',
+              provider: 'smtp',
+              providerMessageId: null,
+              attemptedAt: '2026-08-14T03:03:00Z',
+              responseCode: '450',
+              errorMessage: '一時的な失敗',
+            },
+          ],
+        },
+      ],
+    };
+    const retryProposalMessage = vi.fn<ProjectsApi['retryProposalMessage']>(
+      () =>
+        Promise.resolve({
+          ...failed,
+          status: 'sent',
+          sentAt: '2026-08-14T03:04:00Z',
+          recipients: failed.recipients.map((recipient) => ({
+            ...recipient,
+            deliveryStatus: 'sent',
+            attempts: [
+              ...recipient.attempts,
+              {
+                ...recipient.attempts[0]!,
+                id: '50505050-5050-4050-8050-505050505050',
+                attemptNo: 2,
+                status: 'accepted',
+                responseCode: '250',
+                errorMessage: null,
+              },
+            ],
+          })),
+        }),
+    );
+    const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
+    window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getProposal: () => Promise.resolve(proposal),
+          getLatestProposalMessageDraft: () => Promise.resolve(approved),
+          getProposalMessageDelivery: () => Promise.resolve(failed),
+          sendProposalMessage,
+          retryProposalMessage,
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/#1 failed \/ smtp \/ 450/u)).toBeInTheDocument();
+    expect(retryProposalMessage).not.toHaveBeenCalled();
+    expect(sendProposalMessage).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('button', { name: '失敗した宛先だけ再送' }),
+    );
+    await waitFor(() =>
+      expect(retryProposalMessage).toHaveBeenCalledWith(proposal.id, approved.id),
+    );
+    expect(await screen.findByText(/#2 accepted \/ smtp \/ 250/u)).toBeInTheDocument();
+    expect(retryProposalMessage).toHaveBeenCalledOnce();
+    expect(sendProposalMessage).not.toHaveBeenCalled();
+  });
+
+  it('disables send for an approved message without recipients', async () => {
+    const approved = {
+      ...proposalMessageDraft,
+      status: 'approved' as const,
+      approvedVersionId: proposalMessageDraft.currentVersionId,
+      approvedAt: '2026-08-14T03:02:00Z',
+      reviewStatus: 'approved' as const,
+      recipients: [],
+    };
+    const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
+    window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getProposal: () => Promise.resolve(proposal),
+          getLatestProposalMessageDraft: () => Promise.resolve(approved),
+          getProposalMessageDelivery: () =>
+            Promise.resolve({
+              messageId: approved.id,
+              proposalId: proposal.id,
+              status: 'approved',
+              sentAt: null,
+              approvedVersionId: approved.currentVersionId!,
+              rowVersion: 3,
+              recipients: [],
+            }),
+          sendProposalMessage,
+        })}
+      />,
+    );
+    expect(await screen.findByText('宛先メールアドレスは未登録です。')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '承認済み本文を送信' }),
+    ).toBeDisabled();
+    expect(sendProposalMessage).not.toHaveBeenCalled();
+  });
+
   it('transitions proposal status with optimistic locking', async () => {
     window.history.replaceState({}, '', `/proposals/${proposal.id}`);
     const transitionProposalStatus = vi.fn(() =>
