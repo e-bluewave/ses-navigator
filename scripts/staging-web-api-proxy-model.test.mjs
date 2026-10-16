@@ -222,3 +222,143 @@ test('protection HTML, reflected credentials, oversized bodies and network error
     );
   }
 });
+
+test('mismatched Host, ambiguous framing and missing update versions never reach the upstream', async () => {
+  const { handle, calls, tokenCalls } = fixture();
+  const cases = [
+    request('/api/v1/projects', { headers: { host: 'evil.example' } }),
+    request('/api/v1/projects', { headers: { 'content-length': '2' } }),
+    request('/api/v1/projects', {
+      method: 'POST',
+      body: '{}',
+      headers: { 'transfer-encoding': 'chunked', 'content-length': '2' },
+    }),
+    request('/api/v1/projects', {
+      method: 'POST',
+      body: '{}',
+      headers: { 'content-length': '2, 2' },
+    }),
+    request('/api/v1/projects', {
+      method: 'POST',
+      body: '{}',
+      headers: { 'content-length': '1' },
+    }),
+    request('/api/v1/projects', {
+      method: 'POST',
+      body: '{}',
+      headers: { 'x-http-method-override': 'DELETE' },
+    }),
+    request('/api/v1/projects', {
+      method: 'POST',
+      body: '{}',
+      headers: { 'content-encoding': 'gzip' },
+    }),
+    request(`/api/v1/projects/${id}`, { method: 'PUT', body: '{}' }),
+    request(`/api/v1/proposals/${id}/ai/message-drafts/${id}/review`, {
+      method: 'POST',
+      body: '{}',
+    }),
+    request('/api/v1/projects', {
+      method: 'POST',
+      body: new Uint8Array([255]),
+    }),
+  ];
+  for (const input of cases) assert.equal((await handle(input)).ok, false);
+  assert.equal(calls.length, 0);
+  assert.equal(tokenCalls(), 0);
+});
+
+test('one deadline stops stalled request body, token, fetch and response body without retry', async () => {
+  for (const phase of ['body', 'token', 'fetch', 'response']) {
+    const deadline = new AbortController();
+    let started;
+    const ready = new Promise((resolve) => {
+      started = resolve;
+    });
+    let cancelled = false;
+    let fetchCount = 0;
+    const stalled = new ReadableStream(
+      {
+        pull() {
+          if (phase === 'body' || phase === 'response') started();
+        },
+        cancel() {
+          cancelled = true;
+          return new Promise(() => {});
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const { handle } = fixture({
+      createDeadlineSignal: () => deadline.signal,
+      getOidcToken: () => {
+        if (phase === 'token') {
+          started();
+          return new Promise(() => {});
+        }
+        return Promise.resolve(oidc);
+      },
+      fetchImpl: () => {
+        fetchCount += 1;
+        if (phase === 'fetch') {
+          started();
+          return new Promise(() => {});
+        }
+        return Promise.resolve(
+          new Response(stalled, {
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      },
+    });
+    const input =
+      phase === 'body'
+        ? request('/api/v1/projects', {
+            method: 'POST',
+            body: stalled,
+            duplex: 'half',
+          })
+        : request();
+    const pending = handle(input);
+    await ready;
+    deadline.abort();
+    const result = await pending;
+    assert.equal(result.status, 504, phase);
+    assert.equal(fetchCount, phase === 'body' || phase === 'token' ? 0 : 1);
+    if (phase === 'body' || phase === 'response') assert.equal(cancelled, true);
+    assert.doesNotMatch(await result.text(), /fixture-workload|fixture-user/u);
+  }
+});
+
+test('cancelled requests do not acquire tokens and concurrent requests do not share tokens', async () => {
+  const cancellation = new AbortController();
+  cancellation.abort();
+  const blocked = fixture();
+  assert.equal(
+    (
+      await blocked.handle(
+        request('/api/v1/projects', { signal: cancellation.signal }),
+      )
+    ).status,
+    408,
+  );
+  assert.equal(blocked.tokenCalls(), 0);
+  const identities = [];
+  let sequence = 0;
+  const { handle } = fixture({
+    getOidcToken: async () => `fixture-identity-${++sequence}`,
+    fetchImpl: async (_url, options) => {
+      identities.push(options.headers.get('x-vercel-trusted-oidc-idp-token'));
+      return Response.json({ items: [] });
+    },
+  });
+  const responses = await Promise.all([handle(request()), handle(request())]);
+  assert.deepEqual(
+    responses.map((response) => response.status),
+    [200, 200],
+  );
+  assert.deepEqual(identities.sort(), [
+    'fixture-identity-1',
+    'fixture-identity-2',
+  ]);
+});

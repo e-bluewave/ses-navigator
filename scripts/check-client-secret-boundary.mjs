@@ -4,6 +4,16 @@ import { isMainModule } from './cli-entry.mjs';
 
 const FORBIDDEN_PATTERNS = [
   {
+    rule: 'server-mail-or-protection-credential',
+    pattern:
+      /\b(?:VITE_|NEXT_PUBLIC_)?(?:SMTP_PASSWORD|VERCEL_OIDC_TOKEN|VERCEL_AUTOMATION_BYPASS_SECRET)\b/g,
+  },
+  {
+    rule: 'browser-fixture-in-product',
+    pattern: /\bfixtureSendCount\b/g,
+    fixtureOnly: true,
+  },
+  {
     rule: 'service-role-environment-variable',
     pattern:
       /\b(?:VITE_)?(?:SESN_)?SUPABASE_(?:SERVICE_ROLE|SECRET)_KEY\b|\b(?:VITE_)?SERVICE_ROLE_KEY\b/g,
@@ -39,7 +49,12 @@ export function validateClientSecretBoundary(files) {
   for (const file of files) {
     const lines = file.source.split(/\r?\n/u);
     for (const [index, line] of lines.entries()) {
-      for (const { rule, pattern } of FORBIDDEN_PATTERNS) {
+      for (const { rule, pattern, fixtureOnly } of FORBIDDEN_PATTERNS) {
+        if (
+          fixtureOnly &&
+          /(?:^|\/)tests\/browser\//u.test(file.name.replaceAll('\\', '/'))
+        )
+          continue;
         pattern.lastIndex = 0;
         if (pattern.test(line)) {
           findings.push({ file: file.name, line: index + 1, rule });

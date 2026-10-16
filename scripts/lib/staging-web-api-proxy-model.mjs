@@ -37,24 +37,60 @@ function failure(status, code) {
   );
 }
 
-async function boundedText(stream, limit) {
-  if (!stream) return '';
+function withAbort(operation, signal) {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener('abort', stop);
+    const stop = () => {
+      cleanup();
+      reject(new Error('Request stopped'));
+    };
+    if (signal.aborted) {
+      stop();
+      return;
+    }
+    signal.addEventListener('abort', stop, { once: true });
+    Promise.resolve()
+      .then(() => {
+        if (signal.aborted) throw new Error('Request stopped');
+        return operation();
+      })
+      .then(
+        (value) => {
+          cleanup();
+          resolve(value);
+        },
+        (error) => {
+          cleanup();
+          reject(error);
+        },
+      );
+  });
+}
+
+async function boundedText(stream, limit, signal) {
+  if (!stream) return { text: '', byteLength: 0 };
   const reader = stream.getReader();
   const chunks = [];
   let size = 0;
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      const { done, value } = await withAbort(() => reader.read(), signal);
       if (done) break;
       size += value.byteLength;
       if (size > limit) throw new Error('Body limit');
       chunks.push(value);
     }
   } finally {
-    await reader.cancel().catch(() => undefined);
+    // Cancellation of an unresponsive source must not delay the deadline.
+    void reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
-  return Buffer.concat(chunks).toString('utf8');
+  return {
+    text: new TextDecoder('utf-8', { fatal: true }).decode(
+      Buffer.concat(chunks),
+    ),
+    byteLength: size,
+  };
 }
 
 export function createStagingApiProxyModel({
@@ -62,6 +98,7 @@ export function createStagingApiProxyModel({
   runtimeEnvironment,
   getOidcToken,
   fetchImpl,
+  createDeadlineSignal = () => AbortSignal.timeout(30_000),
 }) {
   const origin = new URL(webOrigin);
   if (
@@ -74,18 +111,21 @@ export function createStagingApiProxyModel({
     origin.password ||
     origin.port ||
     typeof getOidcToken !== 'function' ||
-    typeof fetchImpl !== 'function'
+    typeof fetchImpl !== 'function' ||
+    typeof createDeadlineSignal !== 'function'
   ) {
     throw new Error('Staging proxy design configuration is invalid');
   }
 
   return async function handle(request) {
     const url = new URL(request.url);
+    const host = request.headers.get('host');
     if (
       url.origin !== webOrigin ||
       url.username ||
       url.password ||
       url.hash ||
+      (host !== null && host !== origin.host) ||
       /%|\\/u.test(url.pathname)
     )
       return failure(403, 'origin_denied');
@@ -116,8 +156,30 @@ export function createStagingApiProxyModel({
     const authorization = request.headers.get('authorization') ?? '';
     if (!/^Bearer [A-Za-z0-9._~-]{1,8192}$/u.test(authorization))
       return failure(401, 'authentication_required');
+    for (const name of [
+      'transfer-encoding',
+      'content-encoding',
+      'expect',
+      'trailer',
+      'x-http-method-override',
+      'x-method-override',
+    ]) {
+      if (request.headers.has(name)) return failure(400, 'framing_denied');
+    }
+    const length = request.headers.get('content-length');
+    if (length !== null && !/^(?:0|[1-9][0-9]{0,8})$/u.test(length))
+      return failure(400, 'framing_denied');
+    if (length !== null && Number(length) > 256 * 1024)
+      return failure(413, 'body_limit');
+    if (request.method === 'GET' && length !== null && Number(length) !== 0)
+      return failure(400, 'framing_denied');
     const headers = new Headers({ authorization, accept: 'application/json' });
     const version = request.headers.get('if-match');
+    if (
+      (request.method === 'PUT' || /\/review$/u.test(url.pathname)) &&
+      version === null
+    )
+      return failure(400, 'version_required');
     if (version !== null) {
       if (!/^"[0-9]{1,12}"$/u.test(version))
         return failure(400, 'version_denied');
@@ -130,6 +192,10 @@ export function createStagingApiProxyModel({
       headers.set('idempotency-key', key);
     }
 
+    const signal = AbortSignal.any([request.signal, createDeadlineSignal()]);
+    const stopped = () =>
+      failure(request.signal.aborted ? 408 : 504, 'request_stopped');
+    if (signal.aborted) return stopped();
     let body;
     if (request.method !== 'GET') {
       if (
@@ -139,11 +205,15 @@ export function createStagingApiProxyModel({
       )
         return failure(415, 'json_required');
       try {
-        body = await boundedText(request.body, 256 * 1024);
+        const read = await boundedText(request.body, 256 * 1024, signal);
+        if (length !== null && Number(length) !== read.byteLength)
+          return failure(400, 'framing_denied');
+        body = read.text;
         const parsed = JSON.parse(body);
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
           return failure(400, 'json_object_required');
       } catch {
+        if (signal.aborted) return stopped();
         return failure(400, 'body_denied');
       }
       headers.set('content-type', 'application/json');
@@ -152,7 +222,7 @@ export function createStagingApiProxyModel({
     try {
       // Future adapter must call the official runtime SDK in request context.
       // Never obtain this value from browser headers or a VITE_ build variable.
-      const token = await getOidcToken();
+      const token = await withAbort(() => getOidcToken(), signal);
       if (
         typeof token !== 'string' ||
         !token ||
@@ -161,28 +231,26 @@ export function createStagingApiProxyModel({
       )
         return failure(502, 'workload_identity_unavailable');
       headers.set('x-vercel-trusted-oidc-idp-token', token);
-      const response = await fetchImpl(
-        `${API_ORIGIN}${url.pathname}${url.search}`,
-        {
-          method: request.method,
-          headers,
-          ...(body === undefined ? {} : { body }),
-          redirect: 'manual',
-          credentials: 'omit',
-          cache: 'no-store',
-          signal: AbortSignal.any([
-            request.signal,
-            AbortSignal.timeout(30_000),
-          ]),
-        },
+      const response = await withAbort(
+        () =>
+          fetchImpl(`${API_ORIGIN}${url.pathname}${url.search}`, {
+            method: request.method,
+            headers,
+            ...(body === undefined ? {} : { body }),
+            redirect: 'manual',
+            credentials: 'omit',
+            cache: 'no-store',
+            signal,
+          }),
+        signal,
       );
       // Protection pages, redirects and upstream errors never reach the browser.
       if (response.status >= 300 && response.status < 400) {
-        await response.body?.cancel();
+        void response.body?.cancel().catch(() => undefined);
         return failure(502, 'upstream_redirect_denied');
       }
       if (!response.ok) {
-        await response.body?.cancel();
+        void response.body?.cancel().catch(() => undefined);
         return failure(response.status, 'upstream_api_rejected');
       }
       if (response.status === 204)
@@ -195,10 +263,10 @@ export function createStagingApiProxyModel({
           response.headers.get('content-type') ?? '',
         )
       ) {
-        await response.body?.cancel();
+        void response.body?.cancel().catch(() => undefined);
         return failure(502, 'upstream_json_required');
       }
-      const text = await boundedText(response.body, 1024 * 1024);
+      const { text } = await boundedText(response.body, 1024 * 1024, signal);
       const result = JSON.parse(text);
       const serialized = JSON.stringify(result);
       if (
@@ -211,6 +279,7 @@ export function createStagingApiProxyModel({
         headers: { 'cache-control': 'no-store' },
       });
     } catch {
+      if (signal.aborted) return stopped();
       return failure(502, 'upstream_unavailable');
     }
   };
