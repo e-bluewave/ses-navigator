@@ -3295,7 +3295,10 @@ describe('App', () => {
       await screen.findByRole('button', { name: '候補を再計算' }),
     );
     await screen.findByRole('heading', { name: '山田 太郎' });
-    await act(async () => finishInitial(null));
+    await act(async () => {
+      finishInitial(null);
+      await initial;
+    });
     expect(
       screen.getByRole('heading', { name: '山田 太郎' }),
     ).toBeInTheDocument();
