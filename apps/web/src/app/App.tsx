@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import { ApiClientError, createProjectsApi } from '../api/client.js';
+import { ProposalDeliveryConfirmation } from './ProposalDeliveryConfirmation.js';
 import type { ProjectsApi } from '../api/client.js';
 import { createSalesActivityApi } from '../api/sales-activity-client.js';
 import type { SalesActivityApi } from '../api/sales-activity-types.js';
@@ -6873,6 +6874,14 @@ function ProposalMessageDraftPanel({
   const [bodyText, setBodyText] = useState('');
   const [reviewComment, setReviewComment] = useState('');
   const [busy, setBusy] = useState(false);
+  const deliveryInFlight = useRef(false);
+  const [deliveryUncertain, setDeliveryUncertain] = useState(false);
+  const [deliveryRefresh, setDeliveryRefresh] = useState(0);
+  const [confirmation, setConfirmation] = useState<{
+    retry: boolean;
+    draft: ProposalMessageDraft;
+    delivery: ProposalMessageDelivery;
+  } | null>(null);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
@@ -6899,25 +6908,27 @@ function ProposalMessageDraftPanel({
       !['approved', 'queued', 'sent', 'failed'].includes(draft.status)
     ) {
       setDelivery(null);
+      setDeliveryUncertain(false);
       return;
     }
     let active = true;
+    setDelivery(null);
+    setError(null);
     api
       .getProposalMessageDelivery(proposalId, draft.id)
       .then((result) => {
-        if (active) setDelivery(result);
+        if (active) {
+          setDelivery(result);
+          setDeliveryUncertain(false);
+        }
       })
       .catch((reason: unknown) => {
-        if (
-          active &&
-          !(reason instanceof ApiClientError && reason.status === 404)
-        )
-          setError(reason);
+        if (active) setError(reason);
       });
     return () => {
       active = false;
     };
-  }, [api, proposalId, draft]);
+  }, [api, proposalId, draft, deliveryRefresh]);
 
   async function generate() {
     setBusy(true);
@@ -6980,8 +6991,26 @@ function ProposalMessageDraftPanel({
     }
   }
 
-  async function sendDelivery(retry: boolean) {
-    if (!draft) return;
+  async function sendDelivery() {
+    if (!confirmation || deliveryInFlight.current) return;
+    setConfirmation(null);
+    if (
+      !draft ||
+      !delivery ||
+      draft !== confirmation.draft ||
+      delivery !== confirmation.delivery
+    ) {
+      setError(
+        new Error('確認後に配信情報が変わりました。再度確認してください。'),
+      );
+      return;
+    }
+    const retry = confirmation.retry;
+    if ((retry && !canRetry) || (!retry && !canInitialSend)) {
+      setError(new Error('配信情報を再確認してください。'));
+      return;
+    }
+    deliveryInFlight.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -6992,19 +7021,79 @@ function ProposalMessageDraftPanel({
       if (result.status === 'sent') onSent();
     } catch (reason) {
       setError(reason);
+      setDeliveryUncertain(true);
     } finally {
+      deliveryInFlight.current = false;
       setBusy(false);
     }
   }
 
   const editable = draft?.status === 'draft' && draft.currentVersionId !== null;
+  const approvedVersionMatches =
+    draft?.approvedVersionId !== null &&
+    draft?.approvedVersionId === draft?.currentVersionId &&
+    delivery?.approvedVersionId === draft?.approvedVersionId &&
+    delivery?.messageId === draft?.id &&
+    delivery?.proposalId === proposalId;
+  const recipientKeys = (items: ProposalMessageDraft['recipients']) =>
+    items
+      .map((recipient) => `${recipient.type}:${recipient.address}`)
+      .sort()
+      .join('\n');
+  const canInitialSend = Boolean(
+    !deliveryUncertain &&
+    draft &&
+    delivery &&
+    approvedVersionMatches &&
+    draft.status === 'approved' &&
+    delivery.status === 'approved' &&
+    draft.recipients.length > 0 &&
+    delivery.recipients.length > 0 &&
+    recipientKeys(draft.recipients) === recipientKeys(delivery.recipients) &&
+    delivery.recipients.every(
+      (recipient) =>
+        recipient.deliveryStatus === 'pending' &&
+        recipient.attempts.length === 0,
+    ),
+  );
+  const canRetry = Boolean(
+    !deliveryUncertain &&
+    draft &&
+    delivery &&
+    approvedVersionMatches &&
+    ['approved', 'failed'].includes(draft.status) &&
+    delivery.status === 'failed' &&
+    recipientKeys(draft.recipients) === recipientKeys(delivery.recipients) &&
+    delivery.recipients.some(
+      (recipient) => recipient.deliveryStatus === 'failed',
+    ),
+  );
   return (
     <section className="audit-panel" aria-labelledby="proposal-message-heading">
       <h3 id="proposal-message-heading">AI提案メール下書き</h3>
       <p>
         AI生成版と営業編集版を不変履歴で保持します。承認しても自動送信されません。
       </p>
-      {error ? <ErrorNotice error={error} /> : null}
+      {error ? <ErrorNotice error={error} subject="提案メール" /> : null}
+      {draft?.status === 'approved' && !delivery ? (
+        <p role="status">配信履歴を確認できるまで送信・再送できません。</p>
+      ) : null}
+      {deliveryUncertain ? (
+        <p role="status">
+          送信結果を確認できません。再送せず、配信履歴と受信状況を確認してください。
+        </p>
+      ) : null}
+      {draft &&
+      ['approved', 'queued', 'sent', 'failed'].includes(draft.status) ? (
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={busy}
+          onClick={() => setDeliveryRefresh((value) => value + 1)}
+        >
+          配信履歴を再確認
+        </button>
+      ) : null}
       {!canGenerate ? (
         <p role="status">
           生成するには、送信前の提案に経歴書版IDと要件版IDを設定してください。
@@ -7146,13 +7235,16 @@ function ProposalMessageDraftPanel({
             </>
           ) : null}
           {draft.status === 'approved' &&
-          (!delivery || delivery.status === 'approved') ? (
+          approvedVersionMatches &&
+          delivery?.status === 'approved' ? (
             <div className="button-row">
               <button
                 type="button"
                 className="primary-button"
-                disabled={busy || draft.recipients.length === 0}
-                onClick={() => void sendDelivery(false)}
+                disabled={busy || !canInitialSend}
+                onClick={() =>
+                  setConfirmation({ retry: false, draft, delivery })
+                }
               >
                 承認済み本文を送信
               </button>
@@ -7195,15 +7287,14 @@ function ProposalMessageDraftPanel({
                   )}
                 </div>
               ))}
-              {delivery.status === 'failed' &&
-              delivery.recipients.some(
-                (recipient) => recipient.deliveryStatus === 'failed',
-              ) ? (
+              {canRetry ? (
                 <button
                   type="button"
                   className="secondary-button"
                   disabled={busy}
-                  onClick={() => void sendDelivery(true)}
+                  onClick={() =>
+                    setConfirmation({ retry: true, draft, delivery })
+                  }
                 >
                   失敗した宛先だけ再送
                 </button>
@@ -7218,6 +7309,19 @@ function ProposalMessageDraftPanel({
             </section>
           ) : null}
         </section>
+      ) : null}
+      {confirmation ? (
+        <ProposalDeliveryConfirmation
+          retry={confirmation.retry}
+          subject={confirmation.draft.subject}
+          bodyText={confirmation.draft.bodyText}
+          recipients={confirmation.delivery.recipients.filter(
+            (recipient) =>
+              !confirmation.retry || recipient.deliveryStatus === 'failed',
+          )}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={() => void sendDelivery()}
+        />
       ) : null}
     </section>
   );
@@ -7353,7 +7457,14 @@ function ProposalDetail({
           ['draft', 'pending_approval', 'approved'].includes(item.status)
         }
         onSent={() => {
-          void api.getProposal(item.id).then(setItem);
+          void api
+            .getProposal(item.id)
+            .then(setItem)
+            .catch(() => {
+              setActionError(
+                '送信後の提案状態を取得できませんでした。配信履歴を確認してください。',
+              );
+            });
         }}
       />
       {winResult ? (
@@ -7672,17 +7783,46 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
   );
   const [route, setRoute] = useState<Route>(currentRoute);
   const [requiresMfa, setRequiresMfa] = useState<boolean | null>(null);
+  const [verifiedAccessToken, setVerifiedAccessToken] = useState<string | null>(
+    null,
+  );
+  const [authContextError, setAuthContextError] = useState(false);
 
   useEffect(() => {
+    let active = true;
+    setAuthContextError(false);
+    setRequiresMfa(null);
+    setVerifiedAccessToken(null);
     if (session === null) {
-      setRequiresMfa(null);
       return;
     }
     void api
       .getAuthContext()
-      .then((context) => setRequiresMfa(context.requiresMfa))
-      .catch(() => setRequiresMfa(true));
-  }, [api, session]);
+      .then((context) => {
+        if (!active) return;
+        if (typeof context.requiresMfa !== 'boolean') {
+          setAuthContextError(true);
+          return;
+        }
+        setRequiresMfa(context.requiresMfa);
+        setVerifiedAccessToken(session.accessToken);
+      })
+      .catch(async (reason: unknown) => {
+        if (!active) return;
+        if (reason instanceof ApiClientError && reason.status === 401) {
+          try {
+            await signOut();
+          } catch {
+            if (active) setAuthContextError(true);
+          }
+        } else {
+          setAuthContextError(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, session, signOut]);
 
   useEffect(() => {
     const handlePopState = () => setRoute(currentRoute());
@@ -7723,7 +7863,19 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       />
     );
   if (session === null) return <LoginPage />;
-  if (requiresMfa === null)
+  if (authContextError)
+    return (
+      <main className="login-shell">
+        <section className="login-panel">
+          <h1>アクセス権限を確認できません</h1>
+          <p role="alert">再ログインして、アクセス権限を確認してください。</p>
+          <button type="button" onClick={() => void signOut()}>
+            ログアウト
+          </button>
+        </section>
+      </main>
+    );
+  if (requiresMfa === null || verifiedAccessToken !== session.accessToken)
     return (
       <main className="auth-loading" role="status">
         権限を確認しています…
@@ -11456,15 +11608,19 @@ function ProjectEngineerMatchPanel({
   projectId: string;
 }) {
   const [match, setMatch] = useState<ProjectEngineerMatch | null>(null);
+  const initialMatchEpoch = useRef(0);
   const [limit, setLimit] = useState(5);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     let active = true;
+    const epoch = ++initialMatchEpoch.current;
     api
       .getLatestProjectEngineerMatch(projectId)
-      .then((result) => active && setMatch(result))
+      .then((result) => {
+        if (active && epoch === initialMatchEpoch.current) setMatch(result);
+      })
       .catch(() => undefined);
     return () => {
       active = false;
@@ -11472,6 +11628,8 @@ function ProjectEngineerMatchPanel({
   }, [api, projectId]);
 
   async function runMatch() {
+    // A late initial read must not overwrite an explicit recalculation.
+    initialMatchEpoch.current += 1;
     setRunning(true);
     setError(null);
     try {

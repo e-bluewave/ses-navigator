@@ -70,3 +70,60 @@ test('reports file and line without returning matched secret text', () => {
   assert.equal(result.findings[0].line, 2);
   assert.equal(JSON.stringify(result).includes('do_not_log'), false);
 });
+
+test('rejects Microsoft Graph client secret configuration in browser files', () => {
+  const result = validateClientSecretBoundary([
+    {
+      name: 'src/config.ts',
+      source: 'const secret = import.meta.env.MICROSOFT_GRAPH_CLIENT_SECRET;',
+    },
+  ]);
+
+  assert.ok(
+    result.findings.some(
+      (finding) =>
+        finding.rule === 'microsoft-graph-client-secret-environment-variable',
+    ),
+  );
+});
+
+test('rejects mail and deployment-protection credentials without returning values', () => {
+  for (const name of [
+    'VITE_SMTP_PASSWORD',
+    'SMTP_PASSWORD',
+    'VITE_VERCEL_OIDC_TOKEN',
+    'VERCEL_AUTOMATION_BYPASS_SECRET',
+  ]) {
+    const result = validateClientSecretBoundary([
+      { name: 'dist/client.js', source: `${name}="fixture-sensitive-value";` },
+    ]);
+    assert.equal(result.status, 'CLIENT_SECRET_BOUNDARY_FAILED');
+    assert.equal(
+      JSON.stringify(result).includes('fixture-sensitive-value'),
+      false,
+    );
+  }
+});
+
+test('fixture auth code may live only in the isolated browser test directory', () => {
+  const fixture = {
+    name: 'apps/web/tests/browser/fixture/main.tsx',
+    source: 'window.fixtureSendCount = 0;',
+  };
+  assert.equal(
+    validateClientSecretBoundary([fixture]).status,
+    'CLIENT_SECRET_BOUNDARY_PASSED',
+  );
+  assert.equal(
+    validateClientSecretBoundary([
+      { ...fixture, name: 'apps/web/src/main.tsx' },
+    ]).status,
+    'CLIENT_SECRET_BOUNDARY_FAILED',
+  );
+  assert.equal(
+    validateClientSecretBoundary([
+      { ...fixture, name: 'apps/web/dist/assets/client.js' },
+    ]).status,
+    'CLIENT_SECRET_BOUNDARY_FAILED',
+  );
+});

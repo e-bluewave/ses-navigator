@@ -4,6 +4,8 @@
 
 > AIを活用したSES営業支援システム
 
+> 2026-10-16 追記: 以下の進捗率・更新日時は2026-09-25時点の記録です。PR #168の現行MVP1受入は [営業フロー受入表](docs/runbooks/MVP1_ACCEPTANCE_MATRIX.md) を参照してください。現在のStaging Web/API実接続、Supabase runtime identity、実メール受入は未確認（UNKNOWN）であり、コード・模擬テストの成功を実環境の完了率に換算しません。
+
 ---
 
 # プロジェクト情報

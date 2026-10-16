@@ -136,6 +136,36 @@ describe('Supabase Auth service', () => {
     );
   });
 
+  it('clears an expired session when refresh fails', async () => {
+    const storage = memoryStorage();
+    storage.setItem(
+      'sesn.auth.session',
+      JSON.stringify({
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        expiresAt: 1000,
+        user: { id: 'user-1', email: 'user@example.com' },
+      }),
+    );
+    const request = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response('{}', { status: 401 })),
+    );
+    const auth = createSupabaseAuthService({
+      url: 'https://example.supabase.co',
+      publishableKey: 'publishable-key',
+      fetch: request,
+      storage,
+      now: () => 1_000_000,
+    });
+    const onSessionChange = vi.fn();
+    auth.onSessionChange(onSessionChange);
+    await expect(auth.getSession()).rejects.toThrow();
+    expect(storage.getItem('sesn.auth.session')).toBeNull();
+    expect(onSessionChange).toHaveBeenCalledWith(null);
+    await expect(auth.getSession()).resolves.toBeNull();
+    expect(request).toHaveBeenCalledOnce();
+  });
+
   it('requests a password reset without exposing credentials', async () => {
     const request = vi.fn<typeof fetch>(() =>
       Promise.resolve(new Response('{}', { status: 200 })),

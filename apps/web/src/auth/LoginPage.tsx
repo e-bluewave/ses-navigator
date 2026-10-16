@@ -36,7 +36,7 @@ export function LoginPage() {
     <main className="login-shell">
       <section className="login-panel" aria-labelledby="login-heading">
         <p className="eyebrow">SES営業支援</p>
-        <h1>SES Navigator</h1>
+        <h1 id="login-heading">SES Navigator</h1>
         <p className="login-lead">
           {resetMode
             ? '再設定メールを送信します。'

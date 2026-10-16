@@ -471,9 +471,9 @@ export function createProjectsApi(options: {
         .catch(() => null)) as ApiErrorBody | null;
       throw new ApiClientError(
         response.status,
-        body?.error.code ?? 'unexpected_error',
-        body?.error.message ?? 'APIへの接続に失敗しました。',
-        body?.error.requestId,
+        body?.error?.code ?? 'unexpected_error',
+        body?.error?.message ?? 'APIへの接続に失敗しました。',
+        body?.error?.requestId,
       );
     }
     return response.json() as Promise<T>;
@@ -503,9 +503,9 @@ export function createProjectsApi(options: {
         .catch(() => null)) as ApiErrorBody | null;
       throw new ApiClientError(
         response.status,
-        error?.error.code ?? 'unexpected_error',
-        error?.error.message ?? 'APIへの接続に失敗しました。',
-        error?.error.requestId,
+        error?.error?.code ?? 'unexpected_error',
+        error?.error?.message ?? 'APIへの接続に失敗しました。',
+        error?.error?.requestId,
       );
     }
     return response.status === 204
