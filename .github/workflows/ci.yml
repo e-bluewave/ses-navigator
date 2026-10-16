@@ -109,3 +109,21 @@ jobs:
       - run: pnpm client:check
       - run: pnpm build
       - run: pnpm security:client-secrets
+
+  mobile-fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Use the GitHub-hosted runner's installed Chrome
+        run: google-chrome --version
+      - name: Isolated mobile fixture only (no database or mail transport)
+        run: pnpm --filter @sesn/web test:browser

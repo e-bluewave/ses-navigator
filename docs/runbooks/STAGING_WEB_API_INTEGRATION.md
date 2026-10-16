@@ -15,10 +15,12 @@
 | 境界 | モデルの扱い |
 | --- | --- |
 | 対象 | 固定のStaging APIブランチaliasのみ。入力URL・queryから宛先hostを選ばない。Preview以外の設定を拒否 |
-| ブラウザー | 同一origin URLのみ。Originが異なる要求を拒否。非GETは一致するOriginとJSON object必須。cross-site Fetch Metadataも拒否 |
+| ブラウザー | 同一origin URLのみ。Originが異なる要求と不一致Hostを拒否。非GETは一致するOriginとJSON object必須。cross-site Fetch Metadataも拒否 |
 | 認証 | Supabase BearerをAPIへ渡す。Bearer自体の署名／権限検証はAPIの責務。Cookie、ブラウザーのbypass/OIDC、転送host等は渡さない |
 | method/path | 営業導線の会社・担当者・技術者・案件・提案の限定allowlist。未知pathは404、未許可methodは405。`/internal`やAuth providerへの中継はない |
-| 更新 | JSON body、`If-Match`、送信／再送の`Idempotency-Key`を保持。中継でkeyを生成し直さず、自動再試行もしない。重複排除の永続的保証はAPI側の責務 |
+| 更新 | JSON body、`If-Match`、送信／再送の`Idempotency-Key`を保持。PUT・reviewの版指定欠落を拒否。中継でkeyを生成し直さず、自動再試行もしない。重複排除の永続的保証はAPI側の責務 |
+| framing・文字列 | Transfer-Encoding・Content-Encoding・method override等を拒否。Content-Lengthの形式・上限・実byte数を検証し、転送しない。不正UTF-8を拒否 |
+| lifecycle | tokenは要求ごとに取得し共有・cacheしない。入力stream・token取得・fetch・応答streamを共通deadlineとclient abortで中断。停止しないstream cancelを待ち続けない |
 | CORS/cookies | same-origin設計のためCORS許可を返さない。上流へのcredentialsはomit。上流Set-Cookieを返さない。Vercel WebログインCookieとSupabase Bearerは別物 |
 | redirect | fetchはmanual。上流3xx、Protection HTML、非JSON成功応答は502。LocationやProtectionページをbrowserへ転送しない |
 | 応答・ログ | エラー本文／任意ヘッダーを転送しない。401/403/409等のHTTP statusは維持。レスポンスはno-store。body上限、timeout、既知のBearer/OIDC反射拒否。モデルはログを出さない |
@@ -30,8 +32,27 @@ fixtureテストのPASSは、実際のVercel署名検証、source project identi
 ## 実装した関連UIガード
 
 - Auth contextの401でセッションを終了し、403・取得失敗ではMFA済みでも業務画面へ進めない。古いtokenに対する非同期結果を新しいセッションの権限判定へ流用しない。
-- 送信処理中は同期的なin-flightガードで二重操作を拒否する。UIガードはAPIのidempotency／status検査を代替しない。
-- ログイン領域の見出し参照を修正し、Tab／Enterによるログインと営業画面ナビゲーションをDOM上で検証する。jsdomでは実際の画面幅・overflow・タッチ領域は測定できないため、モバイルの視覚受入はUNKNOWN。
+- 送信・再送前にnative dialogで宛先・件名・本文を表示し、キャンセルを初期focusにする。再送は失敗宛先だけを表示する。確認中にdraft／historyが変われば送信しない。
+- 初回送信は承認版・宛先・message/proposal IDが履歴と一致し、全宛先pendingかつattempt=0の場合だけ可能。履歴取得の403・404・500や版／宛先不一致では停止する。
+- 送信処理中は同期的なin-flightガードで二重操作を拒否する。結果不明のエラー後は送信を凍結し、「配信履歴を再確認」のGETだけを可能にする。自動再送はない。UIガードはAPIのidempotency／status検査を代替しない。
+- ログイン領域の見出し参照を修正し、Tab／Enterによるログインと営業画面ナビゲーションを検証する。モバイルでは入力とbuttonの高さ44px以上、overflowを抑える折返し、見えるkeyboard focusを設定した。
+
+## PC不要の模擬ブラウザー検証
+
+CIの`mobile-fixture`はGitHub-hosted UbuntuのChromeを使い、320px／390px幅のtouch viewportで確認dialog、focus／Escape／復帰、cancel時0回、明示確認時1回、失敗宛先だけの再送、履歴エラー、結果不明時のGET、401後ログインを検証する。`pnpm --filter @sesn/web test:browser`で同じfixtureを起動する（Chromeが必要）。
+
+fixtureは`apps/web/tests/browser/fixture`の別Vite rootから起動し、本物のAppを注入型in-memory Auth/APIで動かす。通常Vite設定やAPI proxyは使わず、ブラウザーの外部要求と`/api`要求を遮断する。Secret・GitHub Environment・OIDC権限・Supabase・SMTPを使わない。trace／画像／videoも保存しない。client境界scannerはfixture markerが製品source／buildへ混入した場合も拒否する。
+
+これはChromeでの模擬画面テストであり、実際のiPhone Safari、Stagingログイン、メール配送、公開Webの保護を実証しない。
+
+| 判定対象 | 現在の証跡 |
+| --- | --- |
+| code-only | unit／型／lint／buildとCIのfixture検証。最終headのCI結果を参照 |
+| Staging Web deployment | UNKNOWN（未公開・handler未接続） |
+| runtime identity／Supabase分離 | UNKNOWN（実照合未実行） |
+| 実メール | NOT RUN |
+
+handlerを置くために不足している証跡は、独立したWeb project ID、Vercelによる署名・source project・Preview検証、未レビューPreviewを除くdeployment制限、照合済みAPI Deployment／commitへの固定、独立したStaging／Production refに対するAPI runtimeの照合である。enable flagだけではこれらを証明できないため、既定無効handlerも含めて今回は公開entryを追加しない。
 
 ## iPhoneからまとめて確認する管理画面ゲート
 

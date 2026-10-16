@@ -10,7 +10,7 @@
 | 案件登録・検索 | `/projects`、`/projects/:id` | `/projects` | `App.test.tsx` の一覧・検索・編集・監査、`client.test.ts` | UNKNOWN: Staging Web実利用 |
 | AIマッチングと根拠確認 | `/projects/:id` のマッチ | `POST /projects/:id/ai/match-engineers`、`GET /projects/:id/ai/matches/latest` | `App.test.tsx` のスコアと根拠、`client.test.ts` | UNKNOWN: 利用量・モデル・費用・営業判断の受入 |
 | 提案・本文の版管理と承認 | `/proposals`、`/proposals/:id` | `/proposals`、`/proposals/:id/ai/message-drafts/latest`、`POST /proposals/:id/ai/message-drafts/:messageId/review` | `App.test.tsx` の生成・編集・承認（送信なし） | UNKNOWN: 権限分離、送信先・件名・本文・承認版の実データ照合 |
-| 明示操作で送信・失敗時だけ再送 | `/proposals/:id` の送信／再送ボタン | `POST /proposals/:id/messages/:messageId/send`、`POST /proposals/:id/messages/:messageId/retry` | `App.test.tsx` の無宛先防止・処理中二重操作防止・模擬失敗→再送、`proposal-message-delivery-client.test.ts` の別idempotency key、API・SMTP unit test | UNKNOWN: Staging実メール。個別承認まで実行禁止 |
+| 明示操作で送信・失敗時だけ再送 | `/proposals/:id` の送信／再送確認dialog | `POST /proposals/:id/messages/:messageId/send`、`POST /proposals/:id/messages/:messageId/retry` | `App.test.tsx` のcancel・履歴エラー拒否・承認版／宛先／attempt照合・二重操作防止、`tests/browser/mobile.spec.ts` の模擬1回確認・失敗宛先のみ再送、API・SMTP unit test | UNKNOWN: Staging実メール。個別承認まで実行禁止 |
 | 試行・provider結果の表示 | `/proposals/:id` の配信状況 | `GET /proposals/:id/messages/:messageId/delivery` | `App.test.tsx` のattempt／response code表示、client・API unit test | UNKNOWN: 実メール受信・履歴・attempt数・Secret非露出 |
 | Web公開と深いURL | 独立したStaging Web Preview | 静的Vite出力、`/api/v1` は同一originを前提 | `apps/web/vercel.json`、`staging-web-routes.test.mjs`（非GET除外も検査）、`staging-web-api-proxy-model.test.mjs`、`pnpm build` | UNKNOWN: Webプロジェクト・Protection・安全なAPI経路が未設定。中継はfixtureモデルのみでhandler未接続 |
 
@@ -42,7 +42,7 @@
 
 | 区分 | 残作業 |
 | --- | --- |
-| コードのみ | 中継候補と401/403・送信中二重操作・キーボード操作の模擬検証を実装。管理画面ゲート解消後にserver-only handlerへ接続し、全APIのallowlistを広げる。実際の狭い画面幅・タッチ領域の検証と画面での明示送信確認仕様は残る |
+| コードのみ | 中継モデルのHost／framing／deadline／token分離、確認dialog、履歴不一致拒否、結果不明時のGET再確認、320px／390pxのChrome模擬画面テストを実装。管理画面ゲート解消後にserver-only handlerを別途レビューし、必要APIのallowlistを個別追加する。実iPhone Safariでの受入は未確認 |
 | クラウド管理画面 | GitHub EnvironmentのPR ref許可とRequired reviewerを確認。Vercel Custom Trusted Sourceの全claim／Preview限定可否を確認。独立したStaging Webプロジェクトと保護・公開値を設定し、API経路とStaging Supabaseの接続先を照合 |
 | 明示承認 | reviewer付きのread-only identity実行と、その後の認証付き実データpreflight。宛先・本文・attempt=0を確認した後の1通限定の実メール送信。Production変更、Mainマージ、Draft解除はそれぞれ別ゲート |
 
