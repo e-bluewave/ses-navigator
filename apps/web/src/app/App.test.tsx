@@ -2755,8 +2755,8 @@ describe('App', () => {
     },
   );
 
-  it.each(['version', 'recipient', 'attempt'])(
-    'blocks a first send when delivery has a conflicting %s',
+  it.each(['version', 'recipient', 'attempt', 'retry-recipient'])(
+    'blocks delivery actions when history has a conflicting %s',
     async (conflict) => {
       const approved = {
         ...proposalMessageDraft,
@@ -2768,7 +2768,7 @@ describe('App', () => {
       > = {
         messageId: approved.id,
         proposalId: proposal.id,
-        status: 'approved',
+        status: conflict === 'retry-recipient' ? 'failed' : 'approved',
         sentAt: null,
         approvedVersionId:
           conflict === 'version'
@@ -2778,9 +2778,10 @@ describe('App', () => {
         recipients: approved.recipients.map((recipient) => ({
           ...recipient,
           id: 'fixture-recipient',
-          deliveryStatus: 'pending',
-          address:
-            conflict === 'recipient' ? 'other@example.test' : recipient.address,
+          deliveryStatus: conflict === 'retry-recipient' ? 'failed' : 'pending',
+          address: ['recipient', 'retry-recipient'].includes(conflict)
+            ? 'other@example.test'
+            : recipient.address,
           attempts:
             conflict === 'attempt'
               ? [
@@ -2815,8 +2816,12 @@ describe('App', () => {
       const button = screen.queryByRole('button', {
         name: '承認済み本文を送信',
       });
-      if (conflict === 'version') expect(button).not.toBeInTheDocument();
+      if (['version', 'retry-recipient'].includes(conflict))
+        expect(button).not.toBeInTheDocument();
       else expect(button).toBeDisabled();
+      expect(
+        screen.queryByRole('button', { name: '失敗した宛先だけ再送' }),
+      ).not.toBeInTheDocument();
       expect(sendProposalMessage).not.toHaveBeenCalled();
     },
   );
@@ -3268,6 +3273,32 @@ describe('App', () => {
     expect(screen.getByText('必須スキル一致')).toBeInTheDocument();
     expect(screen.getByText('根拠: TypeScript 48か月')).toBeInTheDocument();
     expect(createProjectEngineerMatch).toHaveBeenCalledWith(project.id, 5);
+  });
+
+  it('does not overwrite recalculated matches with a late initial history read', async () => {
+    window.history.replaceState({}, '', `/projects/${project.id}`);
+    let finishInitial!: (value: null) => void;
+    const initial = new Promise<null>((resolve) => {
+      finishInitial = resolve;
+    });
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getLatestProjectEngineerMatch: () => initial,
+          createProjectEngineerMatch: () =>
+            Promise.resolve(projectEngineerMatch),
+        })}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: '候補を再計算' }),
+    );
+    await screen.findByRole('heading', { name: '山田 太郎' });
+    await act(async () => finishInitial(null));
+    expect(
+      screen.getByRole('heading', { name: '山田 太郎' }),
+    ).toBeInTheDocument();
   });
 
   it('soft-deletes a project with a required reason', async () => {

@@ -38,6 +38,19 @@ export function ProposalDeliveryConfirmation({
       className="delivery-confirmation"
       aria-labelledby={heading}
       aria-describedby={description}
+      onKeyDown={(event) => {
+        if (event.key !== 'Tab') return;
+        const buttons = event.currentTarget.querySelectorAll('button');
+        const first = buttons.item(0);
+        const last = buttons.item(buttons.length - 1);
+        if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        }
+      }}
       onCancel={(event) => {
         event.preventDefault();
         onCancel();

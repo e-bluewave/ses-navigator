@@ -55,6 +55,10 @@ test('mobile confirmation wraps, keeps focus inside, and cancels without sending
       ),
     ).toBe(true);
   }
+  await page.keyboard.press('Shift+Tab');
+  await expect(
+    dialog.getByRole('button', { name: '内容を確認して送信', exact: true }),
+  ).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
   await expect(open).toBeFocused();

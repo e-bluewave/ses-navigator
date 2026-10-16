@@ -7063,6 +7063,7 @@ function ProposalMessageDraftPanel({
     approvedVersionMatches &&
     ['approved', 'failed'].includes(draft.status) &&
     delivery.status === 'failed' &&
+    recipientKeys(draft.recipients) === recipientKeys(delivery.recipients) &&
     delivery.recipients.some(
       (recipient) => recipient.deliveryStatus === 'failed',
     ),
@@ -11607,15 +11608,19 @@ function ProjectEngineerMatchPanel({
   projectId: string;
 }) {
   const [match, setMatch] = useState<ProjectEngineerMatch | null>(null);
+  const initialMatchEpoch = useRef(0);
   const [limit, setLimit] = useState(5);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     let active = true;
+    const epoch = ++initialMatchEpoch.current;
     api
       .getLatestProjectEngineerMatch(projectId)
-      .then((result) => active && setMatch(result))
+      .then((result) => {
+        if (active && epoch === initialMatchEpoch.current) setMatch(result);
+      })
       .catch(() => undefined);
     return () => {
       active = false;
@@ -11623,6 +11628,8 @@ function ProjectEngineerMatchPanel({
   }, [api, projectId]);
 
   async function runMatch() {
+    // A late initial read must not overwrite an explicit recalculation.
+    initialMatchEpoch.current += 1;
     setRunning(true);
     setError(null);
     try {
