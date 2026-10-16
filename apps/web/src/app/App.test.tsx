@@ -5,10 +5,12 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ProjectsApi } from '../api/client.js';
+import { ApiClientError, type ProjectsApi } from '../api/client.js';
 import type {
   Company,
   CompanyContact,
@@ -2635,6 +2637,65 @@ describe('App', () => {
     expect(sendProposalMessage).not.toHaveBeenCalled();
   });
 
+  it('keeps an in-flight delivery disabled and does not queue a second send', async () => {
+    const approved = {
+      ...proposalMessageDraft,
+      status: 'approved' as const,
+      approvedVersionId: proposalMessageDraft.currentVersionId,
+    };
+    const delivery: Awaited<
+      ReturnType<ProjectsApi['getProposalMessageDelivery']>
+    > = {
+      messageId: approved.id,
+      proposalId: proposal.id,
+      status: 'approved',
+      sentAt: null,
+      approvedVersionId: approved.currentVersionId!,
+      rowVersion: 3,
+      recipients: approved.recipients.map((recipient) => ({
+        ...recipient,
+        id: '30303030-3030-4030-8030-303030303030',
+        deliveryStatus: 'pending',
+        attempts: [],
+      })),
+    };
+    let finish: (result: typeof delivery) => void = () => {
+      throw new Error('fixture request has not started');
+    };
+    const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getProposal: () => Promise.resolve(proposal),
+          getLatestProposalMessageDraft: () => Promise.resolve(approved),
+          getProposalMessageDelivery: () => Promise.resolve(delivery),
+          sendProposalMessage,
+        })}
+      />,
+    );
+    await screen.findByText('配信試行はまだありません。');
+    const button = screen.getByRole('button', { name: '承認済み本文を送信' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    expect(sendProposalMessage).toHaveBeenCalledOnce();
+    await act(async () => {
+      finish({ ...delivery, status: 'sent', sentAt: '2026-08-14T03:04:00Z' });
+      await Promise.resolve();
+    });
+    expect(
+      screen.queryByRole('button', { name: '承認済み本文を送信' }),
+    ).not.toBeInTheDocument();
+    expect(sendProposalMessage).toHaveBeenCalledOnce();
+  });
+
   it('transitions proposal status with optimistic locking', async () => {
     window.history.replaceState({}, '', `/proposals/${proposal.id}`);
     const transitionProposalStatus = vi.fn(() =>
@@ -3201,11 +3262,124 @@ describe('App', () => {
     );
   });
 
+  it('allows keyboard-only login through labeled controls', async () => {
+    const user = userEvent.setup();
+    const authentication = auth(null);
+    render(<App auth={authentication} api={api()} />);
+    expect(
+      await screen.findByRole('region', { name: 'SES Navigator' }),
+    ).toBeInTheDocument();
+    await user.tab();
+    expect(screen.getByLabelText('メールアドレス')).toHaveFocus();
+    await user.keyboard('user@example.com');
+    await user.tab();
+    expect(screen.getByLabelText('パスワード')).toHaveFocus();
+    await user.keyboard('fixture-password{Enter}');
+    await waitFor(() =>
+      expect(authentication.signIn).toHaveBeenCalledWith(
+        'user@example.com',
+        'fixture-password',
+      ),
+    );
+  });
+
+  it('activates the sales navigation with the keyboard', async () => {
+    const user = userEvent.setup();
+    render(<App auth={auth()} api={api()} />);
+    const navigation = await screen.findByRole('navigation', {
+      name: '主要機能',
+    });
+    within(navigation).getByRole('button', { name: '会社' }).focus();
+    await user.keyboard('{Enter}');
+    expect(window.location.pathname).toBe('/companies');
+    expect(
+      await screen.findByRole('heading', { name: '会社一覧' }),
+    ).toBeInTheDocument();
+  });
+
   it('logs out from an authenticated session', async () => {
     const authentication = auth();
     render(<App auth={authentication} api={api()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'ログアウト' }));
     expect(authentication.signOut).toHaveBeenCalledOnce();
+  });
+
+  it('returns to login when the authorization context reports an expired session', async () => {
+    const authentication = auth();
+    render(
+      <App
+        auth={authentication}
+        api={api({
+          getAuthContext: () =>
+            Promise.reject(new ApiClientError(401, 'expired', 'fixture')),
+        })}
+      />,
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'SES Navigator' }),
+    ).toBeInTheDocument();
+    expect(authentication.signOut).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  });
+
+  it('blocks forbidden access even when the session already has MFA assurance', async () => {
+    render(
+      <App
+        auth={auth({ ...session, assuranceLevel: 'aal2' })}
+        api={api({
+          getAuthContext: () =>
+            Promise.reject(new ApiClientError(403, 'forbidden', 'fixture')),
+        })}
+      />,
+    );
+    expect(
+      await screen.findByRole('heading', {
+        name: 'アクセス権限を確認できません',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: '多要素認証' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('fixture')).not.toBeInTheDocument();
+  });
+
+  it('ignores a previous session authorization result after the session changes', async () => {
+    const authentication = auth();
+    let notifySession: (next: AuthSession | null) => void = () => undefined;
+    authentication.onSessionChange = (listener) => {
+      notifySession = listener;
+      return () => undefined;
+    };
+    let finishOldContext: (context: { requiresMfa: boolean }) => void = () =>
+      undefined;
+    const getAuthContext = vi
+      .fn<ProjectsApi['getAuthContext']>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishOldContext = resolve;
+          }),
+      )
+      .mockRejectedValueOnce(new ApiClientError(403, 'forbidden', 'fixture'));
+    render(<App auth={authentication} api={api({ getAuthContext })} />);
+    await waitFor(() => expect(getAuthContext).toHaveBeenCalledOnce());
+    act(() =>
+      notifySession({ ...session, accessToken: 'new-fixture-session' }),
+    );
+    expect(
+      await screen.findByRole('heading', {
+        name: 'アクセス権限を確認できません',
+      }),
+    ).toBeInTheDocument();
+    await act(async () => {
+      finishOldContext({ requiresMfa: false });
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'アクセス権限を確認できません' }),
+    ).toBeInTheDocument();
   });
 
   it('blocks an administrator at AAL1 and shows the MFA flow', async () => {

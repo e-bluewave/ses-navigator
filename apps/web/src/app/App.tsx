@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import { ApiClientError, createProjectsApi } from '../api/client.js';
@@ -6873,6 +6873,7 @@ function ProposalMessageDraftPanel({
   const [bodyText, setBodyText] = useState('');
   const [reviewComment, setReviewComment] = useState('');
   const [busy, setBusy] = useState(false);
+  const deliveryInFlight = useRef(false);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
@@ -6981,7 +6982,8 @@ function ProposalMessageDraftPanel({
   }
 
   async function sendDelivery(retry: boolean) {
-    if (!draft) return;
+    if (!draft || deliveryInFlight.current) return;
+    deliveryInFlight.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -6993,6 +6995,7 @@ function ProposalMessageDraftPanel({
     } catch (reason) {
       setError(reason);
     } finally {
+      deliveryInFlight.current = false;
       setBusy(false);
     }
   }
@@ -7672,17 +7675,46 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
   );
   const [route, setRoute] = useState<Route>(currentRoute);
   const [requiresMfa, setRequiresMfa] = useState<boolean | null>(null);
+  const [verifiedAccessToken, setVerifiedAccessToken] = useState<string | null>(
+    null,
+  );
+  const [authContextError, setAuthContextError] = useState(false);
 
   useEffect(() => {
+    let active = true;
+    setAuthContextError(false);
+    setRequiresMfa(null);
+    setVerifiedAccessToken(null);
     if (session === null) {
-      setRequiresMfa(null);
       return;
     }
     void api
       .getAuthContext()
-      .then((context) => setRequiresMfa(context.requiresMfa))
-      .catch(() => setRequiresMfa(true));
-  }, [api, session]);
+      .then((context) => {
+        if (!active) return;
+        if (typeof context.requiresMfa !== 'boolean') {
+          setAuthContextError(true);
+          return;
+        }
+        setRequiresMfa(context.requiresMfa);
+        setVerifiedAccessToken(session.accessToken);
+      })
+      .catch(async (reason: unknown) => {
+        if (!active) return;
+        if (reason instanceof ApiClientError && reason.status === 401) {
+          try {
+            await signOut();
+          } catch {
+            if (active) setAuthContextError(true);
+          }
+        } else {
+          setAuthContextError(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, session, signOut]);
 
   useEffect(() => {
     const handlePopState = () => setRoute(currentRoute());
@@ -7723,7 +7755,19 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       />
     );
   if (session === null) return <LoginPage />;
-  if (requiresMfa === null)
+  if (authContextError)
+    return (
+      <main className="login-shell">
+        <section className="login-panel">
+          <h1>アクセス権限を確認できません</h1>
+          <p role="alert">再ログインして、アクセス権限を確認してください。</p>
+          <button type="button" onClick={() => void signOut()}>
+            ログアウト
+          </button>
+        </section>
+      </main>
+    );
+  if (requiresMfa === null || verifiedAccessToken !== session.accessToken)
     return (
       <main className="auth-loading" role="status">
         権限を確認しています…
