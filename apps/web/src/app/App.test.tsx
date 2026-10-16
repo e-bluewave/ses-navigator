@@ -2498,6 +2498,15 @@ describe('App', () => {
       await screen.findByRole('button', { name: '承認済み本文を送信' }),
     ).toBeInTheDocument();
     expect(sendProposalMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '承認済み本文を送信' }));
+    const confirmation = await screen.findByRole('dialog', {
+      name: '送信内容を確認',
+    });
+    expect(within(confirmation).getByText('編集済み件名')).toBeInTheDocument();
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: 'キャンセル' }),
+    );
+    expect(sendProposalMessage).not.toHaveBeenCalled();
   });
   it('shows failed delivery history and retries only after an explicit click', async () => {
     const approved = {
@@ -2584,6 +2593,13 @@ describe('App', () => {
     fireEvent.click(
       screen.getByRole('button', { name: '失敗した宛先だけ再送' }),
     );
+    expect(retryProposalMessage).not.toHaveBeenCalled();
+    const confirmation = await screen.findByRole('dialog', {
+      name: '再送内容を確認',
+    });
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: '内容を確認して再送' }),
+    );
     await waitFor(() =>
       expect(retryProposalMessage).toHaveBeenCalledWith(
         proposal.id,
@@ -2631,6 +2647,7 @@ describe('App', () => {
     expect(
       await screen.findByText('宛先メールアドレスは未登録です。'),
     ).toBeInTheDocument();
+    await screen.findByRole('region', { name: '提案メール配信状況' });
     expect(
       screen.getByRole('button', { name: '承認済み本文を送信' }),
     ).toBeDisabled();
@@ -2683,6 +2700,12 @@ describe('App', () => {
     await screen.findByText('配信試行はまだありません。');
     const button = screen.getByRole('button', { name: '承認済み本文を送信' });
     fireEvent.click(button);
+    const confirmation = await screen.findByRole('dialog', {
+      name: '送信内容を確認',
+    });
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: '内容を確認して送信' }),
+    );
     fireEvent.click(button);
     expect(button).toBeDisabled();
     expect(sendProposalMessage).toHaveBeenCalledOnce();
@@ -2695,6 +2718,108 @@ describe('App', () => {
     ).not.toBeInTheDocument();
     expect(sendProposalMessage).toHaveBeenCalledOnce();
   });
+
+  it.each([403, 404, 500])(
+    'blocks delivery when history returns HTTP %s',
+    async (status) => {
+      const approved = {
+        ...proposalMessageDraft,
+        status: 'approved' as const,
+        approvedVersionId: proposalMessageDraft.currentVersionId,
+      };
+      const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
+      const retryProposalMessage = vi.fn<ProjectsApi['retryProposalMessage']>();
+      window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+      render(
+        <App
+          auth={auth()}
+          api={api({
+            getProposal: () => Promise.resolve(proposal),
+            getLatestProposalMessageDraft: () => Promise.resolve(approved),
+            getProposalMessageDelivery: () =>
+              Promise.reject(new ApiClientError(status, 'fixture', 'fixture')),
+            sendProposalMessage,
+            retryProposalMessage,
+          })}
+        />,
+      );
+      await screen.findByRole('alert');
+      expect(
+        screen.queryByRole('button', { name: '承認済み本文を送信' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: '失敗した宛先だけ再送' }),
+      ).not.toBeInTheDocument();
+      expect(sendProposalMessage).not.toHaveBeenCalled();
+      expect(retryProposalMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['version', 'recipient', 'attempt'])(
+    'blocks a first send when delivery has a conflicting %s',
+    async (conflict) => {
+      const approved = {
+        ...proposalMessageDraft,
+        status: 'approved' as const,
+        approvedVersionId: proposalMessageDraft.currentVersionId,
+      };
+      const delivery: Awaited<
+        ReturnType<ProjectsApi['getProposalMessageDelivery']>
+      > = {
+        messageId: approved.id,
+        proposalId: proposal.id,
+        status: 'approved',
+        sentAt: null,
+        approvedVersionId:
+          conflict === 'version'
+            ? 'different-version'
+            : approved.currentVersionId!,
+        rowVersion: 3,
+        recipients: approved.recipients.map((recipient) => ({
+          ...recipient,
+          id: 'fixture-recipient',
+          deliveryStatus: 'pending',
+          address:
+            conflict === 'recipient' ? 'other@example.test' : recipient.address,
+          attempts:
+            conflict === 'attempt'
+              ? [
+                  {
+                    id: 'fixture-attempt',
+                    attemptNo: 1,
+                    status: 'failed',
+                    provider: 'fixture',
+                    providerMessageId: null,
+                    attemptedAt: '2026-10-16T00:00:00Z',
+                    responseCode: '450',
+                    errorMessage: null,
+                  },
+                ]
+              : [],
+        })),
+      };
+      const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
+      window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+      render(
+        <App
+          auth={auth()}
+          api={api({
+            getProposal: () => Promise.resolve(proposal),
+            getLatestProposalMessageDraft: () => Promise.resolve(approved),
+            getProposalMessageDelivery: () => Promise.resolve(delivery),
+            sendProposalMessage,
+          })}
+        />,
+      );
+      await screen.findByRole('region', { name: '提案メール配信状況' });
+      const button = screen.queryByRole('button', {
+        name: '承認済み本文を送信',
+      });
+      if (conflict === 'version') expect(button).not.toBeInTheDocument();
+      else expect(button).toBeDisabled();
+      expect(sendProposalMessage).not.toHaveBeenCalled();
+    },
+  );
 
   it('transitions proposal status with optimistic locking', async () => {
     window.history.replaceState({}, '', `/proposals/${proposal.id}`);
