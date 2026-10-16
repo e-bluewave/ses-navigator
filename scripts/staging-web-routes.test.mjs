@@ -12,7 +12,10 @@ test('Staging Web has only an internal SPA fallback, never an API proxy', () => 
   assert.equal(rewrites.length, 1);
   assert.equal(rewrites[0].destination, '/index.html');
   assert.equal(typeof rewrites[0].source, 'string');
-  assert.equal(rewrites.some(({ destination }) => /^https?:/u.test(destination)), false);
+  assert.equal(
+    rewrites.some(({ destination }) => /^https?:/u.test(destination)),
+    false,
+  );
 });
 
 test('SPA fallback handles sales routes but does not mask API and internal routes', () => {
