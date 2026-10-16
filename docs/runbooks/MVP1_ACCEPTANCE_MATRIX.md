@@ -14,6 +14,20 @@
 | 試行・provider結果の表示 | `/proposals/:id` の配信状況 | `GET /proposals/:id/messages/:messageId/delivery` | `App.test.tsx` のattempt／response code表示、client・API unit test | UNKNOWN: 実メール受信・履歴・attempt数・Secret非露出 |
 | Web公開と深いURL | 独立したStaging Web Preview | 静的Vite出力、`/api/v1` は同一originを前提 | `apps/web/vercel.json`、`staging-web-routes.test.mjs`、`pnpm build` | UNKNOWN: Webプロジェクト・Protection・安全なAPI経路が未設定 |
 
+## その他の実装済み画面・APIの棚卸し
+
+以下も画面と対応するAPI client／模擬テストがある。MVP1の営業導線の外側にある機能を含むため、実運用で必要な範囲と受入優先度を別途確定する。各行の実環境証跡はすべて UNKNOWN である。
+
+| 機能 | React経路 | API領域 | 模擬テスト |
+| --- | --- | --- | --- |
+| ホーム・営業KPI | `/dashboard`、`/sales-kpi` | `/sales-kpi` 等 | `App.test.tsx` のホーム・KPI、`client.test.ts` |
+| 自分のタスク・重複候補・営業活動 | `/my-tasks`、`/duplicate-candidates`、会社／案件詳細 | `/my-tasks`、重複候補・営業活動API | `App.test.tsx`、`CompanySalesActivitiesPanel.test.tsx`、個別client tests |
+| AI抽出・利用状況 | 案件／技術者詳細、`/ai-operations` | 案件・経歴書抽出API、`/ai-operations` | `App.test.tsx` の抽出レビュー・AI状況、`client.test.ts` |
+| 面談・結果・AI要約 | `/interviews`、`/interviews/:id`、`/interviews/:id/result` | `/interviews`、面談要約API | `App.test.tsx` の面談作成・結果・要約 |
+| 契約・参画 | `/contracts`、`/engagements` と各詳細 | `/contracts`、`/engagements` | `App.test.tsx` の作成・状態遷移 |
+| 実績・請求・支払 | `/work-logs`、`/invoices`、`/supplier-payments` と各詳細 | 対応する `/work-logs`、`/invoices`、支払API | `App.test.tsx` の入力・承認・入金・支払 |
+| 会計・経費・収益 | `/accounting-periods`、`/accounting-exports`、`/expenses`、`/profitability` | 対応する会計・経費・収益API | `App.test.tsx` の締め・出力・経費・収益 |
+
 ## Staging Webの分離設計
 
 - 現在確認した `ses-navigator-staging` はFastify APIプロジェクトであり、Reactの公開URLではない。Webは新しい **Staging専用** Vercelプロジェクトとして同じGit repositoryの `apps/web` をRoot Directoryに設定する。Vite／`dist` を使い、Root Directory外のworkspace `scripts` とlockfileをビルド時に利用できる設定を確認する。`apps/web/vercel.json` はSPAの深いURLだけを `index.html` に戻し、`/api`・`/internal`・`/assets` をAPIの代わりにHTMLへ返さない。Productionプロジェクトの設定を転用しない。
