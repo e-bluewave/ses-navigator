@@ -2540,18 +2540,18 @@ describe('App', () => {
       () =>
         Promise.resolve({
           ...failed,
-          status: 'sent',
+          status: 'sent' as const,
           sentAt: '2026-08-14T03:04:00Z',
           recipients: failed.recipients.map((recipient) => ({
             ...recipient,
-            deliveryStatus: 'sent',
+            deliveryStatus: 'sent' as const,
             attempts: [
               ...recipient.attempts,
               {
                 ...recipient.attempts[0]!,
                 id: '50505050-5050-4050-8050-505050505050',
                 attemptNo: 2,
-                status: 'accepted',
+                status: 'accepted' as const,
                 responseCode: '250',
                 errorMessage: null,
               },
@@ -2574,16 +2574,23 @@ describe('App', () => {
       />,
     );
 
-    expect(await screen.findByText(/#1 failed \/ smtp \/ 450/u)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/#1 failed \/ smtp \/ 450/u),
+    ).toBeInTheDocument();
     expect(retryProposalMessage).not.toHaveBeenCalled();
     expect(sendProposalMessage).not.toHaveBeenCalled();
     fireEvent.click(
       screen.getByRole('button', { name: '失敗した宛先だけ再送' }),
     );
     await waitFor(() =>
-      expect(retryProposalMessage).toHaveBeenCalledWith(proposal.id, approved.id),
+      expect(retryProposalMessage).toHaveBeenCalledWith(
+        proposal.id,
+        approved.id,
+      ),
     );
-    expect(await screen.findByText(/#2 accepted \/ smtp \/ 250/u)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/#2 accepted \/ smtp \/ 250/u),
+    ).toBeInTheDocument();
     expect(retryProposalMessage).toHaveBeenCalledOnce();
     expect(sendProposalMessage).not.toHaveBeenCalled();
   });
@@ -2619,7 +2626,9 @@ describe('App', () => {
         })}
       />,
     );
-    expect(await screen.findByText('宛先メールアドレスは未登録です。')).toBeInTheDocument();
+    expect(
+      await screen.findByText('宛先メールアドレスは未登録です。'),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '承認済み本文を送信' }),
     ).toBeDisabled();
