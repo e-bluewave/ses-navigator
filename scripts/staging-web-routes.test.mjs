@@ -33,10 +33,25 @@ test('SPA fallback handles sales routes but does not mask API and internal route
   }
   for (const path of [
     '/api',
+    '/api/v1/unknown',
     '/api/v1/proposals/123/messages/456/send',
+    '/internal',
     '/internal/staging-runtime-identity',
+    '/assets',
     '/assets/index.js',
   ]) {
-    assert.equal(pattern.test(path), false, path);
+    // Vercel rewrites do not distinguish HTTP methods: these exclusions must
+    // therefore hold for mutations and preflights as well as page navigation.
+    for (const method of [
+      'GET',
+      'HEAD',
+      'POST',
+      'PUT',
+      'PATCH',
+      'DELETE',
+      'OPTIONS',
+    ]) {
+      assert.equal(pattern.test(path), false, `${method} ${path}`);
+    }
   }
 });
