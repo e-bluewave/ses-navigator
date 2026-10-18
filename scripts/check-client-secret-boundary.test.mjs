@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
-import { validateClientSecretBoundary } from './check-client-secret-boundary.mjs';
+import {
+  runClientSecretBoundaryCheck,
+  validateClientSecretBoundary,
+} from './check-client-secret-boundary.mjs';
 
 test('accepts browser-safe Supabase configuration', () => {
   const result = validateClientSecretBoundary([
@@ -125,5 +131,62 @@ test('fixture auth code may live only in the isolated browser test directory', (
       { ...fixture, name: 'apps/web/dist/assets/client.js' },
     ]).status,
     'CLIENT_SECRET_BOUNDARY_FAILED',
+  );
+});
+
+test('all public password and token names are rejected with no matching values', () => {
+  for (const name of [
+    'VITE_ACCESS_TOKEN',
+    'VITE_REFRESH_TOKEN',
+    'VITE_TEST_PASSWORD',
+  ]) {
+    const result = validateClientSecretBoundary([
+      {
+        name: 'dist/assets/client.js.map',
+        source: `${name}="fixture-sensitive";`,
+      },
+    ]);
+    assert.equal(result.status, 'CLIENT_SECRET_BOUNDARY_FAILED');
+    assert.equal(JSON.stringify(result).includes('fixture-sensitive'), false);
+  }
+});
+
+test('tree scan includes source maps and logs locations instead of secret fixture values', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sesn-client-boundary-'));
+  const logs = [];
+  try {
+    await writeFile(
+      join(directory, 'client.js.map'),
+      '{"sourcesContent":["sb_secret_fixtureSensitive"]}',
+    );
+    await assert.rejects(
+      runClientSecretBoundaryCheck({
+        webPath: directory,
+        log: (line) => logs.push(line),
+      }),
+      /guard failed/u,
+    );
+    assert.match(logs.join(''), /supabase-secret-key-value/u);
+    assert.doesNotMatch(logs.join(''), /sb_secret_fixtureSensitive/u);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('encoded legacy service-role JWTs are rejected after bundling without exposing the token', () => {
+  const token = (role) =>
+    `e30fixture.${Buffer.from(JSON.stringify({ ref: 'fixture-project', role })).toString('base64url')}.fixtureSignature`;
+  const denied = token('service_role');
+  const result = validateClientSecretBoundary([
+    { name: 'dist/assets/client.js', source: `const key="${denied}"` },
+  ]);
+  assert.equal(result.status, 'CLIENT_SECRET_BOUNDARY_FAILED');
+  assert.equal(result.findings[0].rule, 'encoded-service-role-jwt');
+  assert.equal(JSON.stringify(result).includes(denied), false);
+  assert.equal(
+    validateClientSecretBoundary([
+      { name: 'dist/assets/client.js', source: `const key="${token('anon')}"` },
+    ]).status,
+    'CLIENT_SECRET_BOUNDARY_PASSED',
   );
 });

@@ -9,6 +9,8 @@ const rewrites = config.rewrites ?? [];
 
 test('Staging Web has only an internal SPA fallback, never an API proxy', () => {
   assert.equal(config.framework, 'vite');
+  assert.equal(config.buildCommand, 'pnpm build --mode staging');
+  assert.equal(config.outputDirectory, 'dist');
   assert.equal(rewrites.length, 1);
   assert.equal(rewrites[0].destination, '/index.html');
   assert.equal(typeof rewrites[0].source, 'string');
@@ -16,6 +18,26 @@ test('Staging Web has only an internal SPA fallback, never an API proxy', () => 
     rewrites.some(({ destination }) => /^https?:/u.test(destination)),
     false,
   );
+});
+
+test('static Web responses deny framing, MIME sniffing, referrer leakage and cached auth pages', () => {
+  assert.equal(config.headers.length, 1);
+  assert.equal(config.headers[0].source, '/(.*)');
+  const headers = Object.fromEntries(
+    config.headers[0].headers.map(({ key, value }) => [
+      key.toLowerCase(),
+      value,
+    ]),
+  );
+  assert.equal(headers['x-content-type-options'], 'nosniff');
+  assert.equal(headers['x-frame-options'], 'DENY');
+  assert.equal(headers['referrer-policy'], 'no-referrer');
+  assert.equal(headers['cache-control'], 'no-store');
+  assert.equal(
+    headers['permissions-policy'],
+    'camera=(), microphone=(), geolocation=()',
+  );
+  assert.equal(headers['access-control-allow-origin'], undefined);
 });
 
 test('SPA fallback handles sales routes but does not mask API and internal routes', () => {

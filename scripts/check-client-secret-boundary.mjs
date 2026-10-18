@@ -23,7 +23,7 @@ const FORBIDDEN_PATTERNS = [
   {
     rule: 'vite-secret-environment-variable',
     pattern:
-      /\bVITE_[A-Z0-9_]*(?:SECRET|PRIVATE_KEY|SERVICE_ROLE)[A-Z0-9_]*\b/g,
+      /\bVITE_[A-Z0-9_]*(?:SECRET|PASSWORD|TOKEN|PRIVATE_KEY|SERVICE_ROLE)[A-Z0-9_]*\b/g,
   },
   {
     rule: 'microsoft-graph-client-secret-environment-variable',
@@ -39,6 +39,7 @@ const TEXT_EXTENSIONS = new Set([
   '.json',
   '.jsx',
   '.mjs',
+  '.map',
   '.ts',
   '.tsx',
 ]);
@@ -49,6 +50,27 @@ export function validateClientSecretBoundary(files) {
   for (const file of files) {
     const lines = file.source.split(/\r?\n/u);
     for (const [index, line] of lines.entries()) {
+      // Detect legacy privileged keys even when their environment-variable
+      // name has disappeared from a bundle/source map. Decoding is used only
+      // to reject exposure, never as authentication or signature verification.
+      for (const match of line.matchAll(
+        /[A-Za-z0-9_-]{4,}\.([A-Za-z0-9_-]{4,})\.[A-Za-z0-9_-]{4,}/gu,
+      )) {
+        try {
+          const claim = JSON.parse(
+            Buffer.from(match[1], 'base64url').toString('utf8'),
+          );
+          if (claim?.role === 'service_role') {
+            findings.push({
+              file: file.name,
+              line: index + 1,
+              rule: 'encoded-service-role-jwt',
+            });
+          }
+        } catch {
+          // Arbitrary code/property chains are not necessarily tokens.
+        }
+      }
       for (const { rule, pattern, fixtureOnly } of FORBIDDEN_PATTERNS) {
         if (
           fixtureOnly &&

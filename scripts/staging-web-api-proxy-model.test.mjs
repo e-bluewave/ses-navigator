@@ -362,3 +362,77 @@ test('cancelled requests do not acquire tokens and concurrent requests do not sh
     'fixture-identity-2',
   ]);
 });
+
+test('send and retry transport failures never replay a POST or replace its idempotency key', async () => {
+  for (const action of ['send', 'retry']) {
+    for (const failure of ['network', 'deadline', 'redirect']) {
+      const deadline = new AbortController();
+      const calls = [];
+      const { handle } = fixture({
+        createDeadlineSignal: () => deadline.signal,
+        fetchImpl: async (url, options) => {
+          calls.push({ url, options });
+          if (failure === 'network')
+            throw new Error('fixture-sensitive transport');
+          if (failure === 'deadline') {
+            deadline.abort();
+            return new Promise(() => {});
+          }
+          return new Response(null, {
+            status: 307,
+            headers: { location: 'https://production.example/api' },
+          });
+        },
+      });
+      const path = `/api/v1/proposals/${id}/messages/${id}/${action}`;
+      const result = await handle(
+        request(path, {
+          method: 'POST',
+          body: '{}',
+          headers: { 'idempotency-key': 'fixture-single-operation' },
+        }),
+      );
+      assert.equal(result.status, failure === 'deadline' ? 504 : 502);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].url, `${apiOrigin}${path}`);
+      assert.equal(calls[0].options.method, 'POST');
+      assert.equal(
+        calls[0].options.headers.get('idempotency-key'),
+        'fixture-single-operation',
+      );
+      assert.equal(calls[0].options.redirect, 'manual');
+      assert.doesNotMatch(
+        await result.text(),
+        /fixture-sensitive|production.example/u,
+      );
+    }
+  }
+});
+
+test('response streams reject invalid UTF-8 and enforce byte limits even without content-length', async () => {
+  for (const bytes of [
+    new Uint8Array([0xff]),
+    new Uint8Array(1024 * 1024 + 1),
+  ]) {
+    let cancelled = false;
+    const { handle } = fixture({
+      fetchImpl: async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(bytes);
+              if (bytes.byteLength === 1) controller.close();
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        ),
+    });
+    const result = await handle(request());
+    assert.equal(result.status, 502);
+    if (bytes.byteLength > 1) assert.equal(cancelled, true);
+    assert.equal(result.headers.get('cache-control'), 'no-store');
+  }
+});

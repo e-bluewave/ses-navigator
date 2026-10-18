@@ -48,6 +48,7 @@ jobs:
       - run: node --test scripts/staging-real-mail-cloud-preflight.test.mjs
       - run: node --test scripts/staging-runtime-identity-cloud.test.mjs
       - run: node --test scripts/staging-web-routes.test.mjs
+      - run: node --test scripts/staging-web-build-guard.test.mjs
       - run: node --test scripts/staging-web-api-proxy-model.test.mjs
       - run: pnpm security:data-migration
       - run: pnpm security:data-migration:check
