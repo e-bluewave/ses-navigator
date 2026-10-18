@@ -163,3 +163,93 @@ test('expired auth returns to a mobile login with keyboard-accessible fields', a
   await noPageOverflow(page);
   expect(blocked).toEqual([]);
 });
+
+test('an authenticated but forbidden user never reaches sales or delivery actions', async ({
+  page,
+}) => {
+  const blocked = await isolate(page);
+  await page.goto(`${proposalPath}?scenario=forbidden`);
+  await expect(
+    page.getByRole('heading', { name: 'アクセス権限を確認できません' }),
+  ).toBeVisible();
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '承認済み本文を送信' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'ログアウト', exact: true }).tap();
+  await expect(
+    page.getByRole('button', { name: 'ログイン', exact: true }),
+  ).toBeVisible();
+  await noPageOverflow(page);
+  expect(await page.evaluate(() => window.fixtureSendCount)).toBe(0);
+  expect(blocked).toEqual([]);
+});
+
+test('mobile sales journey logs in, reads company and engineer, matches and approves without sending', async ({
+  page,
+}) => {
+  const blocked = await isolate(page);
+  await page.goto('/companies?scenario=login');
+  await page.getByLabel('メールアドレス').fill('user@example.test');
+  await page
+    .getByLabel('パスワード', { exact: true })
+    .fill('fixture-password-only');
+  await page.getByRole('button', { name: 'ログイン', exact: true }).tap();
+  const navigation = page.getByRole('navigation', { name: '主要機能' });
+  await navigation.getByRole('button', { name: '会社', exact: true }).tap();
+  await expect(page.getByRole('heading', { name: '会社一覧' })).toBeVisible();
+  await expect(page.getByText('架空の取引先', { exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await noPageOverflow(page);
+  await navigation.getByRole('button', { name: '技術者', exact: true }).tap();
+  await expect(page.getByRole('heading', { name: '技術者一覧' })).toBeVisible();
+  await page.getByRole('button', { name: 'EN-FIXTURE' }).tap();
+  await expect(
+    page.getByRole('heading', { name: '架空 技術者' }),
+  ).toBeVisible();
+  await noPageOverflow(page);
+  await navigation.getByRole('button', { name: '案件', exact: true }).tap();
+  await expect(
+    page.getByRole('button', { name: '架空の営業支援案件' }),
+  ).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.getByRole('button', { name: '架空の営業支援案件' }).tap();
+  const matching = page.getByRole('region', {
+    name: '案件・技術者マッチング',
+    exact: true,
+  });
+  await expect(
+    matching.getByText('架空のTypeScript経験48か月', { exact: false }),
+  ).toBeVisible();
+  await matching.getByLabel('比較人数').selectOption('1');
+  await matching.getByRole('button', { name: '候補を再計算' }).tap();
+  await expect(
+    matching.getByRole('button', { name: '候補を再計算' }),
+  ).toBeEnabled();
+  expect(await page.evaluate(() => window.fixtureMatchCount)).toBe(1);
+  await noPageOverflow(page);
+  // Separate fixture entry changes only in-memory review state; no real write.
+  await page.goto('/proposals?scenario=journey');
+  const proposalList = page.getByRole('region', { name: '提案一覧' });
+  await expect(proposalList).toBeVisible();
+  await noPageOverflow(page);
+  await proposalList.focus();
+  await expect(proposalList).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect
+    .poll(() => proposalList.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0);
+  await page.getByRole('button', { name: 'PR-FIXTURE' }).tap();
+  await expect(
+    page.getByRole('button', { name: '承認済み本文を送信' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: '現在版を承認' }).tap();
+  await expect(
+    page.getByRole('button', { name: '承認済み本文を送信' }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.fixtureReviewCount)).toBe(1);
+  expect(await page.evaluate(() => window.fixtureSendCount)).toBe(0);
+  expect(await page.evaluate(() => window.fixtureRetryCount)).toBe(0);
+  await noPageOverflow(page);
+  expect(blocked).toEqual([]);
+});

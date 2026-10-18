@@ -11,6 +11,7 @@ import type {
   AuthSession,
 } from '../../../src/auth/auth-client.js';
 import '../../../src/styles.css';
+import { company, engineer, match, project } from './sales-data.js';
 
 // Only this fixture entry imports the fake service. The production entry never
 // imports tests/browser, and the transport below never calls global fetch.
@@ -18,10 +19,14 @@ declare global {
   interface Window {
     fixtureSendCount: number;
     fixtureRetryCount: number;
+    fixtureReviewCount: number;
+    fixtureMatchCount: number;
   }
 }
 window.fixtureSendCount = 0;
 window.fixtureRetryCount = 0;
+window.fixtureReviewCount = 0;
+window.fixtureMatchCount = 0;
 const scenario = new URLSearchParams(window.location.search).get('scenario');
 const proposalId = '66666666-6666-4666-8666-666666666666';
 const messageId = '17171717-1717-4717-8717-171717171717';
@@ -68,7 +73,7 @@ const draft: ProposalMessageDraft = {
   projectId: versionId,
   engineerId: versionId,
   channel: 'email',
-  status: 'approved',
+  status: scenario === 'journey' ? 'draft' : 'approved',
   subject: 'モバイル確認用の提案メール',
   bodyText:
     'ブラウザー内だけの架空メールです。\n' +
@@ -77,8 +82,8 @@ const draft: ProposalMessageDraft = {
   currentVersionId: versionId,
   currentVersionNo: 1,
   currentGenerationSource: 'manual',
-  approvedVersionId: versionId,
-  approvedAt: '2026-10-16T00:00:00Z',
+  approvedVersionId: scenario === 'journey' ? null : versionId,
+  approvedAt: scenario === 'journey' ? null : '2026-10-16T00:00:00Z',
   aiExecutionId: versionId,
   aiStatus: 'completed',
   aiErrorCode: null,
@@ -86,7 +91,7 @@ const draft: ProposalMessageDraft = {
   promptVersion: 'fixture',
   modelProvider: 'fixture',
   modelName: 'fixture',
-  reviewStatus: 'approved',
+  reviewStatus: scenario === 'journey' ? 'pending' : 'approved',
   reviewComment: null,
   generation: null,
   recipients: [
@@ -140,9 +145,42 @@ const fixtureFetch: typeof fetch = (input, init) => {
   if (path === '/api/v1/auth/context')
     return scenario === 'expired'
       ? json({ error: { code: 'expired', message: 'Fixture only' } }, 401)
-      : json({ requiresMfa: false });
+      : scenario === 'forbidden'
+        ? json({ error: { code: 'forbidden', message: 'Fixture only' } }, 403)
+        : json({ requiresMfa: false });
+  if (path === '/api/v1/companies')
+    return json({ items: [company], page: { limit: 50, nextCursor: null } });
+  if (path === `/api/v1/companies/${company.id}`) return json(company);
+  if (path === '/api/v1/engineers')
+    return json({ items: [engineer], page: { limit: 50, nextCursor: null } });
+  if (path === `/api/v1/engineers/${engineer.id}`) return json(engineer);
+  if (path === '/api/v1/projects')
+    return json({ items: [project], page: { limit: 50, nextCursor: null } });
+  if (path === `/api/v1/projects/${project.id}`) return json(project);
+  if (path.endsWith('/ai/matches/latest')) return json(match);
+  if (path.endsWith('/ai/match-engineers') && init?.method === 'POST') {
+    window.fixtureMatchCount += 1;
+    return json(match);
+  }
+  if (path.endsWith('/ai/extractions/latest')) return json(null);
+  if (path === '/api/v1/proposals')
+    return json({ items: [proposal], page: { limit: 50, nextCursor: null } });
   if (path === `/api/v1/proposals/${proposalId}`) return json(proposal);
   if (path.endsWith('/ai/message-drafts/latest')) return json(draft);
+  if (
+    path.endsWith(`/ai/message-drafts/${messageId}/review`) &&
+    init?.method === 'POST'
+  ) {
+    window.fixtureReviewCount += 1;
+    Object.assign(draft, {
+      status: 'approved',
+      reviewStatus: 'approved',
+      approvedVersionId: versionId,
+      approvedAt: '2026-10-18T00:01:00Z',
+      rowVersion: 2,
+    });
+    return json(draft);
+  }
   if (path.endsWith('/delivery'))
     return scenario === 'history-error'
       ? json({ error: { code: 'forbidden', message: 'Fixture only' } }, 403)

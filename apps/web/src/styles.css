@@ -14,7 +14,8 @@ body {
 button {
   font: inherit;
 }
-button:focus-visible {
+button:focus-visible,
+.table-wrapper:focus-visible {
   outline: 3px solid #267166;
   outline-offset: 3px;
 }
@@ -412,7 +413,9 @@ h2 {
   justify-content: center;
   padding-top: 1.25rem;
 }
-.table-wrap {
+.table-wrap,
+.table-wrapper {
+  max-width: 100%;
   overflow-x: auto;
 }
 table {

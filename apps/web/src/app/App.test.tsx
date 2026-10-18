@@ -2417,6 +2417,57 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '提案を登録' }));
     await waitFor(() => expect(createProposal).toHaveBeenCalledOnce());
   });
+  it.each([403, 500])(
+    'blocks draft generation after a %s read failure until a successful read-only refresh',
+    async (status) => {
+      const ready = {
+        ...proposal,
+        status: 'draft' as const,
+        resumeVersionId: project.id,
+        requirementVersionId: project.id,
+      };
+      const getLatestProposalMessageDraft = vi
+        .fn<ProjectsApi['getLatestProposalMessageDraft']>()
+        .mockRejectedValueOnce(
+          new ApiClientError(status, 'read_failed', 'Fixture only'),
+        )
+        .mockResolvedValueOnce(null);
+      const createProposalMessageDraft =
+        vi.fn<ProjectsApi['createProposalMessageDraft']>();
+      const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
+      window.history.replaceState({}, '', `/proposals/${ready.id}`);
+      render(
+        <App
+          auth={auth()}
+          api={api({
+            getProposal: () => Promise.resolve(ready),
+            getLatestProposalMessageDraft,
+            createProposalMessageDraft,
+            sendProposalMessage,
+          })}
+        />,
+      );
+      await screen.findByText(
+        '既存の下書きを確認できません。下書きの生成・送信を停止しています。',
+      );
+      expect(
+        screen.getByRole('button', { name: '下書きを生成' }),
+      ).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: '下書きを生成' }));
+      expect(createProposalMessageDraft).not.toHaveBeenCalled();
+      expect(sendProposalMessage).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: '下書きを再確認' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: '下書きを生成' }),
+        ).toBeEnabled(),
+      );
+      expect(getLatestProposalMessageDraft).toHaveBeenCalledTimes(2);
+      expect(createProposalMessageDraft).not.toHaveBeenCalled();
+      expect(sendProposalMessage).not.toHaveBeenCalled();
+    },
+  );
+
   it('generates, edits, and approves a proposal email without sending it', async () => {
     const ready = {
       ...proposal,

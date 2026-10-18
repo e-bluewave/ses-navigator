@@ -6818,34 +6818,41 @@ function ProposalListView({
         </select>
       </div>
       {error && <p role="alert">{error}</p>}
-      <table>
-        <thead>
-          <tr>
-            <th>提案番号</th>
-            <th>状態</th>
-            <th>単価</th>
-            <th>開始日</th>
-            <th>有効期限</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id} onClick={() => onOpen(item.id)}>
-              <td>
-                <button className="link-button">{item.managementNo}</button>
-              </td>
-              <td>{proposalStatusLabels[item.status]}</td>
-              <td>
-                {item.proposedUnitPrice === null
-                  ? '—'
-                  : `${item.proposedUnitPrice.toLocaleString()} ${item.currencyCode}`}
-              </td>
-              <td>{item.proposedStartDate ?? '—'}</td>
-              <td>{item.validityDate ?? '—'}</td>
+      <div
+        className="table-wrapper"
+        role="region"
+        aria-label="提案一覧"
+        tabIndex={0}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>提案番号</th>
+              <th>状態</th>
+              <th>単価</th>
+              <th>開始日</th>
+              <th>有効期限</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id} onClick={() => onOpen(item.id)}>
+                <td>
+                  <button className="link-button">{item.managementNo}</button>
+                </td>
+                <td>{proposalStatusLabels[item.status]}</td>
+                <td>
+                  {item.proposedUnitPrice === null
+                    ? '—'
+                    : `${item.proposedUnitPrice.toLocaleString()} ${item.currencyCode}`}
+                </td>
+                <td>{item.proposedStartDate ?? '—'}</td>
+                <td>{item.validityDate ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {items.length === 0 && !error && <p>該当する提案はありません。</p>}
     </section>
   );
@@ -6863,6 +6870,10 @@ function ProposalMessageDraftPanel({
   onSent: () => void;
 }) {
   const [draft, setDraft] = useState<ProposalMessageDraft | null>(null);
+  const [draftReadState, setDraftReadState] = useState<
+    'loading' | 'ready' | 'error'
+  >('loading');
+  const [draftRefresh, setDraftRefresh] = useState(0);
   const [delivery, setDelivery] = useState<ProposalMessageDelivery | null>(
     null,
   );
@@ -6886,16 +6897,23 @@ function ProposalMessageDraftPanel({
 
   useEffect(() => {
     let active = true;
+    setDraft(null);
+    setDraftReadState('loading');
     api
       .getLatestProposalMessageDraft(proposalId)
       .then((result) => {
-        if (active) setDraft(result);
+        if (active) {
+          setDraft(result);
+          setDraftReadState('ready');
+        }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setDraftReadState('error');
+      });
     return () => {
       active = false;
     };
-  }, [api, proposalId]);
+  }, [api, proposalId, draftRefresh]);
 
   useEffect(() => {
     setSubject(draft?.subject ?? '');
@@ -7075,6 +7093,23 @@ function ProposalMessageDraftPanel({
         AI生成版と営業編集版を不変履歴で保持します。承認しても自動送信されません。
       </p>
       {error ? <ErrorNotice error={error} subject="提案メール" /> : null}
+      {draftReadState === 'loading' ? (
+        <p role="status">下書きを確認しています…</p>
+      ) : null}
+      {draftReadState === 'error' ? (
+        <>
+          <p role="alert">
+            既存の下書きを確認できません。下書きの生成・送信を停止しています。
+          </p>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setDraftRefresh((value) => value + 1)}
+          >
+            下書きを再確認
+          </button>
+        </>
+      ) : null}
       {draft?.status === 'approved' && !delivery ? (
         <p role="status">配信履歴を確認できるまで送信・再送できません。</p>
       ) : null}
@@ -7124,7 +7159,7 @@ function ProposalMessageDraftPanel({
         <button
           type="button"
           className="primary-button"
-          disabled={busy || !canGenerate}
+          disabled={busy || !canGenerate || draftReadState !== 'ready'}
           onClick={() => void generate()}
         >
           {busy ? '処理中…' : draft ? '再生成' : '下書きを生成'}
