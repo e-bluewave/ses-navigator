@@ -185,6 +185,88 @@ test('an authenticated but forbidden user never reaches sales or delivery action
   expect(blocked).toEqual([]);
 });
 
+test('expired delivery authorization closes the flow and reauthentication only reads history', async ({
+  page,
+}) => {
+  const blocked = await isolate(page);
+  await page.goto(`${proposalPath}?scenario=send-expired`);
+  await page.getByRole('button', { name: '承認済み本文を送信' }).tap();
+  await page
+    .getByRole('button', { name: '内容を確認して送信', exact: true })
+    .tap();
+  await expect(
+    page.getByRole('button', { name: 'ログイン', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+  expect(await page.evaluate(() => window.fixtureSendCount)).toBe(1);
+  await noPageOverflow(page);
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('メールアドレス')).toBeFocused();
+  await page.keyboard.type('user@example.test');
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel('パスワード', { exact: true })).toBeFocused();
+  await page.keyboard.type('fixture-password-only');
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('button', { name: '承認済み本文を送信' }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.fixtureHistoryCount)).toBe(2);
+  expect(await page.evaluate(() => window.fixtureSendCount)).toBe(1);
+  expect(await page.evaluate(() => window.fixtureRetryCount)).toBe(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await noPageOverflow(page);
+  expect(blocked).toEqual([]);
+});
+
+test('expired delivery history authorization removes all sales actions', async ({
+  page,
+}) => {
+  const blocked = await isolate(page);
+  await page.goto(`${proposalPath}?scenario=history-expired`);
+  await expect(
+    page.getByRole('button', { name: 'ログイン', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => window.fixtureSendCount)).toBe(0);
+  expect(await page.evaluate(() => window.fixtureRetryCount)).toBe(0);
+  await noPageOverflow(page);
+  expect(blocked).toEqual([]);
+});
+
+test('unsaved proposal edits block keyboard approval until the persisted content is restored', async ({
+  page,
+}) => {
+  const blocked = await isolate(page);
+  await page.goto(`${proposalPath}?scenario=journey`);
+  const subject = page.getByLabel('提案メール件名');
+  const approve = page.getByRole('button', { name: '現在版を承認' });
+  await expect(approve).toBeEnabled();
+  const original = await subject.inputValue();
+  await subject.fill('未保存の架空の編集件名');
+  await expect(approve).toBeDisabled();
+  await expect(
+    page.getByText(
+      '未保存の変更があります。承認する前に編集版を保存してください。',
+    ),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.fixtureReviewCount)).toBe(0);
+  await noPageOverflow(page);
+  await subject.fill(original);
+  await expect(approve).toBeEnabled();
+  await approve.focus();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('button', { name: '承認済み本文を送信' }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.fixtureReviewCount)).toBe(1);
+  expect(await page.evaluate(() => window.fixtureSendCount)).toBe(0);
+  expect(await page.evaluate(() => window.fixtureRetryCount)).toBe(0);
+  await noPageOverflow(page);
+  expect(blocked).toEqual([]);
+});
+
 test('mobile sales journey logs in, reads company and engineer, matches and approves without sending', async ({
   page,
 }) => {

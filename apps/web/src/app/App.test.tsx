@@ -2559,6 +2559,190 @@ describe('App', () => {
     );
     expect(sendProposalMessage).not.toHaveBeenCalled();
   });
+  it.each(['subject', 'bodyText'] as const)(
+    'requires saving edited %s before approving the persisted version',
+    async (field) => {
+      const user = userEvent.setup();
+      const saved = { ...proposalMessageDraft, [field]: '保存する編集内容' };
+      const updateProposalMessageDraft = vi.fn(() => Promise.resolve(saved));
+      const reviewProposalMessageDraft = vi.fn(() =>
+        Promise.resolve({
+          ...saved,
+          status: 'approved' as const,
+          approvedVersionId: saved.currentVersionId,
+        }),
+      );
+      window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+      render(
+        <App
+          auth={auth()}
+          api={api({
+            getProposal: () => Promise.resolve(proposal),
+            getLatestProposalMessageDraft: () =>
+              Promise.resolve(proposalMessageDraft),
+            updateProposalMessageDraft,
+            reviewProposalMessageDraft,
+          })}
+        />,
+      );
+      const input = await screen.findByLabelText(
+        field === 'subject' ? '提案メール件名' : '提案メール本文',
+      );
+      await waitFor(() =>
+        expect(input).toHaveValue(proposalMessageDraft[field]),
+      );
+      await user.clear(input);
+      await user.type(input, '保存する編集内容');
+      const approve = screen.getByRole('button', { name: '現在版を承認' });
+      expect(approve).toBeDisabled();
+      expect(
+        screen.getByText(
+          '未保存の変更があります。承認する前に編集版を保存してください。',
+        ),
+      ).toBeInTheDocument();
+      await user.click(approve);
+      expect(reviewProposalMessageDraft).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: '編集版を保存' }));
+      await waitFor(() => expect(approve).toBeEnabled());
+      approve.focus();
+      await user.keyboard('{Enter}');
+      await waitFor(() =>
+        expect(reviewProposalMessageDraft).toHaveBeenCalledOnce(),
+      );
+      expect(updateProposalMessageDraft).toHaveBeenCalledWith(
+        proposal.id,
+        proposalMessageDraft.id,
+        proposalMessageDraft.rowVersion,
+        { subject: saved.subject, bodyText: saved.bodyText },
+      );
+    },
+  );
+
+  it.each([
+    'draft-read',
+    'history-read',
+    'generate',
+    'save',
+    'approve',
+    'send',
+    'retry',
+  ] as const)(
+    'returns to login on proposal email %s 401 without retrying a mutation',
+    async (step) => {
+      const authentication = auth();
+      const approved = {
+        ...proposalMessageDraft,
+        status: 'approved' as const,
+        approvedVersionId: proposalMessageDraft.currentVersionId,
+      };
+      const delivery: Awaited<
+        ReturnType<ProjectsApi['getProposalMessageDelivery']>
+      > = {
+        messageId: approved.id,
+        proposalId: proposal.id,
+        status: step === 'retry' ? 'failed' : 'approved',
+        sentAt: null,
+        approvedVersionId: approved.currentVersionId!,
+        rowVersion: 3,
+        recipients: approved.recipients.map((recipient) => ({
+          ...recipient,
+          id: 'fixture-recipient',
+          deliveryStatus: step === 'retry' ? 'failed' : 'pending',
+          attempts: [],
+        })),
+      };
+      const failure = () =>
+        Promise.reject(new ApiClientError(401, 'expired', 'fixture'));
+      const sendProposalMessage =
+        vi.fn<ProjectsApi['sendProposalMessage']>(failure);
+      const retryProposalMessage =
+        vi.fn<ProjectsApi['retryProposalMessage']>(failure);
+      const createProposalMessageDraft =
+        vi.fn<ProjectsApi['createProposalMessageDraft']>(failure);
+      const updateProposalMessageDraft =
+        vi.fn<ProjectsApi['updateProposalMessageDraft']>(failure);
+      const reviewProposalMessageDraft =
+        vi.fn<ProjectsApi['reviewProposalMessageDraft']>(failure);
+      window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+      render(
+        <App
+          auth={authentication}
+          api={api({
+            getProposal: () =>
+              Promise.resolve({
+                ...proposal,
+                status: 'draft',
+                resumeVersionId: 'fixture-resume',
+                requirementVersionId: 'fixture-requirement',
+              }),
+            getLatestProposalMessageDraft: () =>
+              step === 'draft-read'
+                ? failure()
+                : Promise.resolve(
+                    ['history-read', 'send', 'retry'].includes(step)
+                      ? approved
+                      : step === 'generate'
+                        ? null
+                        : proposalMessageDraft,
+                  ),
+            getProposalMessageDelivery: () =>
+              step === 'history-read' ? failure() : Promise.resolve(delivery),
+            sendProposalMessage,
+            retryProposalMessage,
+            createProposalMessageDraft,
+            updateProposalMessageDraft,
+            reviewProposalMessageDraft,
+          })}
+        />,
+      );
+      if (['generate', 'save', 'approve'].includes(step)) {
+        const action = await screen.findByRole('button', {
+          name:
+            step === 'generate'
+              ? '下書きを生成'
+              : step === 'save'
+                ? '編集版を保存'
+                : '現在版を承認',
+        });
+        await waitFor(() => expect(action).toBeEnabled());
+        fireEvent.click(action);
+      } else if (step === 'send' || step === 'retry') {
+        fireEvent.click(
+          await screen.findByRole('button', {
+            name:
+              step === 'send' ? '承認済み本文を送信' : '失敗した宛先だけ再送',
+          }),
+        );
+        fireEvent.click(
+          await screen.findByRole('button', {
+            name: step === 'send' ? '内容を確認して送信' : '内容を確認して再送',
+          }),
+        );
+      }
+      await waitFor(() =>
+        expect(authentication.signOut).toHaveBeenCalledOnce(),
+      );
+      await screen.findByRole('button', { name: 'ログイン' });
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(sendProposalMessage).toHaveBeenCalledTimes(
+        step === 'send' ? 1 : 0,
+      );
+      expect(retryProposalMessage).toHaveBeenCalledTimes(
+        step === 'retry' ? 1 : 0,
+      );
+      expect(createProposalMessageDraft).toHaveBeenCalledTimes(
+        step === 'generate' ? 1 : 0,
+      );
+      expect(updateProposalMessageDraft).toHaveBeenCalledTimes(
+        step === 'save' ? 1 : 0,
+      );
+      expect(reviewProposalMessageDraft).toHaveBeenCalledTimes(
+        step === 'approve' ? 1 : 0,
+      );
+    },
+  );
+
   it('shows failed delivery history and retries only after an explicit click', async () => {
     const approved = {
       ...proposalMessageDraft,

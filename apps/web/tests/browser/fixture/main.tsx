@@ -21,12 +21,14 @@ declare global {
     fixtureRetryCount: number;
     fixtureReviewCount: number;
     fixtureMatchCount: number;
+    fixtureHistoryCount: number;
   }
 }
 window.fixtureSendCount = 0;
 window.fixtureRetryCount = 0;
 window.fixtureReviewCount = 0;
 window.fixtureMatchCount = 0;
+window.fixtureHistoryCount = 0;
 const scenario = new URLSearchParams(window.location.search).get('scenario');
 const proposalId = '66666666-6666-4666-8666-666666666666';
 const messageId = '17171717-1717-4717-8717-171717171717';
@@ -181,7 +183,10 @@ const fixtureFetch: typeof fetch = (input, init) => {
     });
     return json(draft);
   }
-  if (path.endsWith('/delivery'))
+  if (path.endsWith('/delivery')) {
+    window.fixtureHistoryCount += 1;
+    if (scenario === 'history-expired')
+      return json({ error: { code: 'expired', message: 'Fixture only' } }, 401);
     return scenario === 'history-error'
       ? json({ error: { code: 'forbidden', message: 'Fixture only' } }, 403)
       : json(
@@ -189,9 +194,12 @@ const fixtureFetch: typeof fetch = (input, init) => {
             ? { ...delivery, status: 'queued' }
             : delivery,
         );
+  }
   if (init?.method === 'POST' && /\/(send|retry)$/u.test(path)) {
     if (path.endsWith('/retry')) window.fixtureRetryCount += 1;
     else window.fixtureSendCount += 1;
+    if (scenario === 'send-expired')
+      return json({ error: { code: 'expired', message: 'Fixture only' } }, 401);
     if (scenario === 'send-error')
       return json(
         { error: { code: 'unavailable', message: 'Fixture only' } },

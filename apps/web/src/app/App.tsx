@@ -6863,11 +6863,13 @@ function ProposalMessageDraftPanel({
   proposalId,
   canGenerate,
   onSent,
+  onUnauthorized,
 }: {
   api: ProjectsApi;
   proposalId: string;
   canGenerate: boolean;
   onSent: () => void;
+  onUnauthorized: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState<ProposalMessageDraft | null>(null);
   const [draftReadState, setDraftReadState] = useState<
@@ -6907,13 +6909,16 @@ function ProposalMessageDraftPanel({
           setDraftReadState('ready');
         }
       })
-      .catch(() => {
-        if (active) setDraftReadState('error');
+      .catch((reason: unknown) => {
+        if (!active) return;
+        setDraftReadState('error');
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
       });
     return () => {
       active = false;
     };
-  }, [api, proposalId, draftRefresh]);
+  }, [api, proposalId, draftRefresh, onUnauthorized]);
 
   useEffect(() => {
     setSubject(draft?.subject ?? '');
@@ -6941,12 +6946,15 @@ function ProposalMessageDraftPanel({
         }
       })
       .catch((reason: unknown) => {
-        if (active) setError(reason);
+        if (!active) return;
+        setError(reason);
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
       });
     return () => {
       active = false;
     };
-  }, [api, proposalId, draft, deliveryRefresh]);
+  }, [api, proposalId, draft, deliveryRefresh, onUnauthorized]);
 
   async function generate() {
     setBusy(true);
@@ -6960,6 +6968,8 @@ function ProposalMessageDraftPanel({
       );
     } catch (reason) {
       setError(reason);
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
     } finally {
       setBusy(false);
     }
@@ -6980,13 +6990,15 @@ function ProposalMessageDraftPanel({
       );
     } catch (reason) {
       setError(reason);
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
     } finally {
       setBusy(false);
     }
   }
 
   async function review(decision: 'approve' | 'reject') {
-    if (!draft) return;
+    if (!draft || (decision === 'approve' && hasUnsavedChanges)) return;
     setBusy(true);
     setError(null);
     try {
@@ -7004,6 +7016,8 @@ function ProposalMessageDraftPanel({
       setReviewComment('');
     } catch (reason) {
       setError(reason);
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
     } finally {
       setBusy(false);
     }
@@ -7040,6 +7054,8 @@ function ProposalMessageDraftPanel({
     } catch (reason) {
       setError(reason);
       setDeliveryUncertain(true);
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
     } finally {
       deliveryInFlight.current = false;
       setBusy(false);
@@ -7047,6 +7063,9 @@ function ProposalMessageDraftPanel({
   }
 
   const editable = draft?.status === 'draft' && draft.currentVersionId !== null;
+  const hasUnsavedChanges = Boolean(
+    draft && (subject !== draft.subject || bodyText !== draft.bodyText),
+  );
   const approvedVersionMatches =
     draft?.approvedVersionId !== null &&
     draft?.approvedVersionId === draft?.currentVersionId &&
@@ -7232,6 +7251,11 @@ function ProposalMessageDraftPanel({
           </label>
           {editable ? (
             <>
+              {hasUnsavedChanges ? (
+                <p role="status">
+                  未保存の変更があります。承認する前に編集版を保存してください。
+                </p>
+              ) : null}
               <button
                 type="button"
                 className="secondary-button"
@@ -7253,7 +7277,7 @@ function ProposalMessageDraftPanel({
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={busy}
+                  disabled={busy || hasUnsavedChanges}
                   onClick={() => void review('approve')}
                 >
                   現在版を承認
@@ -7486,6 +7510,7 @@ function ProposalDetail({
       <ProposalMessageDraftPanel
         api={api}
         proposalId={item.id}
+        onUnauthorized={onUnauthorized}
         canGenerate={
           item.resumeVersionId !== null &&
           item.requirementVersionId !== null &&
