@@ -21,3 +21,15 @@
 通常開発は親1＋子1〜2を目安に、調査／レビューまたは重複しないファイルへ分ける。原則として親が統合・push・CI確認・最終報告を行う。ツールが利用不可なら親の逐次作業とGitHub Actionsによる模擬テストへ切り替える。
 
 Staging Web公開、runtime identityとSupabase環境分離の実照合、実メールは今回の検証対象外であり、未完了のゲートを解除していない。PC操作や追加の環境権限は不要だった。
+
+## MVP1 parallel development wave 1（2026-10-18）
+
+基準head `49088aea192d9a5af3440d41876943382873734f`で、指定PRコメント「Codex next task: MVP1 parallel development wave 1」を全文確認した。
+
+- 新しい子2体（`wave1_ui`／`wave1_security`）の起動・完了を実測。各子に独立したworktreeを割り当て、UI／fixtureとscripts／build設定の編集所有を分けた。
+- 親はworkflow・受入表・承認ゲート文書を所有。子はcommit／pushせず、全子の完了後に親が差分をレビューし統合した。
+- 子Aはテーブル用CSSの不整合、下書き読み取り失敗後の生成ガードを修正し、営業導線・403を模擬モバイルfixtureへ追加。
+- 子Bはbuild環境ガード・static設定・Secret境界・POST再試行なしの異常系テストを追加。親が見つけたplatform識別子欠落時のguard skipを追加依頼し、staging modeの強制ガードと実Vite entryの停止テストで修正した。
+- 統合後のテストと最終headのCIは親が確認する。子の個別PASS、並列実行の成立、実環境受入は別の証跡として扱う。
+
+このwaveでも実環境アクセス・DB書き込み・実メール・Vercel設定変更は行わず、未知のWeb project ID／runtime identityはUNKNOWNのまま維持する。

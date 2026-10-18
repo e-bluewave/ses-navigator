@@ -1,6 +1,6 @@
 # MVP1 営業フロー受入表（PR #168）
 
-更新: 2026-10-16。対象は Draft PR #168 のコードおよび模擬テスト。**自動テストのPASSは実環境の受入PASSを意味しない。** この表の「実環境証跡」は照合できるまで UNKNOWN とする。Web/API連携候補と残る管理画面ゲートは [STAGING_WEB_API_INTEGRATION.md](STAGING_WEB_API_INTEGRATION.md) を参照。
+更新: 2026-10-18。対象は Draft PR #168 のコードおよび模擬テスト。**自動テストのPASSは実環境の受入PASSを意味しない。** この表の「実環境証跡」は照合できるまで UNKNOWN とする。Web/API連携候補と残る管理画面ゲートは [STAGING_WEB_API_INTEGRATION.md](STAGING_WEB_API_INTEGRATION.md) を参照。
 
 | 工程・完成条件 | React経路・操作 | API（`/api/v1`以下） | 模擬テスト／コード証跡 | 実環境証跡・残るゲート |
 | --- | --- | --- | --- | --- |
@@ -37,6 +37,18 @@
 ## 証跡の読み方
 
 `PROJECT_STATUS.md` の「80%」は2026-09-25時点の記述で、現在の完成率ではない。BA-001の環境分離記録は過去の証跡であり、PR #168の現行Preview runtimeの`SUPABASE_URL`を実証しない。現行のruntime identity検証がPASSするまで実データpreflightを実行しない。
+
+## 並列開発 Wave 1 の追加証跡
+
+基準head `49088aea192d9a5af3440d41876943382873734f`から、独立worktreeの子A／子Bと親で分担した。子はcommit／pushせず、親が完了結果と全差分をレビューして統合する。実行結果は最終headのCIで確認する。
+
+| 担当 | 具体的な改善・検証経路 | 実環境への意味 |
+| --- | --- | --- |
+| 子A: UI | `mobile.spec.ts`で320／390pxのログイン→会社一覧→技術者詳細→案件／AI根拠・再計算→提案一覧・承認をin-memory fixtureで確認。表のCSS不整合と提案一覧のスクロール・focusを修正。auth 403、下書きGETの403／500で生成停止→GET再確認の回帰を追加 | 模擬の承認・再計算のみ。実登録・実DB書き込み受入ではない |
+| 子B: 安全境界 | `staging-web-build-guard.test.mjs`でPreview／repository／branch／project ID／独立ref／公開変数を検査。static routes・headers、source map／encoded privileged keyの非露出、send／retry POSTの再試行なしを追加検証 | build設定の整合のみ。公開key所有権・OIDC署名・review済head・runtime identityを実証しない |
+| 親: 統合 | 子の差分確認、CIへのguard test追加、全体テスト・ビルド・境界検査。iPhone管理者向け手順に承認者・停止条件・必要証跡を追加 | Web公開・実接続・実メールのゲートを解除しない |
+
+子A／子Bの個別PASSだけで統合PASSと判断しない。モバイルfixtureはChromeの模擬viewportであり、iPhone Safari実機の受入はUNKNOWNのままである。
 
 ## 残作業の担当境界
 
