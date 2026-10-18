@@ -9,7 +9,7 @@
 | 技術者・経歴書版を参照 | `/engineers`、`/engineers/:id` | `/engineers`、`/engineers/:id/resumes` | `App.test.tsx` の技術者作成・詳細・非公開情報、APIの型・テスト | UNKNOWN: 経歴書版の実データ受入 |
 | 案件登録・検索 | `/projects`、`/projects/:id` | `/projects` | `App.test.tsx` の一覧・検索・編集・監査、`client.test.ts` | UNKNOWN: Staging Web実利用 |
 | AIマッチングと根拠確認 | `/projects/:id` のマッチ | `POST /projects/:id/ai/match-engineers`、`GET /projects/:id/ai/matches/latest` | `App.test.tsx` のスコアと根拠、`client.test.ts` | UNKNOWN: 利用量・モデル・費用・営業判断の受入 |
-| 提案・本文の版管理と承認 | `/proposals`、`/proposals/:id` | `/proposals`、`/proposals/:id/ai/message-drafts/latest`、`POST /proposals/:id/ai/message-drafts/:messageId/review` | `App.test.tsx` の生成・編集・承認（送信なし） | UNKNOWN: 権限分離、送信先・件名・本文・承認版の実データ照合 |
+| 提案・本文の版管理と承認 | `/proposals`、`/proposals/:id` | `/proposals`、`/proposals/:id/ai/message-drafts/latest`、`POST /proposals/:id/ai/message-drafts/:messageId/review` | `App.test.tsx` の生成・編集・承認、未保存件名／本文の承認停止、提案メール操作の401でログアウト。`mobile.spec.ts` のkeyboard承認・失効後GET復帰 | UNKNOWN: 権限分離、送信先・件名・本文・承認版の実データ照合 |
 | 明示操作で送信・失敗時だけ再送 | `/proposals/:id` の送信／再送確認dialog | `POST /proposals/:id/messages/:messageId/send`、`POST /proposals/:id/messages/:messageId/retry` | `App.test.tsx` のcancel・履歴エラー拒否・承認版／宛先／attempt照合・二重操作防止、`tests/browser/mobile.spec.ts` の模擬1回確認・失敗宛先のみ再送、API・SMTP unit test | UNKNOWN: Staging実メール。個別承認まで実行禁止 |
 | 試行・provider結果の表示 | `/proposals/:id` の配信状況 | `GET /proposals/:id/messages/:messageId/delivery` | `App.test.tsx` のattempt／response code表示、client・API unit test | UNKNOWN: 実メール受信・履歴・attempt数・Secret非露出 |
 | Web公開と深いURL | 独立したStaging Web Preview | 静的Vite出力、`/api/v1` は同一originを前提 | `apps/web/vercel.json`、`staging-web-routes.test.mjs`（非GET除外も検査）、`staging-web-api-proxy-model.test.mjs`、`pnpm build` | UNKNOWN: Webプロジェクト・Protection・安全なAPI経路が未設定。中継はfixtureモデルのみでhandler未接続 |
@@ -50,12 +50,18 @@
 
 子A／子Bの個別PASSだけで統合PASSと判断しない。モバイルfixtureはChromeの模擬viewportであり、iPhone Safari実機の受入はUNKNOWNのままである。
 
-## 残作業の担当境界
+## 完了済みコードと残作業の担当境界
 
-| 区分 | 残作業 |
-| --- | --- |
-| コードのみ | 中継モデルのHost／framing／deadline／token分離、確認dialog、履歴不一致拒否、結果不明時のGET再確認、320px／390pxのChrome模擬画面テストを実装。管理画面ゲート解消後にserver-only handlerを別途レビューし、必要APIのallowlistを個別追加する。実iPhone Safariでの受入は未確認 |
-| クラウド管理画面 | GitHub EnvironmentのPR ref許可とRequired reviewerを確認。Vercel Custom Trusted Sourceの全claim／Preview限定可否を確認。独立したStaging Webプロジェクトと保護・公開値を設定し、API経路とStaging Supabaseの接続先を照合 |
-| 明示承認 | reviewer付きのread-only identity実行と、その後の認証付き実データpreflight。宛先・本文・attempt=0を確認した後の1通限定の実メール送信。Production変更、Mainマージ、Draft解除はそれぞれ別ゲート |
+基準head `1f36f47d610c9cf10bff372b3598d8d5f9e5ebf2`のCI #697／Windows模擬検証 #81を再確認した。既存のコードのみ欄に並んでいた中継モデル・確認dialog・履歴ガード・モバイルfixtureは、これから作るTODOではなく実装済みの模擬検証対象である。未確認の実環境ゲートを埋めるために、同じ機能やテストを反復追加しない。
 
-管理画面の確認項目はiPhone向けに [Web/API連携手順](STAGING_WEB_API_INTEGRATION.md#iphoneからまとめて確認する管理画面ゲート) に集約した。GitHub ActionsのCustom providerとWeb→APIのproject間信頼は別の設定である。いずれも登録は未実施。新規WebのImportが意図しないProduction-target deployを起動しないことと、未レビューPreviewが信頼対象へ入らないことを確認できるまで進めない。runtime identityがPASSするまでは実データへのアクセスを開始しない。
+| 状態・区分 | 証跡または残作業 | 次へ進む条件・担当 |
+| --- | --- | --- |
+| 完了: code-only基盤 | 中継モデルのHost／framing／deadline／token分離、確認dialog・履歴照合・結果不明時のGET、Staging Web buildガード、Secret境界、320／390pxの模擬営業導線。Wave1 CIでAPI270・Web127・モバイル16ケースがPASS | 新たに再現した不具合だけをCodexが修正・回帰。実環境完了とは数えない |
+| Wave2: 限定した回帰修正 | 提案メール7操作の401でログアウト、未保存件名／本文の承認停止、fixture例外を製品出力へ適用しないpath正規化・root限定。親が子2体の完了と差分を確認し統合 | `App.test.tsx`／`mobile.spec.ts`／`check-client-secret-boundary.test.mjs`と最終headのCIで確認。公開handler・環境設定は変更しない |
+| 条件付き: handlerコード | server-only handlerと照合済みAPI Deploymentへの固定は未実装。必要APIのallowlistは契約ごとに追加するが、根拠なしで広げない | Web project identity・Preview限定trust・レビュー済Deploymentの制限を独立証跡で確認後、Codexが別途実装・レビュー |
+| 未確認: 管理画面の読み取り | GitHub Environmentのreviewer／PR ref、独立Supabase ref、VercelのWeb project／Protection／信頼条件の設定可否 | 管理者が最小チェックリストの結果を提示。保存や登録で不足条件を補わない |
+| 未実施: 設定・非送信identity | 必要なStaging専用設定・固定DeploymentとAPI runtimeのStaging ref一致／Production ref不一致 | 責任者が対象と操作を個別承認し、管理者とRequired reviewerが実施。現作業では起動しない |
+| 未実施: Web実接続・受入 | 保護付きWebログイン／GET、iPhone Safari、営業操作の権限・状態・履歴 | 環境分離と安全なhandlerの証跡後に承認。DB書き込みを伴う受入は読み取り承認に含めない |
+| 未実施: 実メール・リリース | 送信前の宛先・本文・承認版・attempt照合と1通の受信／履歴確認。その後の本番・マージ判断 | 責任者がメール、本番変更、Mainマージ、Draft解除を別々に承認 |
+
+管理画面の確認項目はiPhone向けに [Web/API連携手順](STAGING_WEB_API_INTEGRATION.md#iphoneからまとめて確認する管理画面ゲート) に集約した。GitHub ActionsのCustom providerとWeb→APIのproject間信頼は別の設定であり、本作業では登録していない。現在の管理画面設定は独立に未照合。新規WebのImportが意図しないProduction-target deployを起動しないことと、未レビューPreviewが信頼対象へ入らないことを確認できるまで進めない。runtime identityがPASSするまでは実データへのアクセスを開始しない。

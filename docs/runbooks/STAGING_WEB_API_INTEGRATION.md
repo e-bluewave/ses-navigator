@@ -75,11 +75,15 @@ Vercelの非秘密system metadataはPreview、repository `e-bluewave/ses-navigat
 
 今は設定変更を実施しない。以下は担当者が実施する時の確認順である。読み取り確認を先にまとめ、保存・Import・Deploy・label追加・workflow承認は個別ゲートの承認後に限る。iPhoneで必要な欄を確認できない場合はUNKNOWNで止め、Protectionを弱めたりPC操作を都度依頼して回避しない。
 
-1. GitHubで対象headとCIを確認。`sesn-staging-readonly`のRequired reviewerを維持し、PR refのallowlistを確認する。今回の作業ではlabel追加やworkflow承認を行わない。
-2. 新しいStaging専用Webプロジェクトのteam／project ID／`apps/web` Root Directory／Vite設定を確認。Import時に意図しないProduction-target deploymentが始まらないPreview限定の手順が確認できるまでDeployを押さない。workspace外部ソースとlockfileを利用できること、Preview Protectionが有効であることを確認する。
-3. Web側の公開Supabase設定が独立したStaging refに対応し、Production refと異なることを確認。SMTP・service-role・bypassの値をWebに複製しない。OIDCはrequest内のSDKだけから取得し、VITE変数・ソース・build引数へ渡さない。Vercel自身がbuildに付与するOIDC変数も読み出し／ログ出力／artifact保存しない。
-4. API側に新しいWebプロジェクトの**Preview → Previewだけ**を許可できるか確認。登録は別承認事項。信頼設定がそのWebプロジェクトの全Previewに及ぶ点を確認し、未レビューのbranch／fork／commitを実行できる状態で登録しない。確実なdeployment制限を管理画面で実証できなければ停止し、未確認の仕様で補わない。GitHub ActionsのCustom provider設定とは別の信頼関係である。
-5. APIのruntime identity、Webの実project ID／Preview／commit、API Deploymentの固定方法を独立証跡で確定した後、別作業でserver-only handlerを実装・レビューする。ここまでPASSした場合だけ、承認済みの非送信・読み取り接続確認へ進む。
+まず必要なのは次の**3画面群の読み取り確認だけ**である。値の転記を1項目ずつ求めず、管理者がまとめて照合し、以下の比較結果・未確認事項を返す。Secret・token・key・project refを報告やスクリーンショットへ含めない。
+
+| 順序 | 開く画面 | 返す証跡（値を含めない） | 停止条件 |
+| --- | --- | --- | --- |
+| 1 | GitHub PR #168 Checks、およびSettings → Environments → `sesn-staging-readonly` | 対象headのCI、Required reviewer=`e-bluewave`、実行ref `refs/pull/168/merge`を許可するruleの有無、期待ref Variables2件の存在。ruleは制限表現のみを報告 | branch名だけのruleでPR ref許可を推測しない。設定不一致なら保存・label追加・承認せず停止 |
+| 2 | Supabaseの2プロジェクトのProject Settingsと、独立管理された期待ref | Staging候補とProductionのrefが異なり、GitHub期待refへ正しく対応するかの比較結果 | 実ID照合できなければUNKNOWN。SQLやAuth Users等の実データ画面は開かない |
+| 3 | Vercel `ses-navigator-staging`のDeployment metadata／Protection／Trusted Sources、およびWeb専用projectが既存ならその設定 | APIの対象commit／Preview状態。Web専用projectの有無と独立ID確認の可否。Web Preview → API Previewと未レビューDeployment除外を設定可能か。GitHub Actions External Serviceとは分けて確認 | Webがなければ作成しない。ID・環境・trust範囲を実証できない、またはImportでProduction-targetが始まるなら停止。Add／Save／Deployしない |
+
+この確認だけではAPI runtimeの接続先も署名検証も実証できない。結果をもとに、責任者が下表の設定・非送信identity・実接続を別々に承認する。Web専用projectの作成、必要な公開Auth設定、Preview Protection、レビュー済Deployment制限が未確認なら、handler実装へ先行しない。OIDCは将来のrequest内SDK取得に限定し、browser・VITE変数・build引数・ログ・artifactへ渡さない。
 
 実データGET、DB書き込み、メール送信、Production設定・deploy、Mainマージ、Draft解除の許可はこの文書には含まれない。
 
