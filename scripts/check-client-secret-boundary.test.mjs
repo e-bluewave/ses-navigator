@@ -134,6 +134,31 @@ test('fixture auth code may live only in the isolated browser test directory', (
   );
 });
 
+test('fixture exemption cannot hide copied build output or traversal paths', () => {
+  for (const name of [
+    'tests/browser/fixture/main.js',
+    'apps/web/dist/tests/browser/fixture/main.js',
+    'apps/web/dist/assets/tests/browser/client.js',
+    'apps/web/tests/browser/../../src/main.tsx',
+    'apps\\web\\dist\\tests\\browser\\client.js',
+  ]) {
+    const result = validateClientSecretBoundary([
+      { name, source: 'window.fixtureSendCount = 0;' },
+    ]);
+    assert.equal(result.status, 'CLIENT_SECRET_BOUNDARY_FAILED', name);
+    assert.equal(result.findings[0].rule, 'browser-fixture-in-product');
+  }
+  assert.equal(
+    validateClientSecretBoundary([
+      {
+        name: 'apps\\web\\tests\\browser\\fixture\\main.tsx',
+        source: 'window.fixtureSendCount = 0;',
+      },
+    ]).status,
+    'CLIENT_SECRET_BOUNDARY_PASSED',
+  );
+});
+
 test('all public password and token names are rejected with no matching values', () => {
   for (const name of [
     'VITE_ACCESS_TOKEN',

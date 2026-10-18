@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { extname, join, relative } from 'node:path';
+import { extname, join, posix, relative } from 'node:path';
 import { isMainModule } from './cli-entry.mjs';
 
 const FORBIDDEN_PATTERNS = [
@@ -48,6 +48,11 @@ export function validateClientSecretBoundary(files) {
   const findings = [];
 
   for (const file of files) {
+    // Only the source fixture root is exempt. A build can preserve a nested
+    // tests/browser path; that must not make copied fixture code acceptable.
+    const fixtureSource = /^apps\/web\/tests\/browser\//u.test(
+      posix.normalize(file.name.replaceAll('\\', '/')),
+    );
     const lines = file.source.split(/\r?\n/u);
     for (const [index, line] of lines.entries()) {
       // Detect legacy privileged keys even when their environment-variable
@@ -72,11 +77,7 @@ export function validateClientSecretBoundary(files) {
         }
       }
       for (const { rule, pattern, fixtureOnly } of FORBIDDEN_PATTERNS) {
-        if (
-          fixtureOnly &&
-          /(?:^|\/)tests\/browser\//u.test(file.name.replaceAll('\\', '/'))
-        )
-          continue;
+        if (fixtureOnly && fixtureSource) continue;
         pattern.lastIndex = 0;
         if (pattern.test(line)) {
           findings.push({ file: file.name, line: index + 1, rule });
