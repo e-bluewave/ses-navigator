@@ -5,10 +5,12 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ProjectsApi } from '../api/client.js';
+import { ApiClientError, type ProjectsApi } from '../api/client.js';
 import type {
   Company,
   CompanyContact,
@@ -2415,6 +2417,57 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '提案を登録' }));
     await waitFor(() => expect(createProposal).toHaveBeenCalledOnce());
   });
+  it.each([403, 500])(
+    'blocks draft generation after a %s read failure until a successful read-only refresh',
+    async (status) => {
+      const ready = {
+        ...proposal,
+        status: 'draft' as const,
+        resumeVersionId: project.id,
+        requirementVersionId: project.id,
+      };
+      const getLatestProposalMessageDraft = vi
+        .fn<ProjectsApi['getLatestProposalMessageDraft']>()
+        .mockRejectedValueOnce(
+          new ApiClientError(status, 'read_failed', 'Fixture only'),
+        )
+        .mockResolvedValueOnce(null);
+      const createProposalMessageDraft =
+        vi.fn<ProjectsApi['createProposalMessageDraft']>();
+      const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
+      window.history.replaceState({}, '', `/proposals/${ready.id}`);
+      render(
+        <App
+          auth={auth()}
+          api={api({
+            getProposal: () => Promise.resolve(ready),
+            getLatestProposalMessageDraft,
+            createProposalMessageDraft,
+            sendProposalMessage,
+          })}
+        />,
+      );
+      await screen.findByText(
+        '既存の下書きを確認できません。下書きの生成・送信を停止しています。',
+      );
+      expect(
+        screen.getByRole('button', { name: '下書きを生成' }),
+      ).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: '下書きを生成' }));
+      expect(createProposalMessageDraft).not.toHaveBeenCalled();
+      expect(sendProposalMessage).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: '下書きを再確認' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: '下書きを生成' }),
+        ).toBeEnabled(),
+      );
+      expect(getLatestProposalMessageDraft).toHaveBeenCalledTimes(2);
+      expect(createProposalMessageDraft).not.toHaveBeenCalled();
+      expect(sendProposalMessage).not.toHaveBeenCalled();
+    },
+  );
+
   it('generates, edits, and approves a proposal email without sending it', async () => {
     const ready = {
       ...proposal,
@@ -2496,7 +2549,518 @@ describe('App', () => {
       await screen.findByRole('button', { name: '承認済み本文を送信' }),
     ).toBeInTheDocument();
     expect(sendProposalMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '承認済み本文を送信' }));
+    const confirmation = await screen.findByRole('dialog', {
+      name: '送信内容を確認',
+    });
+    expect(within(confirmation).getByText('編集済み件名')).toBeInTheDocument();
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: 'キャンセル' }),
+    );
+    expect(sendProposalMessage).not.toHaveBeenCalled();
   });
+  it.each(['subject', 'bodyText'] as const)(
+    'requires saving edited %s before approving the persisted version',
+    async (field) => {
+      const user = userEvent.setup();
+      const saved = { ...proposalMessageDraft, [field]: '保存する編集内容' };
+      const updateProposalMessageDraft = vi.fn(() => Promise.resolve(saved));
+      const reviewProposalMessageDraft = vi.fn(() =>
+        Promise.resolve({
+          ...saved,
+          status: 'approved' as const,
+          approvedVersionId: saved.currentVersionId,
+        }),
+      );
+      window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+      render(
+        <App
+          auth={auth()}
+          api={api({
+            getProposal: () => Promise.resolve(proposal),
+            getLatestProposalMessageDraft: () =>
+              Promise.resolve(proposalMessageDraft),
+            updateProposalMessageDraft,
+            reviewProposalMessageDraft,
+          })}
+        />,
+      );
+      const input = await screen.findByLabelText(
+        field === 'subject' ? '提案メール件名' : '提案メール本文',
+      );
+      await waitFor(() =>
+        expect(input).toHaveValue(proposalMessageDraft[field]),
+      );
+      await user.clear(input);
+      await user.type(input, '保存する編集内容');
+      const approve = screen.getByRole('button', { name: '現在版を承認' });
+      expect(approve).toBeDisabled();
+      expect(
+        screen.getByText(
+          '未保存の変更があります。承認する前に編集版を保存してください。',
+        ),
+      ).toBeInTheDocument();
+      await user.click(approve);
+      expect(reviewProposalMessageDraft).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: '編集版を保存' }));
+      await waitFor(() => expect(approve).toBeEnabled());
+      approve.focus();
+      await user.keyboard('{Enter}');
+      await waitFor(() =>
+        expect(reviewProposalMessageDraft).toHaveBeenCalledOnce(),
+      );
+      expect(updateProposalMessageDraft).toHaveBeenCalledWith(
+        proposal.id,
+        proposalMessageDraft.id,
+        proposalMessageDraft.rowVersion,
+        { subject: saved.subject, bodyText: saved.bodyText },
+      );
+    },
+  );
+
+  it.each([
+    'draft-read',
+    'history-read',
+    'generate',
+    'save',
+    'approve',
+    'send',
+    'retry',
+  ] as const)(
+    'returns to login on proposal email %s 401 without retrying a mutation',
+    async (step) => {
+      const authentication = auth();
+      const approved = {
+        ...proposalMessageDraft,
+        status: 'approved' as const,
+        approvedVersionId: proposalMessageDraft.currentVersionId,
+      };
+      const delivery: Awaited<
+        ReturnType<ProjectsApi['getProposalMessageDelivery']>
+      > = {
+        messageId: approved.id,
+        proposalId: proposal.id,
+        status: step === 'retry' ? 'failed' : 'approved',
+        sentAt: null,
+        approvedVersionId: approved.currentVersionId!,
+        rowVersion: 3,
+        recipients: approved.recipients.map((recipient) => ({
+          ...recipient,
+          id: 'fixture-recipient',
+          deliveryStatus: step === 'retry' ? 'failed' : 'pending',
+          attempts: [],
+        })),
+      };
+      const failure = () =>
+        Promise.reject(new ApiClientError(401, 'expired', 'fixture'));
+      const sendProposalMessage =
+        vi.fn<ProjectsApi['sendProposalMessage']>(failure);
+      const retryProposalMessage =
+        vi.fn<ProjectsApi['retryProposalMessage']>(failure);
+      const createProposalMessageDraft =
+        vi.fn<ProjectsApi['createProposalMessageDraft']>(failure);
+      const updateProposalMessageDraft =
+        vi.fn<ProjectsApi['updateProposalMessageDraft']>(failure);
+      const reviewProposalMessageDraft =
+        vi.fn<ProjectsApi['reviewProposalMessageDraft']>(failure);
+      window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+      render(
+        <App
+          auth={authentication}
+          api={api({
+            getProposal: () =>
+              Promise.resolve({
+                ...proposal,
+                status: 'draft',
+                resumeVersionId: 'fixture-resume',
+                requirementVersionId: 'fixture-requirement',
+              }),
+            getLatestProposalMessageDraft: () =>
+              step === 'draft-read'
+                ? failure()
+                : Promise.resolve(
+                    ['history-read', 'send', 'retry'].includes(step)
+                      ? approved
+                      : step === 'generate'
+                        ? null
+                        : proposalMessageDraft,
+                  ),
+            getProposalMessageDelivery: () =>
+              step === 'history-read' ? failure() : Promise.resolve(delivery),
+            sendProposalMessage,
+            retryProposalMessage,
+            createProposalMessageDraft,
+            updateProposalMessageDraft,
+            reviewProposalMessageDraft,
+          })}
+        />,
+      );
+      if (['generate', 'save', 'approve'].includes(step)) {
+        const action = await screen.findByRole('button', {
+          name:
+            step === 'generate'
+              ? '下書きを生成'
+              : step === 'save'
+                ? '編集版を保存'
+                : '現在版を承認',
+        });
+        await waitFor(() => expect(action).toBeEnabled());
+        fireEvent.click(action);
+      } else if (step === 'send' || step === 'retry') {
+        fireEvent.click(
+          await screen.findByRole('button', {
+            name:
+              step === 'send' ? '承認済み本文を送信' : '失敗した宛先だけ再送',
+          }),
+        );
+        fireEvent.click(
+          await screen.findByRole('button', {
+            name: step === 'send' ? '内容を確認して送信' : '内容を確認して再送',
+          }),
+        );
+      }
+      await waitFor(() =>
+        expect(authentication.signOut).toHaveBeenCalledOnce(),
+      );
+      await screen.findByRole('button', { name: 'ログイン' });
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(sendProposalMessage).toHaveBeenCalledTimes(
+        step === 'send' ? 1 : 0,
+      );
+      expect(retryProposalMessage).toHaveBeenCalledTimes(
+        step === 'retry' ? 1 : 0,
+      );
+      expect(createProposalMessageDraft).toHaveBeenCalledTimes(
+        step === 'generate' ? 1 : 0,
+      );
+      expect(updateProposalMessageDraft).toHaveBeenCalledTimes(
+        step === 'save' ? 1 : 0,
+      );
+      expect(reviewProposalMessageDraft).toHaveBeenCalledTimes(
+        step === 'approve' ? 1 : 0,
+      );
+    },
+  );
+
+  it('shows failed delivery history and retries only after an explicit click', async () => {
+    const approved = {
+      ...proposalMessageDraft,
+      status: 'approved' as const,
+      approvedVersionId: proposalMessageDraft.currentVersionId,
+      approvedAt: '2026-08-14T03:02:00Z',
+      reviewStatus: 'approved' as const,
+    };
+    const failed: Awaited<
+      ReturnType<ProjectsApi['getProposalMessageDelivery']>
+    > = {
+      messageId: approved.id,
+      proposalId: proposal.id,
+      status: 'failed',
+      sentAt: null,
+      approvedVersionId: approved.currentVersionId!,
+      rowVersion: 4,
+      recipients: [
+        {
+          id: '30303030-3030-4030-8030-303030303030',
+          type: 'to',
+          name: '営業担当者',
+          address: 'sales@example.com',
+          deliveryStatus: 'failed',
+          attempts: [
+            {
+              id: '40404040-4040-4040-8040-404040404040',
+              attemptNo: 1,
+              status: 'failed',
+              provider: 'smtp',
+              providerMessageId: null,
+              attemptedAt: '2026-08-14T03:03:00Z',
+              responseCode: '450',
+              errorMessage: '一時的な失敗',
+            },
+          ],
+        },
+      ],
+    };
+    const retryProposalMessage = vi.fn<ProjectsApi['retryProposalMessage']>(
+      () =>
+        Promise.resolve({
+          ...failed,
+          status: 'sent' as const,
+          sentAt: '2026-08-14T03:04:00Z',
+          recipients: failed.recipients.map((recipient) => ({
+            ...recipient,
+            deliveryStatus: 'sent' as const,
+            attempts: [
+              ...recipient.attempts,
+              {
+                ...recipient.attempts[0]!,
+                id: '50505050-5050-4050-8050-505050505050',
+                attemptNo: 2,
+                status: 'accepted' as const,
+                responseCode: '250',
+                errorMessage: null,
+              },
+            ],
+          })),
+        }),
+    );
+    const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
+    window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getProposal: () => Promise.resolve(proposal),
+          getLatestProposalMessageDraft: () => Promise.resolve(approved),
+          getProposalMessageDelivery: () => Promise.resolve(failed),
+          sendProposalMessage,
+          retryProposalMessage,
+        })}
+      />,
+    );
+
+    expect(
+      await screen.findByText(/#1 failed \/ smtp \/ 450/u),
+    ).toBeInTheDocument();
+    expect(retryProposalMessage).not.toHaveBeenCalled();
+    expect(sendProposalMessage).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('button', { name: '失敗した宛先だけ再送' }),
+    );
+    expect(retryProposalMessage).not.toHaveBeenCalled();
+    const confirmation = await screen.findByRole('dialog', {
+      name: '再送内容を確認',
+    });
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: '内容を確認して再送' }),
+    );
+    await waitFor(() =>
+      expect(retryProposalMessage).toHaveBeenCalledWith(
+        proposal.id,
+        approved.id,
+      ),
+    );
+    expect(
+      await screen.findByText(/#2 accepted \/ smtp \/ 250/u),
+    ).toBeInTheDocument();
+    expect(retryProposalMessage).toHaveBeenCalledOnce();
+    expect(sendProposalMessage).not.toHaveBeenCalled();
+  });
+
+  it('disables send for an approved message without recipients', async () => {
+    const approved = {
+      ...proposalMessageDraft,
+      status: 'approved' as const,
+      approvedVersionId: proposalMessageDraft.currentVersionId,
+      approvedAt: '2026-08-14T03:02:00Z',
+      reviewStatus: 'approved' as const,
+      recipients: [],
+    };
+    const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
+    window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getProposal: () => Promise.resolve(proposal),
+          getLatestProposalMessageDraft: () => Promise.resolve(approved),
+          getProposalMessageDelivery: () =>
+            Promise.resolve({
+              messageId: approved.id,
+              proposalId: proposal.id,
+              status: 'approved',
+              sentAt: null,
+              approvedVersionId: approved.currentVersionId!,
+              rowVersion: 3,
+              recipients: [],
+            }),
+          sendProposalMessage,
+        })}
+      />,
+    );
+    expect(
+      await screen.findByText('宛先メールアドレスは未登録です。'),
+    ).toBeInTheDocument();
+    await screen.findByRole('region', { name: '提案メール配信状況' });
+    expect(
+      screen.getByRole('button', { name: '承認済み本文を送信' }),
+    ).toBeDisabled();
+    expect(sendProposalMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps an in-flight delivery disabled and does not queue a second send', async () => {
+    const approved = {
+      ...proposalMessageDraft,
+      status: 'approved' as const,
+      approvedVersionId: proposalMessageDraft.currentVersionId,
+    };
+    const delivery: Awaited<
+      ReturnType<ProjectsApi['getProposalMessageDelivery']>
+    > = {
+      messageId: approved.id,
+      proposalId: proposal.id,
+      status: 'approved',
+      sentAt: null,
+      approvedVersionId: approved.currentVersionId!,
+      rowVersion: 3,
+      recipients: approved.recipients.map((recipient) => ({
+        ...recipient,
+        id: '30303030-3030-4030-8030-303030303030',
+        deliveryStatus: 'pending',
+        attempts: [],
+      })),
+    };
+    let finish: (result: typeof delivery) => void = () => {
+      throw new Error('fixture request has not started');
+    };
+    const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getProposal: () => Promise.resolve(proposal),
+          getLatestProposalMessageDraft: () => Promise.resolve(approved),
+          getProposalMessageDelivery: () => Promise.resolve(delivery),
+          sendProposalMessage,
+        })}
+      />,
+    );
+    await screen.findByText('配信試行はまだありません。');
+    const button = screen.getByRole('button', { name: '承認済み本文を送信' });
+    fireEvent.click(button);
+    const confirmation = await screen.findByRole('dialog', {
+      name: '送信内容を確認',
+    });
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: '内容を確認して送信' }),
+    );
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    expect(sendProposalMessage).toHaveBeenCalledOnce();
+    await act(async () => {
+      finish({ ...delivery, status: 'sent', sentAt: '2026-08-14T03:04:00Z' });
+      await Promise.resolve();
+    });
+    expect(
+      screen.queryByRole('button', { name: '承認済み本文を送信' }),
+    ).not.toBeInTheDocument();
+    expect(sendProposalMessage).toHaveBeenCalledOnce();
+  });
+
+  it.each([403, 404, 500])(
+    'blocks delivery when history returns HTTP %s',
+    async (status) => {
+      const approved = {
+        ...proposalMessageDraft,
+        status: 'approved' as const,
+        approvedVersionId: proposalMessageDraft.currentVersionId,
+      };
+      const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
+      const retryProposalMessage = vi.fn<ProjectsApi['retryProposalMessage']>();
+      window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+      render(
+        <App
+          auth={auth()}
+          api={api({
+            getProposal: () => Promise.resolve(proposal),
+            getLatestProposalMessageDraft: () => Promise.resolve(approved),
+            getProposalMessageDelivery: () =>
+              Promise.reject(new ApiClientError(status, 'fixture', 'fixture')),
+            sendProposalMessage,
+            retryProposalMessage,
+          })}
+        />,
+      );
+      await screen.findByRole('alert');
+      expect(
+        screen.queryByRole('button', { name: '承認済み本文を送信' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: '失敗した宛先だけ再送' }),
+      ).not.toBeInTheDocument();
+      expect(sendProposalMessage).not.toHaveBeenCalled();
+      expect(retryProposalMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['version', 'recipient', 'attempt', 'retry-recipient'])(
+    'blocks delivery actions when history has a conflicting %s',
+    async (conflict) => {
+      const approved = {
+        ...proposalMessageDraft,
+        status: 'approved' as const,
+        approvedVersionId: proposalMessageDraft.currentVersionId,
+      };
+      const delivery: Awaited<
+        ReturnType<ProjectsApi['getProposalMessageDelivery']>
+      > = {
+        messageId: approved.id,
+        proposalId: proposal.id,
+        status: conflict === 'retry-recipient' ? 'failed' : 'approved',
+        sentAt: null,
+        approvedVersionId:
+          conflict === 'version'
+            ? 'different-version'
+            : approved.currentVersionId!,
+        rowVersion: 3,
+        recipients: approved.recipients.map((recipient) => ({
+          ...recipient,
+          id: 'fixture-recipient',
+          deliveryStatus: conflict === 'retry-recipient' ? 'failed' : 'pending',
+          address: ['recipient', 'retry-recipient'].includes(conflict)
+            ? 'other@example.test'
+            : recipient.address,
+          attempts:
+            conflict === 'attempt'
+              ? [
+                  {
+                    id: 'fixture-attempt',
+                    attemptNo: 1,
+                    status: 'failed',
+                    provider: 'fixture',
+                    providerMessageId: null,
+                    attemptedAt: '2026-10-16T00:00:00Z',
+                    responseCode: '450',
+                    errorMessage: null,
+                  },
+                ]
+              : [],
+        })),
+      };
+      const sendProposalMessage = vi.fn<ProjectsApi['sendProposalMessage']>();
+      window.history.replaceState({}, '', `/proposals/${proposal.id}`);
+      render(
+        <App
+          auth={auth()}
+          api={api({
+            getProposal: () => Promise.resolve(proposal),
+            getLatestProposalMessageDraft: () => Promise.resolve(approved),
+            getProposalMessageDelivery: () => Promise.resolve(delivery),
+            sendProposalMessage,
+          })}
+        />,
+      );
+      await screen.findByRole('region', { name: '提案メール配信状況' });
+      const button = screen.queryByRole('button', {
+        name: '承認済み本文を送信',
+      });
+      if (['version', 'retry-recipient'].includes(conflict))
+        expect(button).not.toBeInTheDocument();
+      else expect(button).toBeDisabled();
+      expect(
+        screen.queryByRole('button', { name: '失敗した宛先だけ再送' }),
+      ).not.toBeInTheDocument();
+      expect(sendProposalMessage).not.toHaveBeenCalled();
+    },
+  );
+
   it('transitions proposal status with optimistic locking', async () => {
     window.history.replaceState({}, '', `/proposals/${proposal.id}`);
     const transitionProposalStatus = vi.fn(() =>
@@ -2946,6 +3510,35 @@ describe('App', () => {
     expect(createProjectEngineerMatch).toHaveBeenCalledWith(project.id, 5);
   });
 
+  it('does not overwrite recalculated matches with a late initial history read', async () => {
+    window.history.replaceState({}, '', `/projects/${project.id}`);
+    let finishInitial!: (value: null) => void;
+    const initial = new Promise<null>((resolve) => {
+      finishInitial = resolve;
+    });
+    render(
+      <App
+        auth={auth()}
+        api={api({
+          getLatestProjectEngineerMatch: () => initial,
+          createProjectEngineerMatch: () =>
+            Promise.resolve(projectEngineerMatch),
+        })}
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: '候補を再計算' }),
+    );
+    await screen.findByRole('heading', { name: '山田 太郎' });
+    await act(async () => {
+      finishInitial(null);
+      await initial;
+    });
+    expect(
+      screen.getByRole('heading', { name: '山田 太郎' }),
+    ).toBeInTheDocument();
+  });
+
   it('soft-deletes a project with a required reason', async () => {
     window.history.replaceState({}, '', `/projects/${project.id}`);
     const deleteProject = vi.fn(() => Promise.resolve());
@@ -3063,11 +3656,124 @@ describe('App', () => {
     );
   });
 
+  it('allows keyboard-only login through labeled controls', async () => {
+    const user = userEvent.setup();
+    const authentication = auth(null);
+    render(<App auth={authentication} api={api()} />);
+    expect(
+      await screen.findByRole('region', { name: 'SES Navigator' }),
+    ).toBeInTheDocument();
+    await user.tab();
+    expect(screen.getByLabelText('メールアドレス')).toHaveFocus();
+    await user.keyboard('user@example.com');
+    await user.tab();
+    expect(screen.getByLabelText('パスワード')).toHaveFocus();
+    await user.keyboard('fixture-password{Enter}');
+    await waitFor(() =>
+      expect(authentication.signIn).toHaveBeenCalledWith(
+        'user@example.com',
+        'fixture-password',
+      ),
+    );
+  });
+
+  it('activates the sales navigation with the keyboard', async () => {
+    const user = userEvent.setup();
+    render(<App auth={auth()} api={api()} />);
+    const navigation = await screen.findByRole('navigation', {
+      name: '主要機能',
+    });
+    within(navigation).getByRole('button', { name: '会社' }).focus();
+    await user.keyboard('{Enter}');
+    expect(window.location.pathname).toBe('/companies');
+    expect(
+      await screen.findByRole('heading', { name: '会社一覧' }),
+    ).toBeInTheDocument();
+  });
+
   it('logs out from an authenticated session', async () => {
     const authentication = auth();
     render(<App auth={authentication} api={api()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'ログアウト' }));
     expect(authentication.signOut).toHaveBeenCalledOnce();
+  });
+
+  it('returns to login when the authorization context reports an expired session', async () => {
+    const authentication = auth();
+    render(
+      <App
+        auth={authentication}
+        api={api({
+          getAuthContext: () =>
+            Promise.reject(new ApiClientError(401, 'expired', 'fixture')),
+        })}
+      />,
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'SES Navigator' }),
+    ).toBeInTheDocument();
+    expect(authentication.signOut).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  });
+
+  it('blocks forbidden access even when the session already has MFA assurance', async () => {
+    render(
+      <App
+        auth={auth({ ...session, assuranceLevel: 'aal2' })}
+        api={api({
+          getAuthContext: () =>
+            Promise.reject(new ApiClientError(403, 'forbidden', 'fixture')),
+        })}
+      />,
+    );
+    expect(
+      await screen.findByRole('heading', {
+        name: 'アクセス権限を確認できません',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: '多要素認証' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('fixture')).not.toBeInTheDocument();
+  });
+
+  it('ignores a previous session authorization result after the session changes', async () => {
+    const authentication = auth();
+    let notifySession: (next: AuthSession | null) => void = () => undefined;
+    authentication.onSessionChange = (listener) => {
+      notifySession = listener;
+      return () => undefined;
+    };
+    let finishOldContext: (context: { requiresMfa: boolean }) => void = () =>
+      undefined;
+    const getAuthContext = vi
+      .fn<ProjectsApi['getAuthContext']>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishOldContext = resolve;
+          }),
+      )
+      .mockRejectedValueOnce(new ApiClientError(403, 'forbidden', 'fixture'));
+    render(<App auth={authentication} api={api({ getAuthContext })} />);
+    await waitFor(() => expect(getAuthContext).toHaveBeenCalledOnce());
+    act(() =>
+      notifySession({ ...session, accessToken: 'new-fixture-session' }),
+    );
+    expect(
+      await screen.findByRole('heading', {
+        name: 'アクセス権限を確認できません',
+      }),
+    ).toBeInTheDocument();
+    await act(async () => {
+      finishOldContext({ requiresMfa: false });
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'アクセス権限を確認できません' }),
+    ).toBeInTheDocument();
   });
 
   it('blocks an administrator at AAL1 and shows the MFA flow', async () => {

@@ -1,8 +1,18 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { extname, join, relative } from 'node:path';
+import { extname, join, posix, relative } from 'node:path';
 import { isMainModule } from './cli-entry.mjs';
 
 const FORBIDDEN_PATTERNS = [
+  {
+    rule: 'server-mail-or-protection-credential',
+    pattern:
+      /\b(?:VITE_|NEXT_PUBLIC_)?(?:SMTP_PASSWORD|VERCEL_OIDC_TOKEN|VERCEL_AUTOMATION_BYPASS_SECRET)\b/g,
+  },
+  {
+    rule: 'browser-fixture-in-product',
+    pattern: /\bfixtureSendCount\b/g,
+    fixtureOnly: true,
+  },
   {
     rule: 'service-role-environment-variable',
     pattern:
@@ -13,7 +23,11 @@ const FORBIDDEN_PATTERNS = [
   {
     rule: 'vite-secret-environment-variable',
     pattern:
-      /\bVITE_[A-Z0-9_]*(?:SECRET|PRIVATE_KEY|SERVICE_ROLE)[A-Z0-9_]*\b/g,
+      /\bVITE_[A-Z0-9_]*(?:SECRET|PASSWORD|TOKEN|PRIVATE_KEY|SERVICE_ROLE)[A-Z0-9_]*\b/g,
+  },
+  {
+    rule: 'microsoft-graph-client-secret-environment-variable',
+    pattern: /\b(?:VITE_|NEXT_PUBLIC_)?MICROSOFT_GRAPH_CLIENT_SECRET\b/g,
   },
 ];
 
@@ -25,6 +39,7 @@ const TEXT_EXTENSIONS = new Set([
   '.json',
   '.jsx',
   '.mjs',
+  '.map',
   '.ts',
   '.tsx',
 ]);
@@ -33,9 +48,36 @@ export function validateClientSecretBoundary(files) {
   const findings = [];
 
   for (const file of files) {
+    // Only the source fixture root is exempt. A build can preserve a nested
+    // tests/browser path; that must not make copied fixture code acceptable.
+    const fixtureSource = /^apps\/web\/tests\/browser\//u.test(
+      posix.normalize(file.name.replaceAll('\\', '/')),
+    );
     const lines = file.source.split(/\r?\n/u);
     for (const [index, line] of lines.entries()) {
-      for (const { rule, pattern } of FORBIDDEN_PATTERNS) {
+      // Detect legacy privileged keys even when their environment-variable
+      // name has disappeared from a bundle/source map. Decoding is used only
+      // to reject exposure, never as authentication or signature verification.
+      for (const match of line.matchAll(
+        /[A-Za-z0-9_-]{4,}\.([A-Za-z0-9_-]{4,})\.[A-Za-z0-9_-]{4,}/gu,
+      )) {
+        try {
+          const claim = JSON.parse(
+            Buffer.from(match[1], 'base64url').toString('utf8'),
+          );
+          if (claim?.role === 'service_role') {
+            findings.push({
+              file: file.name,
+              line: index + 1,
+              rule: 'encoded-service-role-jwt',
+            });
+          }
+        } catch {
+          // Arbitrary code/property chains are not necessarily tokens.
+        }
+      }
+      for (const { rule, pattern, fixtureOnly } of FORBIDDEN_PATTERNS) {
+        if (fixtureOnly && fixtureSource) continue;
         pattern.lastIndex = 0;
         if (pattern.test(line)) {
           findings.push({ file: file.name, line: index + 1, rule });

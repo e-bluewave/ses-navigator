@@ -3,6 +3,38 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createProjectsApi } from './client.js';
 
 describe('generated projects API client', () => {
+  it('preserves HTTP auth failures when the error JSON has no error envelope', async () => {
+    for (const status of [401, 403]) {
+      const request = vi.fn<typeof fetch>(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ message: 'fixture protection error' }),
+            {
+              status,
+            },
+          ),
+        ),
+      );
+      const api = createProjectsApi({
+        getAccessToken: () => 'fixture-token',
+        fetch: request,
+      });
+      await expect(api.getAuthContext()).rejects.toMatchObject({
+        status,
+        code: 'unexpected_error',
+      });
+      await expect(
+        api.transitionProposalStatus('fixture-proposal', 1, {
+          status: 'lost',
+          reason: 'fixture',
+        }),
+      ).rejects.toMatchObject({
+        status,
+        code: 'unexpected_error',
+      });
+    }
+  });
+
   it('lists and updates My Tasks with filters and optimistic locking', async () => {
     const request = vi.fn<
       (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>

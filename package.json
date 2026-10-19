@@ -116,7 +116,11 @@
     "smoke:proposal-delivery-local-preflight:check": "node --test scripts/proposal-delivery-local-preflight.test.mjs",
     "smoke:proposal-delivery-local-runtime": "pnpm --filter @sesn/api smoke:proposal-delivery-local-runtime",
     "smoke:proposal-delivery-local-repair-165": "node scripts/proposal-delivery-local-repair-165.mjs",
-    "smoke:proposal-delivery-local-repair-165:check": "node --test scripts/proposal-delivery-local-repair-165.test.mjs"
+    "smoke:proposal-delivery-local-repair-165:check": "node --test scripts/proposal-delivery-local-repair-165.test.mjs",
+    "smoke:microsoft-graph-preflight": "node scripts/microsoft-graph-mail-preflight.mjs",
+    "smoke:microsoft-graph-preflight:check": "node --test scripts/microsoft-graph-mail-preflight.test.mjs",
+    "smoke:proposal-delivery-real-mail": "node scripts/proposal-delivery-real-mail-smoke.mjs",
+    "smoke:proposal-delivery-real-mail:check": "node --test scripts/proposal-delivery-real-mail-smoke.test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

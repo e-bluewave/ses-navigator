@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import { ApiClientError, createProjectsApi } from '../api/client.js';
+import { ProposalDeliveryConfirmation } from './ProposalDeliveryConfirmation.js';
 import type { ProjectsApi } from '../api/client.js';
 import { createSalesActivityApi } from '../api/sales-activity-client.js';
 import type { SalesActivityApi } from '../api/sales-activity-types.js';
@@ -6817,34 +6818,41 @@ function ProposalListView({
         </select>
       </div>
       {error && <p role="alert">{error}</p>}
-      <table>
-        <thead>
-          <tr>
-            <th>提案番号</th>
-            <th>状態</th>
-            <th>単価</th>
-            <th>開始日</th>
-            <th>有効期限</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id} onClick={() => onOpen(item.id)}>
-              <td>
-                <button className="link-button">{item.managementNo}</button>
-              </td>
-              <td>{proposalStatusLabels[item.status]}</td>
-              <td>
-                {item.proposedUnitPrice === null
-                  ? '—'
-                  : `${item.proposedUnitPrice.toLocaleString()} ${item.currencyCode}`}
-              </td>
-              <td>{item.proposedStartDate ?? '—'}</td>
-              <td>{item.validityDate ?? '—'}</td>
+      <div
+        className="table-wrapper"
+        role="region"
+        aria-label="提案一覧"
+        tabIndex={0}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>提案番号</th>
+              <th>状態</th>
+              <th>単価</th>
+              <th>開始日</th>
+              <th>有効期限</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id} onClick={() => onOpen(item.id)}>
+                <td>
+                  <button className="link-button">{item.managementNo}</button>
+                </td>
+                <td>{proposalStatusLabels[item.status]}</td>
+                <td>
+                  {item.proposedUnitPrice === null
+                    ? '—'
+                    : `${item.proposedUnitPrice.toLocaleString()} ${item.currencyCode}`}
+                </td>
+                <td>{item.proposedStartDate ?? '—'}</td>
+                <td>{item.validityDate ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {items.length === 0 && !error && <p>該当する提案はありません。</p>}
     </section>
   );
@@ -6855,13 +6863,19 @@ function ProposalMessageDraftPanel({
   proposalId,
   canGenerate,
   onSent,
+  onUnauthorized,
 }: {
   api: ProjectsApi;
   proposalId: string;
   canGenerate: boolean;
   onSent: () => void;
+  onUnauthorized: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState<ProposalMessageDraft | null>(null);
+  const [draftReadState, setDraftReadState] = useState<
+    'loading' | 'ready' | 'error'
+  >('loading');
+  const [draftRefresh, setDraftRefresh] = useState(0);
   const [delivery, setDelivery] = useState<ProposalMessageDelivery | null>(
     null,
   );
@@ -6873,20 +6887,38 @@ function ProposalMessageDraftPanel({
   const [bodyText, setBodyText] = useState('');
   const [reviewComment, setReviewComment] = useState('');
   const [busy, setBusy] = useState(false);
+  const deliveryInFlight = useRef(false);
+  const [deliveryUncertain, setDeliveryUncertain] = useState(false);
+  const [deliveryRefresh, setDeliveryRefresh] = useState(0);
+  const [confirmation, setConfirmation] = useState<{
+    retry: boolean;
+    draft: ProposalMessageDraft;
+    delivery: ProposalMessageDelivery;
+  } | null>(null);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     let active = true;
+    setDraft(null);
+    setDraftReadState('loading');
     api
       .getLatestProposalMessageDraft(proposalId)
       .then((result) => {
-        if (active) setDraft(result);
+        if (active) {
+          setDraft(result);
+          setDraftReadState('ready');
+        }
       })
-      .catch(() => undefined);
+      .catch((reason: unknown) => {
+        if (!active) return;
+        setDraftReadState('error');
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
+      });
     return () => {
       active = false;
     };
-  }, [api, proposalId]);
+  }, [api, proposalId, draftRefresh, onUnauthorized]);
 
   useEffect(() => {
     setSubject(draft?.subject ?? '');
@@ -6899,25 +6931,30 @@ function ProposalMessageDraftPanel({
       !['approved', 'queued', 'sent', 'failed'].includes(draft.status)
     ) {
       setDelivery(null);
+      setDeliveryUncertain(false);
       return;
     }
     let active = true;
+    setDelivery(null);
+    setError(null);
     api
       .getProposalMessageDelivery(proposalId, draft.id)
       .then((result) => {
-        if (active) setDelivery(result);
+        if (active) {
+          setDelivery(result);
+          setDeliveryUncertain(false);
+        }
       })
       .catch((reason: unknown) => {
-        if (
-          active &&
-          !(reason instanceof ApiClientError && reason.status === 404)
-        )
-          setError(reason);
+        if (!active) return;
+        setError(reason);
+        if (reason instanceof ApiClientError && reason.status === 401)
+          void onUnauthorized();
       });
     return () => {
       active = false;
     };
-  }, [api, proposalId, draft]);
+  }, [api, proposalId, draft, deliveryRefresh, onUnauthorized]);
 
   async function generate() {
     setBusy(true);
@@ -6931,6 +6968,8 @@ function ProposalMessageDraftPanel({
       );
     } catch (reason) {
       setError(reason);
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
     } finally {
       setBusy(false);
     }
@@ -6951,13 +6990,15 @@ function ProposalMessageDraftPanel({
       );
     } catch (reason) {
       setError(reason);
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
     } finally {
       setBusy(false);
     }
   }
 
   async function review(decision: 'approve' | 'reject') {
-    if (!draft) return;
+    if (!draft || (decision === 'approve' && hasUnsavedChanges)) return;
     setBusy(true);
     setError(null);
     try {
@@ -6975,13 +7016,33 @@ function ProposalMessageDraftPanel({
       setReviewComment('');
     } catch (reason) {
       setError(reason);
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
     } finally {
       setBusy(false);
     }
   }
 
-  async function sendDelivery(retry: boolean) {
-    if (!draft) return;
+  async function sendDelivery() {
+    if (!confirmation || deliveryInFlight.current) return;
+    setConfirmation(null);
+    if (
+      !draft ||
+      !delivery ||
+      draft !== confirmation.draft ||
+      delivery !== confirmation.delivery
+    ) {
+      setError(
+        new Error('確認後に配信情報が変わりました。再度確認してください。'),
+      );
+      return;
+    }
+    const retry = confirmation.retry;
+    if ((retry && !canRetry) || (!retry && !canInitialSend)) {
+      setError(new Error('配信情報を再確認してください。'));
+      return;
+    }
+    deliveryInFlight.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -6992,19 +7053,101 @@ function ProposalMessageDraftPanel({
       if (result.status === 'sent') onSent();
     } catch (reason) {
       setError(reason);
+      setDeliveryUncertain(true);
+      if (reason instanceof ApiClientError && reason.status === 401)
+        await onUnauthorized();
     } finally {
+      deliveryInFlight.current = false;
       setBusy(false);
     }
   }
 
   const editable = draft?.status === 'draft' && draft.currentVersionId !== null;
+  const hasUnsavedChanges = Boolean(
+    draft && (subject !== draft.subject || bodyText !== draft.bodyText),
+  );
+  const approvedVersionMatches =
+    draft?.approvedVersionId !== null &&
+    draft?.approvedVersionId === draft?.currentVersionId &&
+    delivery?.approvedVersionId === draft?.approvedVersionId &&
+    delivery?.messageId === draft?.id &&
+    delivery?.proposalId === proposalId;
+  const recipientKeys = (items: ProposalMessageDraft['recipients']) =>
+    items
+      .map((recipient) => `${recipient.type}:${recipient.address}`)
+      .sort()
+      .join('\n');
+  const canInitialSend = Boolean(
+    !deliveryUncertain &&
+    draft &&
+    delivery &&
+    approvedVersionMatches &&
+    draft.status === 'approved' &&
+    delivery.status === 'approved' &&
+    draft.recipients.length > 0 &&
+    delivery.recipients.length > 0 &&
+    recipientKeys(draft.recipients) === recipientKeys(delivery.recipients) &&
+    delivery.recipients.every(
+      (recipient) =>
+        recipient.deliveryStatus === 'pending' &&
+        recipient.attempts.length === 0,
+    ),
+  );
+  const canRetry = Boolean(
+    !deliveryUncertain &&
+    draft &&
+    delivery &&
+    approvedVersionMatches &&
+    ['approved', 'failed'].includes(draft.status) &&
+    delivery.status === 'failed' &&
+    recipientKeys(draft.recipients) === recipientKeys(delivery.recipients) &&
+    delivery.recipients.some(
+      (recipient) => recipient.deliveryStatus === 'failed',
+    ),
+  );
   return (
     <section className="audit-panel" aria-labelledby="proposal-message-heading">
       <h3 id="proposal-message-heading">AI提案メール下書き</h3>
       <p>
         AI生成版と営業編集版を不変履歴で保持します。承認しても自動送信されません。
       </p>
-      {error ? <ErrorNotice error={error} /> : null}
+      {error ? <ErrorNotice error={error} subject="提案メール" /> : null}
+      {draftReadState === 'loading' ? (
+        <p role="status">下書きを確認しています…</p>
+      ) : null}
+      {draftReadState === 'error' ? (
+        <>
+          <p role="alert">
+            既存の下書きを確認できません。下書きの生成・送信を停止しています。
+          </p>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setDraftRefresh((value) => value + 1)}
+          >
+            下書きを再確認
+          </button>
+        </>
+      ) : null}
+      {draft?.status === 'approved' && !delivery ? (
+        <p role="status">配信履歴を確認できるまで送信・再送できません。</p>
+      ) : null}
+      {deliveryUncertain ? (
+        <p role="status">
+          送信結果を確認できません。再送せず、配信履歴と受信状況を確認してください。
+        </p>
+      ) : null}
+      {draft &&
+      ['approved', 'queued', 'sent', 'failed'].includes(draft.status) ? (
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={busy}
+          onClick={() => setDeliveryRefresh((value) => value + 1)}
+        >
+          配信履歴を再確認
+        </button>
+      ) : null}
       {!canGenerate ? (
         <p role="status">
           生成するには、送信前の提案に経歴書版IDと要件版IDを設定してください。
@@ -7035,7 +7178,7 @@ function ProposalMessageDraftPanel({
         <button
           type="button"
           className="primary-button"
-          disabled={busy || !canGenerate}
+          disabled={busy || !canGenerate || draftReadState !== 'ready'}
           onClick={() => void generate()}
         >
           {busy ? '処理中…' : draft ? '再生成' : '下書きを生成'}
@@ -7108,6 +7251,11 @@ function ProposalMessageDraftPanel({
           </label>
           {editable ? (
             <>
+              {hasUnsavedChanges ? (
+                <p role="status">
+                  未保存の変更があります。承認する前に編集版を保存してください。
+                </p>
+              ) : null}
               <button
                 type="button"
                 className="secondary-button"
@@ -7129,7 +7277,7 @@ function ProposalMessageDraftPanel({
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={busy}
+                  disabled={busy || hasUnsavedChanges}
                   onClick={() => void review('approve')}
                 >
                   現在版を承認
@@ -7146,13 +7294,16 @@ function ProposalMessageDraftPanel({
             </>
           ) : null}
           {draft.status === 'approved' &&
-          (!delivery || delivery.status === 'approved') ? (
+          approvedVersionMatches &&
+          delivery?.status === 'approved' ? (
             <div className="button-row">
               <button
                 type="button"
                 className="primary-button"
-                disabled={busy || draft.recipients.length === 0}
-                onClick={() => void sendDelivery(false)}
+                disabled={busy || !canInitialSend}
+                onClick={() =>
+                  setConfirmation({ retry: false, draft, delivery })
+                }
               >
                 承認済み本文を送信
               </button>
@@ -7195,15 +7346,14 @@ function ProposalMessageDraftPanel({
                   )}
                 </div>
               ))}
-              {delivery.status === 'failed' &&
-              delivery.recipients.some(
-                (recipient) => recipient.deliveryStatus === 'failed',
-              ) ? (
+              {canRetry ? (
                 <button
                   type="button"
                   className="secondary-button"
                   disabled={busy}
-                  onClick={() => void sendDelivery(true)}
+                  onClick={() =>
+                    setConfirmation({ retry: true, draft, delivery })
+                  }
                 >
                   失敗した宛先だけ再送
                 </button>
@@ -7218,6 +7368,19 @@ function ProposalMessageDraftPanel({
             </section>
           ) : null}
         </section>
+      ) : null}
+      {confirmation ? (
+        <ProposalDeliveryConfirmation
+          retry={confirmation.retry}
+          subject={confirmation.draft.subject}
+          bodyText={confirmation.draft.bodyText}
+          recipients={confirmation.delivery.recipients.filter(
+            (recipient) =>
+              !confirmation.retry || recipient.deliveryStatus === 'failed',
+          )}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={() => void sendDelivery()}
+        />
       ) : null}
     </section>
   );
@@ -7347,13 +7510,21 @@ function ProposalDetail({
       <ProposalMessageDraftPanel
         api={api}
         proposalId={item.id}
+        onUnauthorized={onUnauthorized}
         canGenerate={
           item.resumeVersionId !== null &&
           item.requirementVersionId !== null &&
           ['draft', 'pending_approval', 'approved'].includes(item.status)
         }
         onSent={() => {
-          void api.getProposal(item.id).then(setItem);
+          void api
+            .getProposal(item.id)
+            .then(setItem)
+            .catch(() => {
+              setActionError(
+                '送信後の提案状態を取得できませんでした。配信履歴を確認してください。',
+              );
+            });
         }}
       />
       {winResult ? (
@@ -7672,17 +7843,46 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
   );
   const [route, setRoute] = useState<Route>(currentRoute);
   const [requiresMfa, setRequiresMfa] = useState<boolean | null>(null);
+  const [verifiedAccessToken, setVerifiedAccessToken] = useState<string | null>(
+    null,
+  );
+  const [authContextError, setAuthContextError] = useState(false);
 
   useEffect(() => {
+    let active = true;
+    setAuthContextError(false);
+    setRequiresMfa(null);
+    setVerifiedAccessToken(null);
     if (session === null) {
-      setRequiresMfa(null);
       return;
     }
     void api
       .getAuthContext()
-      .then((context) => setRequiresMfa(context.requiresMfa))
-      .catch(() => setRequiresMfa(true));
-  }, [api, session]);
+      .then((context) => {
+        if (!active) return;
+        if (typeof context.requiresMfa !== 'boolean') {
+          setAuthContextError(true);
+          return;
+        }
+        setRequiresMfa(context.requiresMfa);
+        setVerifiedAccessToken(session.accessToken);
+      })
+      .catch(async (reason: unknown) => {
+        if (!active) return;
+        if (reason instanceof ApiClientError && reason.status === 401) {
+          try {
+            await signOut();
+          } catch {
+            if (active) setAuthContextError(true);
+          }
+        } else {
+          setAuthContextError(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, session, signOut]);
 
   useEffect(() => {
     const handlePopState = () => setRoute(currentRoute());
@@ -7723,7 +7923,19 @@ function AuthenticatedApp({ api: providedApi }: { api?: ProjectsApi }) {
       />
     );
   if (session === null) return <LoginPage />;
-  if (requiresMfa === null)
+  if (authContextError)
+    return (
+      <main className="login-shell">
+        <section className="login-panel">
+          <h1>アクセス権限を確認できません</h1>
+          <p role="alert">再ログインして、アクセス権限を確認してください。</p>
+          <button type="button" onClick={() => void signOut()}>
+            ログアウト
+          </button>
+        </section>
+      </main>
+    );
+  if (requiresMfa === null || verifiedAccessToken !== session.accessToken)
     return (
       <main className="auth-loading" role="status">
         権限を確認しています…
@@ -11456,15 +11668,19 @@ function ProjectEngineerMatchPanel({
   projectId: string;
 }) {
   const [match, setMatch] = useState<ProjectEngineerMatch | null>(null);
+  const initialMatchEpoch = useRef(0);
   const [limit, setLimit] = useState(5);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     let active = true;
+    const epoch = ++initialMatchEpoch.current;
     api
       .getLatestProjectEngineerMatch(projectId)
-      .then((result) => active && setMatch(result))
+      .then((result) => {
+        if (active && epoch === initialMatchEpoch.current) setMatch(result);
+      })
       .catch(() => undefined);
     return () => {
       active = false;
@@ -11472,6 +11688,8 @@ function ProjectEngineerMatchPanel({
   }, [api, projectId]);
 
   async function runMatch() {
+    // A late initial read must not overwrite an explicit recalculation.
+    initialMatchEpoch.current += 1;
     setRunning(true);
     setError(null);
     try {

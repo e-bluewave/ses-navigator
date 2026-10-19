@@ -1,0 +1,48 @@
+name: Staging Read-Only Cloud Preflight
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  staging-readonly:
+    # A label triggers this only for the reviewed, same-repository PR #168.
+    # A required reviewer gates access to the read-only OIDC identity job.
+    if: >-
+      github.event.label.name == 'sesn-staging-readonly' &&
+      github.event.pull_request.number == 168 &&
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.head.ref == 'codex/issue-167-microsoft-graph-mail-provider' &&
+      github.event.pull_request.head.repo.full_name == 'e-bluewave/ses-navigator'
+    runs-on: ubuntu-latest
+    environment: sesn-staging-readonly
+    timeout-minutes: 15
+    concurrency:
+      group: sesn-pr168-readonly
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Staging runtime identity verification
+        shell: bash
+        env:
+          SESN_READONLY_PREFLIGHT: 'true'
+          SESN_STAGING_SUPABASE_REF: ${{ vars.SESN_STAGING_SUPABASE_REF }}
+          SESN_PRODUCTION_SUPABASE_REF: ${{ vars.SESN_PRODUCTION_SUPABASE_REF }}
+          SESN_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SESN_STAGING_SUPABASE_REF" || -z "$SESN_PRODUCTION_SUPABASE_REF" ]]; then
+            echo 'Staging read-only environment is incomplete.' >&2
+            exit 1
+          fi
+          node "$GITHUB_WORKSPACE/scripts/staging-runtime-identity-cloud.mjs"

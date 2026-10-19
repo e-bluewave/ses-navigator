@@ -54,8 +54,21 @@ export function createSupabaseAuthService(options: {
   let session = readSession(storage);
   let refreshPromise: Promise<AuthSession> | null = null;
   let enrollPromise: Promise<MfaEnrollment> | null = null;
+  let sessionRevision = 0;
+
+  function assertCurrent(revision: number) {
+    if (revision !== sessionRevision)
+      throw new AuthenticationError('認証状態が変わりました。');
+  }
+
+  function beginSessionChange() {
+    refreshPromise = null;
+    enrollPromise = null;
+    return ++sessionRevision;
+  }
 
   function notify(next: AuthSession | null) {
+    sessionRevision++;
     session = next;
     if (next === null) storage.removeItem(storageKey);
     else storage.setItem(storageKey, JSON.stringify(next));
@@ -65,6 +78,7 @@ export function createSupabaseAuthService(options: {
   async function token(
     grantType: 'password' | 'refresh_token',
     body: Record<string, string>,
+    revision: number,
   ): Promise<AuthSession> {
     const response = await request(
       `${options.url.replace(/\/$/, '')}/auth/v1/token?grant_type=${grantType}`,
@@ -82,20 +96,29 @@ export function createSupabaseAuthService(options: {
       (await response.json()) as SupabaseSessionResponse,
       now(),
     );
+    assertCurrent(revision);
     notify(next);
     return next;
   }
 
   async function refresh(current: AuthSession): Promise<AuthSession> {
-    refreshPromise ??= token('refresh_token', {
-      refresh_token: current.refreshToken,
-    }).finally(() => {
-      refreshPromise = null;
-    });
+    const revision = sessionRevision;
+    if (refreshPromise === null) {
+      const pending = token(
+        'refresh_token',
+        {
+          refresh_token: current.refreshToken,
+        },
+        revision,
+      ).finally(() => {
+        if (refreshPromise === pending) refreshPromise = null;
+      });
+      refreshPromise = pending;
+    }
     try {
       return await refreshPromise;
     } catch (error) {
-      notify(null);
+      if (revision === sessionRevision) notify(null);
       throw error;
     }
   }
@@ -108,10 +131,11 @@ export function createSupabaseAuthService(options: {
       return refresh(session);
     },
     signIn(email, password) {
-      return token('password', { email, password });
+      return token('password', { email, password }, beginSessionChange());
     },
     async signOut() {
       const accessToken = session?.accessToken;
+      beginSessionChange();
       notify(null);
       if (accessToken === undefined) return;
       await request(`${options.url.replace(/\/$/, '')}/auth/v1/logout`, {
@@ -124,7 +148,9 @@ export function createSupabaseAuthService(options: {
     },
     async enrollMfa() {
       if (session === null) throw new AuthenticationError('認証が必要です。');
-      enrollPromise ??= request(
+      if (enrollPromise !== null) return enrollPromise;
+      const revision = sessionRevision;
+      const pending = request(
         `${options.url.replace(/\/$/, '')}/auth/v1/factors`,
         {
           method: 'POST',
@@ -146,6 +172,7 @@ export function createSupabaseAuthService(options: {
             id?: unknown;
             totp?: { qr_code?: unknown; secret?: unknown };
           };
+          assertCurrent(revision);
           if (
             typeof body.id !== 'string' ||
             typeof body.totp?.qr_code !== 'string' ||
@@ -161,12 +188,14 @@ export function createSupabaseAuthService(options: {
           };
         })
         .finally(() => {
-          enrollPromise = null;
+          if (enrollPromise === pending) enrollPromise = null;
         });
-      return enrollPromise;
+      enrollPromise = pending;
+      return pending;
     },
     async verifyMfa(factorId, code) {
       if (session === null) throw new AuthenticationError('認証が必要です。');
+      const revision = sessionRevision;
       const base = options.url.replace(/\/$/, '');
       const headers = {
         apikey: options.publishableKey,
@@ -178,6 +207,7 @@ export function createSupabaseAuthService(options: {
         { method: 'POST', headers, body: '{}' },
       );
       const challengeBody = (await challenge.json()) as { id?: unknown };
+      assertCurrent(revision);
       if (!challenge.ok || typeof challengeBody.id !== 'string')
         throw new AuthenticationError('MFAを確認できませんでした。');
       const verified = await request(
@@ -194,6 +224,7 @@ export function createSupabaseAuthService(options: {
         (await verified.json()) as SupabaseSessionResponse,
         now(),
       );
+      assertCurrent(revision);
       notify(next);
       return next;
     },
@@ -217,6 +248,7 @@ export function createSupabaseAuthService(options: {
       const values = new URLSearchParams(parsed.hash.replace(/^#/, ''));
       const type = values.get('type') ?? parsed.searchParams.get('type');
       if (type !== 'recovery' && type !== 'invite') return null;
+      const revision = beginSessionChange();
       const accessToken = values.get('access_token');
       const refreshToken = values.get('refresh_token');
       if (accessToken && refreshToken) {
@@ -248,9 +280,12 @@ export function createSupabaseAuthService(options: {
       );
       if (!response.ok)
         throw new AuthenticationError('認証リンクが無効または期限切れです。');
-      notify(
-        parseSession((await response.json()) as SupabaseSessionResponse, now()),
+      const next = parseSession(
+        (await response.json()) as SupabaseSessionResponse,
+        now(),
       );
+      assertCurrent(revision);
+      notify(next);
       return type;
     },
     async updatePassword(password) {
