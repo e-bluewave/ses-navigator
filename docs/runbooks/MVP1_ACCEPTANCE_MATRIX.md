@@ -4,7 +4,7 @@
 
 | 工程・完成条件 | React経路・操作 | API（`/api/v1`以下） | 模擬テスト／コード証跡 | 実環境証跡・残るゲート |
 | --- | --- | --- | --- | --- |
-| 認証・MFA・期限切れ | `/` のログイン、MFA、`/auth/callback` | Supabase Auth `/auth/v1/token`、`/auth/v1/factors`、`GET /auth/context` | `auth-client.test.ts` の認証・更新失敗、`App.test.tsx` のログイン・401ログアウト・MFA済み403拒否・キーボード操作、`client.test.ts` の不正error envelope | UNKNOWN: 保護されたStaging Webと権限付きテストユーザー |
+| 認証・MFA・期限切れ | `/` のログイン、MFA、`/auth/callback` | Supabase Auth `/auth/v1/token`、`/auth/v1/factors`、`GET /auth/context` | `auth-client.test.ts` の認証・更新失敗・logout／新login後の古い応答拒否・logout後のMFA続行停止、`AuthProvider.test.tsx` の初回／定期取得競合・古いエラー拒否・更新失敗時logout、`App.test.tsx` のログイン・401ログアウト・MFA済み403拒否・キーボード操作、`client.test.ts` の不正error envelope | UNKNOWN: 保護されたStaging Webと権限付きテストユーザー |
 | 会社・担当者を登録／参照 | `/companies`、`/companies/:id`、`/contacts` | `/companies`、`/contacts` | `App.test.tsx` の会社作成・編集、担当者監査・削除、`client.test.ts` | UNKNOWN: Staging権限・データを用いた画面受入 |
 | 技術者・経歴書版を参照 | `/engineers`、`/engineers/:id` | `/engineers`、`/engineers/:id/resumes` | `App.test.tsx` の技術者作成・詳細・非公開情報、APIの型・テスト | UNKNOWN: 経歴書版の実データ受入 |
 | 案件登録・検索 | `/projects`、`/projects/:id` | `/projects` | `App.test.tsx` の一覧・検索・編集・監査、`client.test.ts` | UNKNOWN: Staging Web実利用 |

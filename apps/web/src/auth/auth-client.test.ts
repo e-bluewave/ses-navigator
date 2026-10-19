@@ -25,7 +25,151 @@ const sessionBody = {
 
 const jwt = (aal: string) => `e30.${btoa(JSON.stringify({ aal }))}.signature`;
 
+function deferredResponse() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
 describe('Supabase Auth service', () => {
+  it.each([200, 401])(
+    'does not replace a new login with a stale refresh response (%s)',
+    async (status) => {
+      const storage = memoryStorage();
+      storage.setItem(
+        'sesn.auth.session',
+        JSON.stringify({
+          accessToken: 'old-access',
+          refreshToken: 'old-refresh',
+          expiresAt: 1000,
+          user: { id: 'old-user', email: 'old@example.test' },
+        }),
+      );
+      const pending = deferredResponse();
+      const request = vi
+        .fn<typeof fetch>()
+        .mockReturnValueOnce(pending.promise)
+        .mockResolvedValueOnce(new Response('{}'))
+        .mockResolvedValueOnce(new Response(JSON.stringify(sessionBody)));
+      const auth = createSupabaseAuthService({
+        url: 'https://example.supabase.co',
+        publishableKey: 'key',
+        fetch: request,
+        storage,
+        now: () => 1_000_000,
+      });
+      const refreshing = auth.getSession();
+      const rejected = expect(refreshing).rejects.toThrow();
+      await auth.signOut();
+      const current = await auth.signIn(
+        'user@example.test',
+        'fixture-password',
+      );
+      const changes = vi.fn();
+      auth.onSessionChange(changes);
+      pending.resolve(
+        new Response(
+          JSON.stringify({ ...sessionBody, access_token: 'stale-access' }),
+          { status },
+        ),
+      );
+      await rejected;
+      await expect(auth.getSession()).resolves.toEqual(current);
+      expect(changes).not.toHaveBeenCalled();
+      expect(JSON.parse(storage.getItem('sesn.auth.session')!)).toEqual(
+        current,
+      );
+    },
+  );
+
+  it('does not restore a signed-out session after a pending refresh succeeds', async () => {
+    const storage = memoryStorage();
+    storage.setItem(
+      'sesn.auth.session',
+      JSON.stringify({
+        accessToken: 'old',
+        refreshToken: 'old-refresh',
+        expiresAt: 1000,
+        user: sessionBody.user,
+      }),
+    );
+    const pending = deferredResponse();
+    const request = vi
+      .fn<typeof fetch>()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(new Response('{}'));
+    const auth = createSupabaseAuthService({
+      url: 'https://example.supabase.co',
+      publishableKey: 'key',
+      fetch: request,
+      storage,
+      now: () => 1_000_000,
+    });
+    const refreshing = auth.getSession();
+    const rejected = expect(refreshing).rejects.toThrow();
+    await auth.signOut();
+    pending.resolve(new Response(JSON.stringify(sessionBody)));
+    await rejected;
+    await expect(auth.getSession()).resolves.toBeNull();
+    expect(storage.getItem('sesn.auth.session')).toBeNull();
+  });
+
+  it('keeps the latest login when an earlier sign-in finishes later', async () => {
+    const pending = deferredResponse();
+    const request = vi
+      .fn<typeof fetch>()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(new Response(JSON.stringify(sessionBody)));
+    const storage = memoryStorage();
+    const auth = createSupabaseAuthService({
+      url: 'https://example.supabase.co',
+      publishableKey: 'key',
+      fetch: request,
+      storage,
+    });
+    const first = auth.signIn('old@example.test', 'fixture-password');
+    const rejected = expect(first).rejects.toThrow();
+    const current = await auth.signIn('new@example.test', 'fixture-password');
+    pending.resolve(
+      new Response(
+        JSON.stringify({ ...sessionBody, access_token: 'stale-access' }),
+      ),
+    );
+    await rejected;
+    await expect(auth.getSession()).resolves.toEqual(current);
+  });
+
+  it('does not continue MFA verification after logout during its challenge', async () => {
+    const challenge = deferredResponse();
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(sessionBody)))
+      .mockReturnValueOnce(challenge.promise)
+      .mockResolvedValueOnce(new Response('{}'));
+    const auth = createSupabaseAuthService({
+      url: 'https://example.supabase.co',
+      publishableKey: 'key',
+      fetch: request,
+      storage: memoryStorage(),
+    });
+    await auth.signIn('user@example.test', 'fixture-password');
+    const verification = auth.verifyMfa('fixture-factor', '123456');
+    const rejected = expect(verification).rejects.toThrow();
+    await auth.signOut();
+    challenge.resolve(
+      new Response(JSON.stringify({ id: 'fixture-challenge' })),
+    );
+    await rejected;
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(
+      request.mock.calls.some(([url]) =>
+        (url instanceof Request ? url.url : url.toString()).endsWith('/verify'),
+      ),
+    ).toBe(false);
+    await expect(auth.getSession()).resolves.toBeNull();
+  });
   it('signs in and restores the stored session', async () => {
     const storage = memoryStorage();
     const request = vi.fn<typeof fetch>(() =>
